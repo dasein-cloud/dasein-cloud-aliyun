@@ -90,6 +90,6 @@ public class AliyunIpAddressCapabilities extends AbstractCapabilities<Aliyun> im
     }
 
     public boolean supportsVLANAddresses(@Nonnull IPVersion ofVersion) throws InternalException, CloudException {
-        return false;
+        return false; //TODO
     }
 }

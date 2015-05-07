@@ -209,7 +209,7 @@ public class AliyunIPAddress extends AbstractIpAddressSupport<Aliyun> implements
         IpAddress ipAddress = new IpAddress();
         try {
             ipAddress.setAddress(jsonObject.getString("IpAddress"));
-            //TODO check forVlan and AddressType
+            //TODO check forVlan and AddressType, AWS assigned while Google not.
             if (!StringUtils.isEmpty(jsonObject.getString("InstanceId"))) {
                 ipAddress.setServerId(jsonObject.getString("InstanceId"));
             }
