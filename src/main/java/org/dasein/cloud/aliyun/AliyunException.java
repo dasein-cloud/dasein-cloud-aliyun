@@ -31,12 +31,25 @@ import org.dasein.cloud.CloudException;
  * @since 2015.05.1
  */
 public class AliyunException extends CloudException {
-    //OSS: http://docs.aliyun.com/?spm=5176.100055.3.4.7xKK1V#/oss/api-reference/error-response
-    //ECS: http://docs.aliyun.com/?spm=5176.100054.3.1.Ym5tBh#/ecs/open-api/requestmethod&commonresponse
-
     static public AliyunException newInstance(int httpCode, String code, String message, String requestId,
             String hostId) {
-        return new AliyunException(CloudErrorType.GENERAL, httpCode, code, message, requestId, hostId);
+        //http://docs.aliyun.com/?spm=5176.100054.3.1.Ym5tBh#/ecs/open-api/requestmethod&commonresponse
+        //http://docs.aliyun.com/?spm=5176.100055.3.4.7xKK1V#/oss/api-reference/error-response
+        CloudErrorType errorType;
+        if (httpCode == 403 || code.equals("InvalidAccessKeyId.NotFound") || code.equals("IncompleteSignature") || code
+                .equals("IllegalTimestamp") || code.equals("SignatureNonceUsed")) {
+            errorType = CloudErrorType.AUTHENTICATION;
+        } else if (code.equals("Throttling")) {
+            errorType = CloudErrorType.THROTTLING;
+        } else if (code.equals("InsufficientBalance")) {
+            errorType = CloudErrorType.QUOTA;
+        } else if (httpCode >= 400 && httpCode < 500) {
+            errorType = CloudErrorType.COMMUNICATION;
+        } else { //5xx
+            errorType = CloudErrorType.GENERAL;
+        }
+
+        return new AliyunException(errorType, httpCode, code, message, requestId, hostId);
     }
 
     private String requestId;
