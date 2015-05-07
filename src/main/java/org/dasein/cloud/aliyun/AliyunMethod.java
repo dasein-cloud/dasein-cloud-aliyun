@@ -129,7 +129,9 @@ public class AliyunMethod {
 
         try {
             Mac mac = Mac.getInstance("HmacSHA1");
-            mac.init(new SecretKeySpec((new String(accessKeySecret) + "&").getBytes("UTF-8"), "HmacSHA1"));
+            byte[] secretKey = Arrays.copyOf(accessKeySecret, accessKeySecret.length + 1);
+            secretKey[accessKeySecret.length] = '&';
+            mac.init(new SecretKeySpec(secretKey, "HmacSHA1"));
             byte[] signedData = mac.doFinal(stringToSign.toString().getBytes("UTF-8"));
             signature = new String(Base64.encodeBase64(signedData));
         } catch (NoSuchAlgorithmException noSuchAlgorithmException) {
