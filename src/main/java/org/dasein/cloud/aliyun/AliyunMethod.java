@@ -51,6 +51,7 @@ import org.apache.http.params.HttpProtocolParams;
 import org.apache.http.protocol.HttpContext;
 import org.apache.http.util.EntityUtils;
 import org.apache.log4j.Logger;
+import org.dasein.cloud.Cloud;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.ProviderContext;
@@ -262,11 +263,11 @@ public class AliyunMethod {
 
     public Response get() throws InternalException, CloudException {
         if( stdLogger.isTraceEnabled() ) {
-            stdLogger.trace("ENTER - " + AliyunMethod.class.getName() + ".get(" + category.getHost()  + ")");
+            stdLogger.trace("ENTER - " + AliyunMethod.class.getName() + ".get(" + category.getHost(this.aliyun)  + ")");
         }
         if( wireLogger.isDebugEnabled() ) {
             wireLogger.debug("");
-            wireLogger.debug(">>> [GET (" + (new Date()) + ")] -> " + category.getHost()
+            wireLogger.debug(">>> [GET (" + (new Date()) + ")] -> " + category.getHost(this.aliyun)
                     + " >--------------------------------------------------------------------------------------");
         }
         try {
@@ -274,7 +275,7 @@ public class AliyunMethod {
 
             HttpGet httpGet = new HttpGet();
             URIBuilder uriBuilder = new URIBuilder();
-            uriBuilder.setScheme("https").setHost(category.getHost()).setPath("/");
+            uriBuilder.setScheme("https").setHost(category.getHost(this.aliyun)).setPath("/");
             for(Map.Entry<String, String> requestParameter: requestParameters.entrySet()) {
                 uriBuilder.setParameter(requestParameter.getKey(), requestParameter.getValue());
             }
@@ -287,10 +288,10 @@ public class AliyunMethod {
             return invoke(httpGet);
         } finally {
             if( stdLogger.isTraceEnabled() ) {
-                stdLogger.trace("EXIT - " + AliyunMethod.class.getName() + ".get(" + category.getHost() + ")");
+                stdLogger.trace("EXIT - " + AliyunMethod.class.getName() + ".get(" + category.getHost(this.aliyun) + ")");
             }
             if( wireLogger.isDebugEnabled() ) {
-                wireLogger.debug(">>> [GET (" + (new Date()) + ")] -> " + category.getHost()
+                wireLogger.debug(">>> [GET (" + (new Date()) + ")] -> " + category.getHost(this.aliyun)
                         + " >--------------------------------------------------------------------------------------");
                 wireLogger.debug("");
             }
@@ -299,11 +300,11 @@ public class AliyunMethod {
 
     public Response post() throws InternalException, CloudException {
         if( stdLogger.isTraceEnabled() ) {
-            stdLogger.trace("ENTER - " + AliyunMethod.class.getName() + ".post(" + category.getHost()  + ")");
+            stdLogger.trace("ENTER - " + AliyunMethod.class.getName() + ".post(" + category.getHost(this.aliyun)  + ")");
         }
         if( wireLogger.isDebugEnabled() ) {
             wireLogger.debug("");
-            wireLogger.debug(">>> [POST (" + (new Date()) + ")] -> " + category.getHost()
+            wireLogger.debug(">>> [POST (" + (new Date()) + ")] -> " + category.getHost(this.aliyun)
                     + " >--------------------------------------------------------------------------------------");
         }
         try {
@@ -311,7 +312,7 @@ public class AliyunMethod {
 
             HttpPost httpPost = new HttpPost();
             URIBuilder uriBuilder = new URIBuilder();
-            uriBuilder.setScheme("https").setHost(category.getHost()).setPath("/");
+            uriBuilder.setScheme("https").setHost(category.getHost(this.aliyun)).setPath("/");
 
             List<NameValuePair> params = new ArrayList<NameValuePair>();
 
@@ -332,10 +333,10 @@ public class AliyunMethod {
             return invoke(httpPost);
         } finally {
             if( stdLogger.isTraceEnabled() ) {
-                stdLogger.trace("EXIT - " + AliyunMethod.class.getName() + ".post(" + category.getHost() + ")");
+                stdLogger.trace("EXIT - " + AliyunMethod.class.getName() + ".post(" + category.getHost(this.aliyun) + ")");
             }
             if( wireLogger.isDebugEnabled() ) {
-                wireLogger.debug(">>> [POST (" + (new Date()) + ")] -> " + category.getHost()
+                wireLogger.debug(">>> [POST (" + (new Date()) + ")] -> " + category.getHost(this.aliyun)
                         + " >--------------------------------------------------------------------------------------");
                 wireLogger.debug("");
             }
@@ -414,8 +415,22 @@ public class AliyunMethod {
             this.name = name;
         }
 
-        public String getHost() {
-            return host + ".aliyuncs.com";
+        public String getHost(Aliyun aliyun) {
+            String endpoint = ".aliyuncs.com";
+            //ignore config one, use hardcode URL
+            /*
+            ProviderContext context = aliyun.getContext();
+            if (context != null) {
+                Cloud cloud = context.getCloud();
+                if (cloud != null) {
+                    String configEndpoint = cloud.getEndpoint();
+                    if(configEndpoint != null && !"".equals(configEndpoint)) {
+                        endpoint = configEndpoint;
+                    }
+                }
+            }
+            */
+            return host + endpoint;
         }
 
         @Deprecated

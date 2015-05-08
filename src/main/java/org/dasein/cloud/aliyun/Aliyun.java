@@ -26,8 +26,10 @@ import org.dasein.cloud.AbstractCloud;
 import org.dasein.cloud.ContextRequirements;
 import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.dc.DataCenterServices;
+import org.dasein.cloud.dc.Region;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 /**
  * Created by Jeffrey Yan on 5/5/2015.
@@ -36,6 +38,9 @@ import javax.annotation.Nonnull;
  * @since 2015.05.1
  */
 public class Aliyun extends AbstractCloud {
+
+    static private Logger stdLogger = Aliyun.getStdLogger(Aliyun.class);
+
 
     static public final String DSN_ACCESS_KEY = "accessKey";
 
@@ -54,13 +59,13 @@ public class Aliyun extends AbstractCloud {
     static private @Nonnull Logger getLogger(@Nonnull Class<?> cls, @Nonnull String type) {
         String pkg = getLastItem(cls.getPackage().getName());
 
-        if( pkg.equals("joyent") ) {
+        if( pkg.equals("aliyun") ) {
             pkg = "";
         }
         else {
             pkg = pkg + ".";
         }
-        return Logger.getLogger("dasein.cloud.joyent." + type + "." + pkg + getLastItem(cls.getName()));
+        return Logger.getLogger("dasein.cloud.aliyun." + type + "." + pkg + getLastItem(cls.getName()));
     }
 
     static public @Nonnull Logger getStdLogger(Class<?> cls) {
@@ -80,11 +85,6 @@ public class Aliyun extends AbstractCloud {
     }
 
     @Override
-    public @Nonnull DataCenterServices getDataCenterServices() {
-        return new AliyunDataCenter(this);
-    }
-
-    @Override
     public @Nonnull String getProviderName() {
         ProviderContext ctx = getContext();
         String name = ( ctx == null ? null : ctx.getCloud().getProviderName() );
@@ -95,8 +95,43 @@ public class Aliyun extends AbstractCloud {
     @Override
     public @Nonnull ContextRequirements getContextRequirements() {
         return new ContextRequirements(
-                new ContextRequirements.Field(DSN_ACCESS_KEY, "AWS API access keys", ContextRequirements.FieldType.KEYPAIR, ContextRequirements.Field.ACCESS_KEYS, true),
+                new ContextRequirements.Field(DSN_ACCESS_KEY, "Aliyun API access keys", ContextRequirements.FieldType.KEYPAIR, ContextRequirements.Field.ACCESS_KEYS, true),
                 new ContextRequirements.Field("proxyHost", "Proxy host", ContextRequirements.FieldType.TEXT, false),
                 new ContextRequirements.Field("proxyPort", "Proxy port", ContextRequirements.FieldType.TEXT, false));
+    }
+
+
+    @Override
+    public @Nullable String testContext() {
+        if (stdLogger.isTraceEnabled()) {
+            stdLogger.trace("Enter - " + Aliyun.class.getName() + ".textContext()");
+        }
+        try {
+            ProviderContext context = getContext();
+
+            if (context == null) {
+                return null;
+            }
+
+            DataCenterServices dataCenterServices = getDataCenterServices();
+            Iterable<Region> regions = dataCenterServices.listRegions();
+            if (regions.iterator().hasNext()) {
+                return context.getAccountNumber();
+            } else {
+                return null;
+            }
+        } catch (Throwable throwable) {
+            stdLogger.warn("Failed to test Aliyun connection context: " + throwable.getMessage(), throwable);
+            return null;
+        } finally {
+            if (stdLogger.isTraceEnabled()) {
+                stdLogger.trace("Exit - " + Aliyun.class.getName() + ".testContext()");
+            }
+        }
+    }
+
+    @Override
+    public @Nonnull DataCenterServices getDataCenterServices() {
+        return new AliyunDataCenter(this);
     }
 }

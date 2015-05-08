@@ -53,6 +53,12 @@
         <url>http://software.dell.com</url>
     </organization>
 
+    <scm>
+        <connection>scm:git:git://github.com/dasein-cloud/dasein-cloud-aliyun.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/dasein-cloud/dasein-cloud-aliyun.git</developerConnection>
+        <url>http://github.com/dasein-cloud/dasein-cloud-aliyun</url>
+    </scm>
+
     <parent>
         <groupId>org.sonatype.oss</groupId>
         <artifactId>oss-parent</artifactId>
@@ -126,4 +132,180 @@
         </dependency>
     </dependencies>
 
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>2.0.2</version>
+                <configuration>
+                    <source>1.6</source>
+                    <target>1.6</target>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <version>2.10.1</version>
+                <executions>
+                    <execution>
+                        <id>javadoc</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <encoding>utf-8</encoding>
+                    <quiet>true</quiet>
+                    <links>
+                        <link>http://docs.oracle.com/javase/6/docs/api/</link>
+                        <link>http://docs.oracle.com/javaee/6/api/</link>
+                    </links>
+                    <stylesheetfile>dasein-javadoc.css</stylesheetfile>
+                    <footer />
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>com.mycila.maven-license-plugin</groupId>
+                <artifactId>maven-license-plugin</artifactId>
+                <version>1.8.0</version>
+                <configuration>
+                    <strictCheck>true</strictCheck>
+                    <encoding>utf-8</encoding>
+                    <aggregate>true</aggregate>
+                    <header>src/main/etc/header.txt</header>
+                    <mapping>
+                        <clj>SEMICOLON_STYLE</clj>
+                    </mapping>
+                    <excludes>
+                        <exclude>thirdparty/**</exclude>
+                        <exclude>**/src/**/resources/**</exclude>
+                        <exclude>**/LICENSE-APACHE.txt</exclude>
+                    </excludes>
+                    <properties>
+                        <year>2009-2015</year>
+                        <copyrightHolder>Dell, Inc.</copyrightHolder>
+                    </properties>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>2.1.2</version>
+                <executions>
+                    <execution>
+                        <id>source</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>jar-no-fork</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-release-plugin</artifactId>
+                <version>2.1</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>2.6</version>
+                <configuration>
+                    <systemProperties>
+                        <property>
+                            <name>providerClass</name>
+                            <value>${providerClass}</value>
+                        </property>
+                        <property>
+                            <name>endpoint</name>
+                            <value>${endpoint}</value>
+                        </property>
+                        <property>
+                            <name>accountNumber</name>
+                            <value>${accountNumber}</value>
+                        </property>
+                        <property>
+                            <name>cloudName</name>
+                            <value>${cloudName}</value>
+                        </property>
+                        <property>
+                            <name>providerName</name>
+                            <value>${providerName}</value>
+                        </property>
+                        <property>
+                            <name>regionId</name>
+                            <value>${regionId}</value>
+                        </property>
+                        <property>
+                            <name>accessKeyShared</name>
+                            <value>${apiSharedKey}</value>
+                        </property>
+                        <property>
+                            <name>accessKeySecret</name>
+                            <value>${apiSecretKey}</value>
+                        </property>
+                        <property>
+                            <name>proxyHost</name>
+                            <value>${proxyHost}</value>
+                        </property>
+                        <property>
+                            <name>proxyPort</name>
+                            <value>${proxyPort}</value>
+                        </property>
+                        <property>
+                            <name>test.machineImage</name>
+                            <value>${test.machineImage}</value>
+                        </property>
+                    </systemProperties>
+                    <includes>
+                        <include>**/TestSuite.java</include>
+                    </includes>
+                </configuration>
+            </plugin>
+            <plugin>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/lib</outputDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <distributionManagement>
+        <repository>
+            <id>sonatype-nexus-staging</id>
+            <url>https://oss.sonatype.org/service/local/staging/deploy/maven2</url>
+            <uniqueVersion>false</uniqueVersion>
+        </repository>
+        <snapshotRepository>
+            <id>sonatype-nexus-snapshots</id>
+            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+        </snapshotRepository>
+    </distributionManagement>
+
+    <developers>
+        <developer>
+            <name>George Reese</name>
+            <id>greese</id>
+            <email>george_reese -at- dell -dot- com</email>
+            <organization>Dell</organization>
+            <roles>
+                <role>Java Developer</role>
+                <role>PMC</role>
+            </roles>
+            <url>http://software.dell.com</url>
+            <timezone>-6</timezone>
+        </developer>
+    </developers>
 </project>
