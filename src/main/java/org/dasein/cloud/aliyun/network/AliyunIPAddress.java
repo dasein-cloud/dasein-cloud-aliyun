@@ -39,7 +39,7 @@ import java.util.concurrent.*;
  * @author Jane Wang
  * @since 2015.5.1
  */
-public class AliyunIPAddress extends AbstractIpAddressSupport<Aliyun> implements IpAddressSupport {
+public class AliyunIPAddress extends AbstractIpAddressSupport<Aliyun> {
 
     static private final Logger stdLogger = Aliyun.getStdLogger(AliyunIPAddress.class);
     static private final ExecutorService threadPool = Executors.newFixedThreadPool(10);

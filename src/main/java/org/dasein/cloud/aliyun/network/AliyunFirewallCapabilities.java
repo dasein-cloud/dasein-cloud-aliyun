@@ -89,7 +89,7 @@ public class AliyunFirewallCapabilities extends AbstractCapabilities<Aliyun> imp
 
     @Nonnull
     public Iterable<Permission> listSupportedPermissions(boolean inVlan) throws InternalException, CloudException {
-        return Collections.singletonList(Permission.ALLOW);
+        return Collections.unmodifiableList(Arrays.asList(Permission.ALLOW, Permission.DENY));
     }
 
     @Nonnull
@@ -117,7 +117,7 @@ public class AliyunFirewallCapabilities extends AbstractCapabilities<Aliyun> imp
     }
 
     public boolean supportsRules(@Nonnull Direction direction, @Nonnull Permission permission, boolean inVlan) throws CloudException, InternalException {
-        return direction.equals(Direction.INGRESS) && permission.equals(Permission.ALLOW);
+        return direction.equals(Direction.INGRESS);
     }
 
     public boolean supportsFirewallCreation(boolean inVlan) throws CloudException, InternalException {
