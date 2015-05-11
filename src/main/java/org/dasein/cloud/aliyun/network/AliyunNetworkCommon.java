@@ -29,9 +29,11 @@ package org.dasein.cloud.aliyun.network;
  */
 public class AliyunNetworkCommon {
 
-   public static final int DefaultPageSize = 10; //maximum 50
+   public static final int DefaultPageSize = 10; //from 10 to 50
 
    public static enum AliyunFirewallPermission {ACCEPT, DROP};
+
+   public static enum AliyunFirewallNicType {INTERNET, INTRANET};
 
    public static final String IpProtocolAll = "all";
 }
