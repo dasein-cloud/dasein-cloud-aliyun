@@ -18,6 +18,7 @@
  */
 package org.dasein.cloud.aliyun.network;
 
+import org.apache.http.conn.util.InetAddressUtils;
 import org.apache.log4j.Logger;
 import org.dasein.cloud.*;
 import org.dasein.cloud.aliyun.Aliyun;
@@ -36,14 +37,14 @@ import java.util.concurrent.*;
  * @author Jane Wang
  * @since 2015.05.01
  */
-public class AliyunIPAddress extends AbstractIpAddressSupport<Aliyun> {
+public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
 
-    static private final Logger stdLogger = Aliyun.getStdLogger(AliyunIPAddress.class);
-    static private final ExecutorService threadPool = Executors.newFixedThreadPool(10);
+    private static final Logger stdLogger = Aliyun.getStdLogger(AliyunIpAddress.class);
+    private static final ExecutorService threadPool = Executors.newFixedThreadPool(10);
 
     private transient volatile AliyunIpAddressCapabilities capabilities;
 
-    public AliyunIPAddress(@Nonnull Aliyun provider) {
+    public AliyunIpAddress(@Nonnull Aliyun provider) {
         super(provider);
     }
 
@@ -122,18 +123,19 @@ public class AliyunIPAddress extends AbstractIpAddressSupport<Aliyun> {
         int currentPageNumber = 1;
         int maxPageNumber = 1;
         do {
+            params.put("PageNumber", currentPageNumber);
             AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DescribeEipAddresses", params);
             JSONObject response = method.get().asJson();
             try {
                 JSONArray eipAddresses = response.getJSONObject("EipAddresses").getJSONArray("EipAddress");
                 for (int i = 0; i < eipAddresses.length(); i++) {
                     JSONObject eipAddress = eipAddresses.getJSONObject(i);
-                    maxPageNumber = eipAddress.getInt("TotalCount") / AliyunNetworkCommon.DefaultPageSize
-                            + (eipAddress.getInt("TotalCount") % AliyunNetworkCommon.DefaultPageSize > 0 ? 1 : 0);
                     if (eipAddress.getString("Status") != null && eipAddress.getString("Status").toLowerCase().equals(AliyunNetworkCommon.AliyunEipStatus.AVAILABLE.name().toLowerCase())) {
                         resourceStatuses.add(new ResourceStatus(eipAddress.getString("AllocationId"), true));
                     }
                 }
+                maxPageNumber = response.getInt("TotalCount") / AliyunNetworkCommon.DefaultPageSize
+                        + (response.getInt("TotalCount") % AliyunNetworkCommon.DefaultPageSize > 0 ? 1 : 0);
                 currentPageNumber++;
             } catch (JSONException e) {
                 stdLogger.error("An exception occurs during List Ip Pool Status!", e);
@@ -186,9 +188,18 @@ public class AliyunIPAddress extends AbstractIpAddressSupport<Aliyun> {
         throw new OperationNotSupportedException("Aliyun doesn't support request for vlan!");
     }
 
+    /**
+     * Ip addresses for vlan use only:
+     * A class: 10.0.0.0 - 10.255.255.255 (7/24)
+     * B class: 172.16.0.0 - 172.31.255.255 (14/16)
+     * C class 192.168.0.0 - 192.168.255.255 (21/8)
+     * @param ipAddress IP address
+     * @return true - public ip address; false - private ip address
+     * @throws InternalException
+     */
     public static boolean isPublicIpAddress(String ipAddress) throws InternalException {
-        if (AliyunNetworkCommon.isEmpty(ipAddress)) {
-            throw new InternalException("Invalid ip address: ip address is empty!");
+        if (!InetAddressUtils.isIPv4Address(ipAddress)) {
+            throw new OperationNotSupportedException("Aliyun supports IPV4 address only!");
         }
         if (ipAddress.startsWith("10.") || ipAddress.startsWith("192.168.")) {
             return false;
@@ -255,10 +266,10 @@ public class AliyunIPAddress extends AbstractIpAddressSupport<Aliyun> {
                     JSONArray eipAddresses = response.getJSONObject("EipAddresses").getJSONArray("EipAddress");
                     for (int i = 0; i < eipAddresses.length(); i++) {
                         JSONObject eipAddress = eipAddresses.getJSONObject(i);
-                        maxPageNumber = eipAddress.getInt("TotalCount") / AliyunNetworkCommon.DefaultPageSize
-                                + (eipAddress.getInt("TotalCount") % AliyunNetworkCommon.DefaultPageSize > 0 ? 1 : 0);
                         ipAddresses.add(toIpAddress(eipAddress));
                     }
+                    maxPageNumber = response.getInt("TotalCount") / AliyunNetworkCommon.DefaultPageSize
+                            + (response.getInt("TotalCount") % AliyunNetworkCommon.DefaultPageSize > 0 ? 1 : 0);
                     currentPageNumber++;
                 } catch (JSONException e) {
                     stdLogger.error("An exception occurs during Describe Eip Addresses!", e);

@@ -28,9 +28,9 @@ import javax.annotation.Nullable;
  * @author Jane Wang
  * @since 2015.05.01
  */
-public class ECSNetworkServices extends AbstractNetworkServices<Aliyun> {
+public class AliyunNetwork extends AbstractNetworkServices<Aliyun> {
 
-    public ECSNetworkServices (Aliyun cloud) { super(cloud); }
+    public AliyunNetwork(Aliyun cloud) { super(cloud); }
 
     @Nullable
     @Override
@@ -48,7 +48,7 @@ public class ECSNetworkServices extends AbstractNetworkServices<Aliyun> {
     @Nullable
     @Override
     public IpAddressSupport getIpAddressSupport() {
-        return new AliyunIPAddress(getProvider());
+        return new AliyunIpAddress(getProvider());
     }
 
     @Nullable
