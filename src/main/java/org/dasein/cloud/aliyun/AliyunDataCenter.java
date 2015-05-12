@@ -54,7 +54,7 @@ import java.util.Map;
  */
 public class AliyunDataCenter extends AbstractDataCenterServices<Aliyun> implements DataCenterServices {
 
-    static private final Logger stdLogger = Aliyun.getStdLogger(AliyunMethod.class);
+    static private final Logger stdLogger = Aliyun.getStdLogger(AliyunDataCenter.class);
 
     private transient volatile AliyunDataCenterCapabilities capabilities;
 
@@ -62,9 +62,8 @@ public class AliyunDataCenter extends AbstractDataCenterServices<Aliyun> impleme
         super(provider);
     }
 
-    @Nonnull
     @Override
-    public DataCenterCapabilities getCapabilities() throws InternalException, CloudException {
+    public @Nonnull DataCenterCapabilities getCapabilities() throws InternalException, CloudException {
         if( capabilities == null ) {
             capabilities = new AliyunDataCenterCapabilities(getProvider());
         }
