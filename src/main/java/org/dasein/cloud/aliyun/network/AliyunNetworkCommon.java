@@ -33,7 +33,7 @@ public class AliyunNetworkCommon {
 
    public static enum AliyunFirewallNicType {INTERNET, INTRANET};
 
-   public static final String IpProtocolAll = "all";
+   public static final String IpProtocolAll = "ALL";
 
    public static enum AliyunEipStatus {ASSOCIATING, UNASSOCIATING, INUSE, AVAILABLE};
 
