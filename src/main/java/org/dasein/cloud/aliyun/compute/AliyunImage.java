@@ -139,14 +139,10 @@ public class AliyunImage extends AbstractImageSupport<Aliyun> implements Machine
 
         MachineImageState machineImageState = MachineImageState.DELETED;
         String status = imageJson.getString("Status");
-        String progress = imageJson.getString("Progress");
         if (status.equals("Available")) {
             machineImageState = MachineImageState.ACTIVE;
-        } else {
-            progress = progress.endsWith("%") ? progress.substring(0, progress.length()) : progress;
-            if (Integer.parseInt(progress) < 100) {
-                machineImageState = MachineImageState.PENDING;
-            }
+        } else if (status.equals("Creating")) {
+            machineImageState = MachineImageState.PENDING;
         }
 
         List<MachineImageVolume> volumes = new ArrayList<MachineImageVolume>();
