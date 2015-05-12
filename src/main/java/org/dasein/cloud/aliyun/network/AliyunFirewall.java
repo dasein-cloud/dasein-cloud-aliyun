@@ -76,28 +76,28 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
     public Iterable<Firewall> list() throws InternalException, CloudException {
         Map<String, Object> params = new HashMap<String, Object>();
         List<Firewall> firewalls = new ArrayList<Firewall>();
-        params.put("RegionId", getProvider().getContext().getRegionId());
+        params.put("RegionId", getContext().getRegionId());
         params.put("PageSize", AliyunNetworkCommon.DefaultPageSize);
-        int totalPageCount = 1;
+        int maxPageNumber = 1;
         int currentPageNumber = 1;
-        AliyunMethod method = null;
         do {
             params.put("PageNumber", currentPageNumber);
-            method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DescribeSecurityGroups", params);
+            AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DescribeSecurityGroups", params);
             JSONObject response = method.get().asJson();
             try {
-                int totalItemCount = response.getInt("TotalCount");
-                totalPageCount = totalItemCount / AliyunNetworkCommon.DefaultPageSize + totalItemCount % AliyunNetworkCommon.DefaultPageSize > 0 ? 1 : 0;
                 JSONArray securityGroups = response.getJSONObject("SecurityGroups").getJSONArray("SecurityGroup");
                 for (int i = 0; i < securityGroups.length(); i++) {
                     JSONObject securityGroup = securityGroups.getJSONObject(i);
                     firewalls.add(getFirewall(securityGroup.getString("SecurityGroupId")));
                 }
+                maxPageNumber = response.getInt("TotalCount") / AliyunNetworkCommon.DefaultPageSize +
+                        response.getInt("TotalCount") % AliyunNetworkCommon.DefaultPageSize > 0 ? 1 : 0;
                 currentPageNumber++;
             } catch (JSONException e) {
-                throw new InternalException("An exception occurs during describing security groups!");
+                stdLogger.error("An exception occurs during list all firewalls!", e);
+                throw new InternalException(e);
             }
-        } while (currentPageNumber < totalPageCount);
+        } while (currentPageNumber < maxPageNumber);
         return firewalls;
     }
 
@@ -114,7 +114,7 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
             throw new OperationNotSupportedException("Aliyun doesn't support EGRESS rule!");
         }
         Map<String, Object> params = new HashMap<String, Object>();
-        params.put("RegionId", getProvider().getContext().getRegionId());
+        params.put("RegionId", getContext().getRegionId());
         params.put("SecurityGroupId", firewallId);
         if (!options.getSourceEndpoint().getRuleTargetType().equals(RuleTargetType.CIDR) || !options.getSourceEndpoint().getRuleTargetType().equals(RuleTargetType.GLOBAL)) {
             throw new OperationNotSupportedException("Aliyun only supports firewall with source target type equals to CIDR or Global(security group for the same account)!");
@@ -125,7 +125,7 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
                     throw new OperationNotSupportedException("Aliyun supports IPV4 address only!");
                 } else {
                     params.put("SourceCidrIp", ipAddress); //TODO: check auth by source cidr
-                    if (!isPublicIpAddress(ipAddress)) {
+                    if (!AliyunIpAddress.isPublicIpAddress(ipAddress)) {
                         params.put("NicType", AliyunNetworkCommon.AliyunFirewallNicType.INTRANET.name().toLowerCase());
                     }
                 }
@@ -167,7 +167,7 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
     @Override
     public String create(@Nonnull FirewallCreateOptions options) throws InternalException, CloudException {
         Map<String, Object> params = new HashMap<String, Object>();
-        params.put("RegionId", getProvider().getContext().getRegionId());
+        params.put("RegionId", getContext().getRegionId());
         if (!AliyunNetworkCommon.isEmpty(options.getDescription())) {
             params.put("Description", options.getDescription());
         }
@@ -191,7 +191,7 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
     @Override
     public Firewall getFirewall(@Nonnull String firewallId) throws InternalException, CloudException {
         Map<String, Object> params = new HashMap<String, Object>();
-        params.put("RegionId", getProvider().getContext().getRegionId());
+        params.put("RegionId", getContext().getRegionId());
         params.put("SecurityGroupId", firewallId);
         AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DescribeSecurityGroupAttribute", params);
         JSONObject response = method.get().asJson();
@@ -203,7 +203,7 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
     public Iterable<ResourceStatus> listFirewallStatus() throws InternalException, CloudException {
         Map<String, Object> params = new HashMap<String, Object>();
         List<ResourceStatus> resourceStatus = new ArrayList<ResourceStatus>();
-        params.put("RegionId", getProvider().getContext().getRegionId());
+        params.put("RegionId", getContext().getRegionId());
         params.put("PageSize", AliyunNetworkCommon.DefaultPageSize);
         int totalPageCount = 1;
         int currentPageNumber = 1;
@@ -269,7 +269,7 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
     @Override
     public void revoke(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull String source, @Nonnull Protocol protocol, @Nonnull RuleTarget target, int beginPort, int endPort) throws CloudException, InternalException {
         Map<String, Object> params = new HashMap<String, Object>();
-        params.put("RegionId", getProvider().getContext().getRegionId());
+        params.put("RegionId", getContext().getRegionId());
         params.put("SecurityGroupId", firewallId);
         //protocol
         if (protocol == null) {
@@ -296,7 +296,7 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
 
         if (isCidrBlock(source)) {
             params.put("DestCidrIp", source); //revoke rule auth by source cidr block
-            if (!isPublicIpAddress(source)) {
+            if (!AliyunIpAddress.isPublicIpAddress(source)) {
                 params.put("NicType", AliyunNetworkCommon.AliyunFirewallNicType.INTRANET.name().toLowerCase());
             }
         } else {
@@ -324,7 +324,7 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
     private Firewall toFirewall (String firewallId, JSONObject jsonObject) throws InternalException {
         Firewall firewall = new Firewall();
         ArrayList<FirewallRule> firewallRuleList = new ArrayList<FirewallRule>();
-        firewall.setRegionId(getProvider().getContext().getRegionId());
+        firewall.setRegionId(getContext().getRegionId());
         firewall.setActive(true);
         firewall.setAvailable(true);
         try {
@@ -402,32 +402,6 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
                 throw new InternalException("Invalid PortRange, from " + startPort + " to " + endPort);
             }
         }
-    }
-
-    /**
-     * Ip addresses for vlan use only:
-     * A class: 10.0.0.0 - 10.255.255.255 (7/24)
-     * B class: 172.16.0.0 - 172.31.255.255 (14/16)
-     * C class 192.168.0.0 - 192.168.255.255 (21/8)
-     * @param ipAddress
-     * @return true - public ip address; false - private ip address
-     * @throws InternalException
-     */
-    private boolean isPublicIpAddress(String ipAddress) throws InternalException {
-        if (AliyunNetworkCommon.isEmpty(ipAddress)) {
-            throw new InternalException("Invalid ip address: ip address is empty!");
-        }
-        if (ipAddress.startsWith("10.") || ipAddress.startsWith("192.168.")) {
-            return false;
-        }
-        if (ipAddress.startsWith("172.")) {
-            String[] ipSegments = ipAddress.split(".");
-            Integer segment = Integer.valueOf(ipSegments[1]);
-            if (segment >= 16 && segment <= 31) {
-                return false;
-            }
-        }
-        return true;
     }
 
     /**
