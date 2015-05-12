@@ -18,7 +18,6 @@
  */
 package org.dasein.cloud.aliyun.network;
 
-import org.apache.commons.lang3.StringUtils;
 import org.apache.log4j.Logger;
 import org.dasein.cloud.*;
 import org.dasein.cloud.aliyun.Aliyun;
@@ -161,7 +160,7 @@ public class AliyunIPAddress extends AbstractIpAddressSupport<Aliyun> {
             JSONArray eipAddresses = response.getJSONObject("EipAddresses").getJSONArray("EipAddress");
             for (int i = 0; i < eipAddresses.length(); i++) {
                 JSONObject eipAddress = eipAddresses.getJSONObject(i);
-                if (!StringUtils.isEmpty(eipAddress.getString("InstanceId"))) {
+                if (!AliyunNetworkCommon.isEmpty(eipAddress.getString("InstanceId"))) {
                     instanceId = eipAddress.getString("InstaceId");
                     break;
                 } else {
@@ -208,7 +207,7 @@ public class AliyunIPAddress extends AbstractIpAddressSupport<Aliyun> {
         try {
             ipAddress.setAddress(jsonObject.getString("IpAddress"));
             //TODO check forVlan and AddressType, AWS assigned while Google not.
-            if (!StringUtils.isEmpty(jsonObject.getString("InstanceId"))) {
+            if (!AliyunNetworkCommon.isEmpty(jsonObject.getString("InstanceId"))) {
                 ipAddress.setServerId(jsonObject.getString("InstanceId"));
             }
             ipAddress.setRegionId(jsonObject.getString("RegionId"));

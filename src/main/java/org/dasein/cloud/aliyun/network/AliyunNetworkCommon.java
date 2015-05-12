@@ -34,4 +34,15 @@ public class AliyunNetworkCommon {
    public static enum AliyunFirewallNicType {INTERNET, INTRANET};
 
    public static final String IpProtocolAll = "all";
+
+   public static boolean isEmpty (Object obj) {
+      if (obj instanceof String) {
+         if (obj == null || ((String) obj).length() == 0) {
+            return true;
+         } else {
+            return false;
+         }
+      }
+      return false;
+   }
 }
