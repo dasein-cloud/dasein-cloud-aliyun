@@ -169,7 +169,7 @@ public class AliyunIPAddress extends AbstractIpAddressSupport<Aliyun> {
         Map<String, Object> params = new HashMap<String, Object>();
         params.put("RegionId", getContext().getRegionId());
         AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "AllocateEipAddress", params);
-        JSONObject response = method.get().asJson();
+        JSONObject response = method.post().asJson();
         try{
             return response.getString("AllocationId");
         } catch (JSONException e) {
