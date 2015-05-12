@@ -84,7 +84,6 @@ public class AliyunMethod {
     static private final Logger stdLogger = Aliyun.getStdLogger(AliyunMethod.class);
     static private final Logger wireLogger = Aliyun.getWireLogger(AliyunMethod.class);
 
-    static private final String ISO8601_DATE_FORMAT = "yyyy-MM-dd'T'HH:mm:ss'Z'";
     static private final String ENCODING = "UTF-8";
     static private final String SIGNATURE_ALGORITHM = "HmacSHA1";
 
@@ -105,12 +104,6 @@ public class AliyunMethod {
         this.category = category;
         this.action = action;
         this.parameters = parameters;
-    }
-
-    private String formatIso8601Date(Date date) {
-        SimpleDateFormat df = new SimpleDateFormat(ISO8601_DATE_FORMAT);
-        df.setTimeZone(new SimpleTimeZone(0, "GMT"));
-        return df.format(date);
     }
 
     private String urlEncode(String value) throws InternalException {
@@ -169,7 +162,7 @@ public class AliyunMethod {
         requestParameters.put("Action", this.action);
         requestParameters.put("Version", "2014-05-26");
         requestParameters.put("AccessKeyId", new String(accessKey[0]));
-        requestParameters.put("TimeStamp", formatIso8601Date(new Date()));
+        requestParameters.put("TimeStamp", aliyun.formatIso8601Date(new Date()));
         requestParameters.put("SignatureMethod", "HMAC-SHA1");
         requestParameters.put("SignatureVersion", "1");
         requestParameters.put("SignatureNonce", UUID.randomUUID().toString());
@@ -177,7 +170,7 @@ public class AliyunMethod {
         for (Map.Entry<String, Object> parameter : this.parameters.entrySet()) {
             Object value = parameter.getValue();
             if (value instanceof Date) {
-                requestParameters.put(parameter.getKey(), formatIso8601Date((Date) value));
+                requestParameters.put(parameter.getKey(), aliyun.formatIso8601Date((Date) value));
             } else {
                 requestParameters.put(parameter.getKey(), value.toString());
             }

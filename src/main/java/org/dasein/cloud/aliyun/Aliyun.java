@@ -20,13 +20,21 @@ package org.dasein.cloud.aliyun;
 
 import org.apache.log4j.Logger;
 import org.dasein.cloud.AbstractCloud;
+import org.dasein.cloud.CloudException;
 import org.dasein.cloud.ContextRequirements;
+import org.dasein.cloud.InternalException;
 import org.dasein.cloud.ProviderContext;
+import org.dasein.cloud.aliyun.compute.AliyunCompute;
+import org.dasein.cloud.compute.ComputeServices;
 import org.dasein.cloud.dc.DataCenterServices;
 import org.dasein.cloud.dc.Region;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.SimpleTimeZone;
 
 /**
  * Created by Jeffrey Yan on 5/5/2015.
@@ -38,7 +46,7 @@ public class Aliyun extends AbstractCloud {
 
     static private Logger stdLogger = Aliyun.getStdLogger(Aliyun.class);
 
-
+    static private final String ISO8601_DATE_FORMAT = "yyyy-MM-dd'T'HH:mm:ss'Z'";
     static public final String DSN_ACCESS_KEY = "accessKey";
 
     static private @Nonnull String getLastItem(@Nonnull String name) {
@@ -130,5 +138,31 @@ public class Aliyun extends AbstractCloud {
     @Override
     public @Nonnull DataCenterServices getDataCenterServices() {
         return new AliyunDataCenter(this);
+    }
+
+    @Override
+    public @Nullable ComputeServices getComputeServices() {
+        return new AliyunCompute(this);
+    }
+
+
+    public String formatIso8601Date(Date date) {
+        SimpleDateFormat df = new SimpleDateFormat(ISO8601_DATE_FORMAT);
+        df.setTimeZone(new SimpleTimeZone(0, "GMT"));
+        return df.format(date);
+    }
+
+    public Date parseIso8601Date(@Nonnull String date) throws InternalException {
+        if (date == null || date.isEmpty()) {
+            return new Date(0);
+        }
+
+        SimpleDateFormat dateFormat = new SimpleDateFormat(ISO8601_DATE_FORMAT);
+
+        try {
+            return dateFormat.parse(date);
+        } catch (ParseException parseException) {
+            throw new InternalException("Could not parse date: " + date);
+        }
     }
 }

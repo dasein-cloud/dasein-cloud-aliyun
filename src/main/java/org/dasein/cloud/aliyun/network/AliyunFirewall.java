@@ -179,7 +179,7 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
         }
         AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "AllocateEipAddress", params);
         try {
-            JSONObject response = method.get().asJson();
+            JSONObject response = method.post().asJson();
             return response.getString("SecurityGroupId");
         } catch (JSONException e) {
             stdLogger.error("An exception occurs during create security group!", e);
