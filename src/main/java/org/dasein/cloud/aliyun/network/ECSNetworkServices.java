@@ -26,7 +26,7 @@ import javax.annotation.Nullable;
  * Created by Jane Wang on 5/12/2015.
  *
  * @author Jane Wang
- * @since 2015.5.1
+ * @since 2015.05.01
  */
 public class ECSNetworkServices extends AbstractNetworkServices<Aliyun> {
 

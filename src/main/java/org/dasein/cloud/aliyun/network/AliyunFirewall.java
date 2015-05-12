@@ -18,8 +18,6 @@
  */
 package org.dasein.cloud.aliyun.network;
 
-import com.fasterxml.jackson.core.JsonToken;
-import com.sun.corba.se.spi.orb.Operation;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.conn.util.InetAddressUtils;
 import org.apache.log4j.Logger;
@@ -43,8 +41,7 @@ import java.util.*;
  * Created by Jane Wang on 5/7/2015.
  *
  * @author Jane Wang
- * @since 2015.5.1
- *
+ * @since 2015.05.01
  */
 public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
 
@@ -405,7 +402,7 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
      * B class: 172.16.0.0 - 172.31.255.255 (14/16)
      * C class 192.168.0.0 - 192.168.255.255 (21/8)
      * @param ipAddress
-     * @return
+     * @return true - public ip address; false - private ip address
      * @throws InternalException
      */
     private boolean isPublicIpAddress(String ipAddress) throws InternalException {
@@ -430,8 +427,12 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
             if (source.contains("/")) {
                 String ipAddress = source.split("/")[0];
                 if (InetAddressUtils.isIPv4Address(ipAddress)) {
-                    Integer.valueOf(source.split("/")[1]);
-                    return true;
+                    try{
+                        Integer.valueOf(source.split("/")[1]);
+                        return true;
+                    } catch (NumberFormatException e) {
+                        return false;
+                    }
                 } else {
                     throw new OperationNotSupportedException("Aliyun doesn't support IPV6 address!");
                 }

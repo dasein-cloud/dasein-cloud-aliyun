@@ -32,7 +32,7 @@ import java.util.Locale;
  * Created by jwang7 on 5/7/2015.
  *
  * @author Jane Wang
- * @since 2015.5.1
+ * @since 2015.05.01
  *
  */
 public class AliyunFirewallCapabilities extends AbstractCapabilities<Aliyun> implements FirewallCapabilities {
