@@ -1,24 +1,21 @@
-/*
- * *
- *  * Copyright (C) 2009-2015 Dell, Inc.
- *  * See annotations for authorship information
- *  *
- *  * ====================================================================
- *  * Licensed under the Apache License, Version 2.0 (the "License");
- *  * you may not use this file except in compliance with the License.
- *  * You may obtain a copy of the License at
- *  *
- *  * http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  * Unless required by applicable law or agreed to in writing, software
- *  * distributed under the License is distributed on an "AS IS" BASIS,
- *  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  * See the License for the specific language governing permissions and
- *  * limitations under the License.
- *  * ====================================================================
+/**
+ * Copyright (C) 2009-2015 Dell, Inc.
+ * See annotations for authorship information
  *
+ * ====================================================================
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ * ====================================================================
  */
-
 package org.dasein.cloud.aliyun;
 
 import org.apache.commons.codec.binary.Base64;
@@ -51,7 +48,6 @@ import org.apache.http.params.HttpProtocolParams;
 import org.apache.http.protocol.HttpContext;
 import org.apache.http.util.EntityUtils;
 import org.apache.log4j.Logger;
-import org.dasein.cloud.Cloud;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.ProviderContext;
@@ -82,11 +78,14 @@ import java.util.UUID;
  * Created by Jeffrey Yan on 5/5/2015.
  *
  * @author Jeffrey Yan
- * @since 2015.05.1
+ * @since 2015.05.01
  */
 public class AliyunMethod {
     static private final Logger stdLogger = Aliyun.getStdLogger(AliyunMethod.class);
     static private final Logger wireLogger = Aliyun.getWireLogger(AliyunMethod.class);
+
+    static private final String ENCODING = "UTF-8";
+    static private final String SIGNATURE_ALGORITHM = "HmacSHA1";
 
     private Aliyun aliyun;
     private Category category;
@@ -107,12 +106,12 @@ public class AliyunMethod {
         this.parameters = parameters;
     }
 
-    private static String urlEncode(String value) throws InternalException {
+    private String urlEncode(String value) throws InternalException {
         if (value == null) {
             return null;
         }
         try {
-            return URLEncoder.encode(value, "UTF-8").replace("+", "%20").replace("*", "%2A").replace("%7E", "~");
+            return URLEncoder.encode(value, ENCODING).replace("+", "%20").replace("*", "%2A").replace("%7E", "~");
         } catch (UnsupportedEncodingException unsupportedEncodingException) {
             stdLogger.error("AliyunMethod.urlEncode() failed due to encoding not supported: " + unsupportedEncodingException.getMessage());
             throw new InternalException(unsupportedEncodingException);
@@ -137,11 +136,11 @@ public class AliyunMethod {
         byte[][] accessKey = ( byte[][] ) aliyun.getContext().getConfigurationValue(Aliyun.DSN_ACCESS_KEY);
         byte[] accessKeySecret = accessKey[1];
         try {
-            Mac mac = Mac.getInstance("HmacSHA1");
+            Mac mac = Mac.getInstance(SIGNATURE_ALGORITHM);
             byte[] secretKey = Arrays.copyOf(accessKeySecret, accessKeySecret.length + 1);
             secretKey[accessKeySecret.length] = '&';
-            mac.init(new SecretKeySpec(secretKey, "HmacSHA1"));
-            byte[] signedData = mac.doFinal(stringToSign.toString().getBytes("UTF-8"));
+            mac.init(new SecretKeySpec(secretKey, SIGNATURE_ALGORITHM));
+            byte[] signedData = mac.doFinal(stringToSign.toString().getBytes(ENCODING));
             signature = new String(Base64.encodeBase64(signedData));
         } catch (NoSuchAlgorithmException noSuchAlgorithmException) {
             stdLogger.error("AliyunMethod.sign() failed due to algorithm not supported: " + noSuchAlgorithmException.getMessage());
@@ -207,6 +206,10 @@ public class AliyunMethod {
             stdLogger.error("I/O error from server communications: " + ioException.getMessage());
             throw new InternalException(ioException);
         }
+        return transformResponse(httpResponse);
+    }
+
+    private Response transformResponse(HttpResponse httpResponse) throws CloudException, InternalException {
         int httpCode = httpResponse.getStatusLine().getStatusCode();
 
         stdLogger.debug("HTTP STATUS: " + httpCode);
@@ -314,7 +317,7 @@ public class AliyunMethod {
 
             try {
                 httpPost.setURI(uriBuilder.build());
-                httpPost.setEntity(new UrlEncodedFormEntity(params, "UTF-8"));
+                httpPost.setEntity(new UrlEncodedFormEntity(params, ENCODING));
             } catch (URISyntaxException uriSyntaxException) {
                 stdLogger.error("AliyunMethod.post() failed due to URI invalid: " + uriSyntaxException.getMessage());
                 throw new InternalException(uriSyntaxException);
@@ -361,6 +364,8 @@ public class AliyunMethod {
             }
         }
         DefaultHttpClient client = new DefaultHttpClient(params);
+        //TODO: overwrite HttpRequestRetryHandler to handle idempotency
+        //refer http://docs.aliyun.com/?spm=5176.100054.3.1.Ym5tBh#/ecs/open-api/appendix&idempotency
         client.addRequestInterceptor(new HttpRequestInterceptor() {
             public void process(
                     final HttpRequest request,
