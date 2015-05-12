@@ -88,7 +88,9 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
                 JSONArray securityGroups = response.getJSONObject("SecurityGroups").getJSONArray("SecurityGroup");
                 for (int i = 0; i < securityGroups.length(); i++) {
                     JSONObject securityGroup = securityGroups.getJSONObject(i);
-                    firewalls.add(getFirewall(securityGroup.getString("SecurityGroupId")));
+                    if (!AliyunNetworkCommon.isEmpty(securityGroup.getString("SecurityGroupId"))){
+                        firewalls.add(getFirewall(securityGroup.getString("SecurityGroupId")));
+                    }
                 }
                 maxPageNumber = response.getInt("TotalCount") / AliyunNetworkCommon.DefaultPageSize +
                         response.getInt("TotalCount") % AliyunNetworkCommon.DefaultPageSize > 0 ? 1 : 0;
