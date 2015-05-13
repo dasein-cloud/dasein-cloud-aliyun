@@ -60,7 +60,8 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
         //NO-OP
     }
 
-    public String forward(@Nonnull String addressId, int publicPort, @Nonnull Protocol protocol, int privatePort, @Nonnull String onServerId) throws InternalException, CloudException {
+    public String forward(@Nonnull String addressId, int publicPort, @Nonnull Protocol protocol, int privatePort, @Nonnull String onServerId)
+            throws InternalException, CloudException {
         throw new OperationNotSupportedException("Aliyun doesn't support IP forward!");
     }
 
