@@ -74,7 +74,7 @@ public class AliyunFirewallCapabilities extends AbstractCapabilities<Aliyun> imp
     @Nonnull
     public Iterable<RuleTargetType> listSupportedDestinationTypes(boolean inVlan, Direction direction) throws InternalException, CloudException {
         if (direction.equals(Direction.INGRESS)) {
-            return Collections.unmodifiableList(Arrays.asList(RuleTargetType.VLAN, RuleTargetType.VM));
+            return Collections.unmodifiableList(Arrays.asList(RuleTargetType.GLOBAL, RuleTargetType.VM));
         } else {
             return Collections.emptyList();
         }
@@ -92,7 +92,7 @@ public class AliyunFirewallCapabilities extends AbstractCapabilities<Aliyun> imp
 
     @Nonnull
     public Iterable<Protocol> listSupportedProtocols(boolean inVlan) throws InternalException, CloudException {
-        return Collections.unmodifiableList(Arrays.asList(Protocol.TCP, Protocol.UDP, Protocol.ICMP));
+        return Collections.unmodifiableList(Arrays.asList(Protocol.TCP, Protocol.UDP, Protocol.ICMP, Protocol.ANY));
     }
 
     @Nonnull
@@ -102,7 +102,7 @@ public class AliyunFirewallCapabilities extends AbstractCapabilities<Aliyun> imp
 
     @Nonnull
     public Iterable<RuleTargetType> listSupportedSourceTypes(boolean inVlan, Direction direction) throws InternalException, CloudException {
-        return Collections.singletonList(RuleTargetType.CIDR);
+        return Collections.unmodifiableList(Arrays.asList(RuleTargetType.CIDR, RuleTargetType.GLOBAL));
     }
 
     public boolean requiresRulesOnCreation() throws CloudException, InternalException {
