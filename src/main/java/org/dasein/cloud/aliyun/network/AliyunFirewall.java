@@ -35,6 +35,8 @@ import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Created by Jane Wang on 5/7/2015.
@@ -106,14 +108,22 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
     @Nonnull
     @Override
     public String authorize(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull RuleTarget sourceEndpoint, @Nonnull Protocol protocol, @Nonnull RuleTarget destinationEndpoint, int beginPort, int endPort, @Nonnegative int precedence) throws CloudException, InternalException {
+
         if (direction != null && direction.equals(Direction.EGRESS)) {
             throw new OperationNotSupportedException("Aliyun doesn't support EGRESS firewall rule!");
         }
+        if (sourceEndpoint == null) {
+            sourceEndpoint = RuleTarget.getGlobal(firewallId);
+        }
+        if (destinationEndpoint == null) {
+            destinationEndpoint = RuleTarget.getGlobal(firewallId);
+        }
+
         Map<String, Object> params = new HashMap<String, Object>();
         params.put("RegionId", getContext().getRegionId());
         params.put("SecurityGroupId", firewallId);
         //set params for sourceCidrIp or sourceGroupId
-        if (sourceEndpoint != null && sourceEndpoint.getRuleTargetType().equals(RuleTargetType.CIDR)) {
+        if (sourceEndpoint.getRuleTargetType().equals(RuleTargetType.CIDR)) {
             String ipAddress = sourceEndpoint.getCidr().split("/")[0];
             if (!InetAddressUtils.isIPv4Address(ipAddress)) {
                 throw new OperationNotSupportedException("Aliyun supports IPV4 address only!");
@@ -122,11 +132,14 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
             if (!AliyunIpAddress.isPublicIpAddress(ipAddress)) {
                 params.put("NicType", AliyunNetworkCommon.AliyunFirewallNicType.INTRANET.name().toLowerCase());
             }
-        } else if (sourceEndpoint != null && sourceEndpoint.getRuleTargetType().equals(RuleTargetType.GLOBAL)) {
+        } else if (sourceEndpoint.getRuleTargetType().equals(RuleTargetType.GLOBAL)) {
+            if (sourceEndpoint.getProviderFirewallId() == null) {
+                throw new InternalException("Aliyun support source rule type GLOBAL, but you must specify the source firewall ID!");
+            }
             params.put("SourceGroupId", sourceEndpoint.getProviderFirewallId());
             params.put("NicType", AliyunNetworkCommon.AliyunFirewallNicType.INTRANET.name().toLowerCase());
         } else {
-            throw new OperationNotSupportedException("Aliyun supports source CIDR, source Security Group auth, and source cannot be empty!");
+            throw new OperationNotSupportedException("Aliyun supports source CIDR, source Security Group auth!");
         }
         if (protocol != null) {
             if (protocol.equals(Protocol.ANY)) {
@@ -145,18 +158,14 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
                 params.put("Policy", AliyunNetworkCommon.AliyunFirewallPermission.DROP.name().toLowerCase());
             }
         }
+        if (destinationEndpoint != null || !destinationEndpoint.getRuleTargetType().equals(RuleTargetType.GLOBAL)) {
+            throw new OperationNotSupportedException("Aliyun supports empty destination or Global destination only, " +
+                    "rules for all the desinations guarded by this firewall!");
+        }
         AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "AuthorizeSecurityGroup", params);
         method.post();
-        if (destinationEndpoint != null) {
-            if (destinationEndpoint.getRuleTargetType().equals(RuleTargetType.VM)) {
-                //TODO invoke compute API JoinSecurityGroup to add instance to the security group.
-            } else if (destinationEndpoint.getRuleTargetType().equals(RuleTargetType.GLOBAL)) {
-                //NO-OP
-            } else {
-                throw new OperationNotSupportedException("Aliyun supports destination target type VM or empty/GLOBAL destination only!");
-            }
-        }
-        return FirewallRule.getInstance(null, firewallId, sourceEndpoint, direction, protocol, permission, destinationEndpoint, beginPort, endPort).getProviderRuleId();
+        return FirewallRule.getInstance(null, firewallId, sourceEndpoint, direction, protocol, permission, destinationEndpoint,
+                beginPort, endPort).getProviderRuleId();
     }
 
     @Nonnull
@@ -219,7 +228,8 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
                 }
                 currentPageNumber++;
             } catch (JSONException e) {
-                throw new InternalException("An exception occurs during parsing response from describe security groups!");
+                stdLogger.error("An exception occurs during list firewall status!", e);
+                throw new InternalException(e);
             }
         } while (currentPageNumber < totalPageCount);
         return resourceStatus;
@@ -229,9 +239,14 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
     public void revoke(@Nonnull String providerFirewallRuleId) throws InternalException, CloudException {
         FirewallRule firewallRule = FirewallRule.parseId(providerFirewallRuleId);
         String source = null;
-        if (firewallRule.getSourceEndpoint().getRuleTargetType().equals(RuleTargetType.CIDR)) {
+        if (firewallRule.getSourceEndpoint() != null
+                && firewallRule.getSourceEndpoint().getRuleTargetType().equals(RuleTargetType.CIDR)) {
             source = firewallRule.getSourceEndpoint().getCidr();
-        } else if (firewallRule.getSourceEndpoint().getRuleTargetType().equals(RuleTargetType.GLOBAL)) {
+        } else if (firewallRule.getSourceEndpoint() != null
+                && firewallRule.getSourceEndpoint().getRuleTargetType().equals(RuleTargetType.GLOBAL)) {
+            if (AliyunNetworkCommon.isEmpty(firewallRule.getSourceEndpoint().getProviderFirewallId())) {
+                throw new InternalException("Revoke a firewall rule with type GLOBAL, you must specify the source firewall ID!");
+            }
             source = firewallRule.getSourceEndpoint().getProviderFirewallId();
         } else {
             throw new OperationNotSupportedException("Aliyun only support CIDR and GLOBAL source target type!");
@@ -245,21 +260,6 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
         } else {
             revoke(firewallRule.getFirewallId(), firewallRule.getDirection(), firewallRule.getPermission(), source, firewallRule.getProtocol(), firewallRule.getDestinationEndpoint(), firewallRule.getStartPort(), firewallRule.getEndPort());
         }
-    }
-
-    @Override
-    public void revoke(@Nonnull String firewallId, @Nonnull String source, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
-        revoke(firewallId, Direction.INGRESS, null, source, protocol, beginPort, endPort);
-    }
-
-    @Override
-    public void revoke(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull String source, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
-        revoke(firewallId, source, protocol, beginPort, endPort);
-    }
-
-    @Override
-    public void revoke(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull String source, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
-        revoke(firewallId, direction, permission, source, protocol, null, beginPort, endPort);
     }
 
     @Override
@@ -278,17 +278,7 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
             }
         }
         //portRange
-        if (beginPort == 0 || endPort < beginPort) { //default value
-            if (protocol.equals(Protocol.ICMP) || protocol.equals(Protocol.ANY)) {
-                params.put("PortRange", "-1/-1");
-            } else if (protocol.equals(Protocol.TCP) || protocol.equals(Protocol.UDP)) {
-                params.put("PortRange", "1/65535");
-            } else {
-                throw new OperationNotSupportedException("Aliyun doesn't support " + protocol.name().toLowerCase() + " protocol!");
-            }
-        } else { //customer provided value
-            params.put("PortRange", beginPort + "/" + endPort);
-        }
+        params.put("PortRange", toPortRange(protocol, beginPort, endPort));
 
         if (isCidrBlock(source)) {
             params.put("DestCidrIp", source); //revoke rule auth by source cidr block
@@ -401,32 +391,17 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
     }
 
     /**
-     * The verify of CIDR block should be (IPV4 Address) + "/" + (Integer)
-     * @param source
-     * @return true - CIDR block, false - normal string, deems as a security group id
-     * @throws CloudException
-     * @throws InternalException
+     * verify the CIDR block format source.
+     * @param source CIDR string
+     * @return true if source is CIDR block; false if not.
      */
-    private boolean isCidrBlock (String source) throws CloudException, InternalException {
-        if (AliyunNetworkCommon.isEmpty(source)) {
-            if (source.contains("/")) {
-                String ipAddress = source.split("/")[0];
-                if (InetAddressUtils.isIPv4Address(ipAddress)) {
-                    try{
-                        Integer.valueOf(source.split("/")[1]);
-                        return true;
-                    } catch (NumberFormatException e) {
-                        return false;
-                    }
-                } else {
-                    throw new OperationNotSupportedException("Aliyun doesn't support IPV6 address!");
-                }
-            } else {
-                return false;
-            }
-        } else {
-            throw new InternalException("source to be check is empty!");
+    private boolean isCidrBlock (String source) {
+        if (!AliyunNetworkCommon.isEmpty(source)) {
+            Pattern pattern = Pattern.compile("^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(\\d|[1-2]\\d|3[0-2]))?$");
+            Matcher matcher = pattern.matcher(source);
+            return matcher.find();
         }
+        return false;
     }
 
 }

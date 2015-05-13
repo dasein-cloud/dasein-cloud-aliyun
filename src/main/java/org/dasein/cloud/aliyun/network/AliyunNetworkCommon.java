@@ -39,7 +39,7 @@ public class AliyunNetworkCommon {
 
    public static boolean isEmpty (Object obj) {
       if (obj instanceof String) {
-         if (obj == null || ((String) obj).length() == 0) {
+         if (obj == null || ((String) obj).trim().length() == 0) {
             return true;
          } else {
             return false;
