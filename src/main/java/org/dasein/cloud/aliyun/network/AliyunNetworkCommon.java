@@ -18,6 +18,13 @@
  */
 package org.dasein.cloud.aliyun.network;
 
+import org.dasein.cloud.InternalException;
+import java.text.ParseException;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.TimeZone;
+
 /**
  * Created by Jane Wang on 5/7/2015.
  *
@@ -37,6 +44,8 @@ public class AliyunNetworkCommon {
 
    public static enum AliyunEipStatus {ASSOCIATING, UNASSOCIATING, INUSE, AVAILABLE};
 
+   public static final String TimeFormat = "YYYY-MM-DDThh:mmZ";
+
    public static boolean isEmpty (Object obj) {
       if (obj instanceof String) {
          if (obj == null || ((String) obj).trim().length() == 0) {
@@ -47,4 +56,16 @@ public class AliyunNetworkCommon {
       }
       return false;
    }
+
+   public static Date parseFromUTCString(String source) throws InternalException {
+      SimpleDateFormat format = new SimpleDateFormat(TimeFormat);
+      TimeZone timeZone = TimeZone.getTimeZone("UTC");
+      format.setTimeZone(timeZone);
+      try {
+         return format.parse(source);
+      } catch (ParseException e) {
+         throw new InternalException(e);
+      }
+   }
+
 }

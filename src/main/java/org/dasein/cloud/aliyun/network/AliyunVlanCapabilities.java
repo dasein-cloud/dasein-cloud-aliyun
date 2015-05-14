@@ -159,6 +159,7 @@ public class AliyunVlanCapabilities extends AbstractCapabilities<Aliyun> impleme
 
     @Override
     public boolean supportsRawAddressRouting() throws CloudException, InternalException {
+        //TODO verify
         return false;
     }
 }

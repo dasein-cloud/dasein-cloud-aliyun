@@ -67,10 +67,7 @@ public class AliyunNetwork extends AbstractNetworkServices<Aliyun> {
 
     @Nullable
     @Override
-    public VLANSupport getVlanSupport() {
-        //TODO
-        return super.getVlanSupport();
-    }
+    public VLANSupport getVlanSupport() { return new AliyunVlan(getProvider()); }
 
     @Nullable
     @Override
