@@ -44,6 +44,8 @@ public class AliyunNetworkCommon {
 
    public static enum AliyunEipStatus {ASSOCIATING, UNASSOCIATING, INUSE, AVAILABLE};
 
+   public static enum AliyunRouteEntryNextHopType {INSTANCE, TUNNEL};
+
    public static final String TimeFormat = "YYYY-MM-DDThh:mmZ";
 
    public static boolean isEmpty (Object obj) {
@@ -66,6 +68,14 @@ public class AliyunNetworkCommon {
       } catch (ParseException e) {
          throw new InternalException(e);
       }
+   }
+
+   public static String toUpperCaseFirstLetter(String s)
+   {
+      if(Character.isUpperCase(s.charAt(0)))
+         return s;
+      else
+         return (new StringBuilder()).append(Character.toUpperCase(s.charAt(0))).append(s.substring(1)).toString();
    }
 
 }
