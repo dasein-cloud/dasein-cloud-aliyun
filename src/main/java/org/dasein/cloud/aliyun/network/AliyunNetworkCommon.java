@@ -48,6 +48,30 @@ public class AliyunNetworkCommon {
 
    public static enum AliyunRouteType {SYSTEM ,CUSTOM};
 
+   public static enum AliyunLbNetworkType {INTERNET, INTRANET};
+
+   //WRR: weighted round-robin, WLC: weighted least connection
+   public static enum AliyunLbScheduleAlgorithm {WRR, WLC};
+
+   public static enum AliyunLbSwitcher {ON, OFF};
+
+   public static enum AliyunLbPersistenceType {INSERT, SERVER};
+
+   public static final int DefaultWeight = 100;
+
+   public static enum AliyunLbHealthCheckDomain {
+      SERVER_IP("$_ip"), CUSTOMIZE("");
+      private final String value;
+      AliyunLbHealthCheckDomain (String value) {
+         this.value = value;
+      }
+      public String getValue() {
+         return value;
+      }
+   };
+
+   public static final int DefaultPersistenceTimeout = 5 * 60;
+
    //TODO check in Aliyun document says "YYYY-MM-DD'T'hh:mm'Z'", however example shows "YYYY-MM-DD'T'hh:mm:ss'Z'"
    private  static final String TimeFormat = "YYYY-MM-DD'T'hh:mm:ss'Z'";
 

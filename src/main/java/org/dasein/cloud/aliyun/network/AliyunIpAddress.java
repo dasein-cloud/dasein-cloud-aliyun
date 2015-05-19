@@ -48,6 +48,26 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
         super(provider);
     }
 
+    /**
+     * This is not a common Dasein API.
+     * Allocate ip address for instance/server, this method will not be called by Dasein,
+     * however it may be called by the computing in order to make an instance work.
+     * @param serverId instance id
+     * @return public id address
+     */
+//    public String assign(@Nonnull String serverId) throws CloudException, InternalException {
+//        Map<String, Object> params = new HashMap<String, Object>();
+//        params.put("InstanceId", serverId);
+//        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "AllocatePublicIpAddress", params);
+//        JSONObject response = method.post().asJson();
+//        try {
+//            return response.getString("IpAddress");
+//        } catch (JSONException e) {
+//            stdLogger.error("An exception occurs during assign public ip address for server!", e);
+//            throw new InternalException(e);
+//        }
+//    }
+
     public void assign(@Nonnull String addressId, @Nonnull String serverId) throws InternalException, CloudException {
         Map<String, Object> params = new HashMap<String, Object>();
         params.put("AllocationId", addressId);

@@ -34,13 +34,6 @@ public class AliyunNetwork extends AbstractNetworkServices<Aliyun> {
 
     @Nullable
     @Override
-    public DNSSupport getDnsSupport() {
-        //TODO
-        return super.getDnsSupport();
-    }
-
-    @Nullable
-    @Override
     public FirewallSupport getFirewallSupport() {
         return new AliyunFirewall(getProvider());
     }
@@ -54,27 +47,11 @@ public class AliyunNetwork extends AbstractNetworkServices<Aliyun> {
     @Nullable
     @Override
     public LoadBalancerSupport getLoadBalancerSupport() {
-        //TODO
-        return super.getLoadBalancerSupport();
-    }
-
-    @Nullable
-    @Override
-    public NetworkFirewallSupport getNetworkFirewallSupport() {
-        //TODO check not support?
-        return null;
+        return new AliyunLoadBalancer(getProvider());
     }
 
     @Nullable
     @Override
     public VLANSupport getVlanSupport() { return new AliyunVlan(getProvider()); }
-
-    @Nullable
-    @Override
-    public VPNSupport getVpnSupport() {
-        //TODO not support?
-        return super.getVpnSupport();
-    }
-
 
 }
