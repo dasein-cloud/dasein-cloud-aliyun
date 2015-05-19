@@ -30,6 +30,7 @@ import org.dasein.cloud.dc.Region;
 import org.dasein.cloud.util.APITrace;
 import org.dasein.cloud.util.Cache;
 import org.dasein.cloud.util.CacheLevel;
+import org.dasein.util.uom.time.TimePeriod;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -110,7 +111,8 @@ public class AliyunDataCenter extends AbstractDataCenterServices<Aliyun> impleme
             Collection<DataCenter> dataCenters;
 
             if (providerRegionId.equals(context.getRegionId())) {//only cache context's region
-                cache = Cache.getInstance(getProvider(), "dataCenters", DataCenter.class, CacheLevel.REGION_ACCOUNT);
+                cache = Cache.getInstance(getProvider(), "dataCenters", DataCenter.class, CacheLevel.REGION_ACCOUNT,
+                        TimePeriod.valueOf(1, "day"));
                 dataCenters = (Collection<DataCenter>) cache.get(context);
                 if (dataCenters != null) {
                     return dataCenters;

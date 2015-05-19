@@ -28,6 +28,8 @@ import org.dasein.cloud.aliyun.compute.AliyunCompute;
 import org.dasein.cloud.compute.ComputeServices;
 import org.dasein.cloud.dc.DataCenterServices;
 import org.dasein.cloud.dc.Region;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -163,6 +165,20 @@ public class Aliyun extends AbstractCloud {
             return dateFormat.parse(date);
         } catch (ParseException parseException) {
             throw new InternalException("Could not parse date: " + date);
+        }
+    }
+
+    public void validateResponse(JSONObject json) throws CloudException, InternalException {
+        try {
+            String requestId = json.getString("RequestId");
+            if (requestId != null && !requestId.isEmpty()) {
+                return;
+            } else {
+                throw new CloudException("Response is not valid: no RequestId field");
+            }
+        } catch (JSONException jsonException) {
+            stdLogger.error("Failed to parse JSON due to field not exist", jsonException);
+            throw new InternalException(jsonException);
         }
     }
 }

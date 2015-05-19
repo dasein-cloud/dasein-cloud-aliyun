@@ -1,22 +1,20 @@
-/*
- * *
- *  * Copyright (C) 2009-2015 Dell, Inc.
- *  * See annotations for authorship information
- *  *
- *  * ====================================================================
- *  * Licensed under the Apache License, Version 2.0 (the "License");
- *  * you may not use this file except in compliance with the License.
- *  * You may obtain a copy of the License at
- *  *
- *  * http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  * Unless required by applicable law or agreed to in writing, software
- *  * distributed under the License is distributed on an "AS IS" BASIS,
- *  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  * See the License for the specific language governing permissions and
- *  * limitations under the License.
- *  * ====================================================================
+/**
+ * Copyright (C) 2009-2015 Dell, Inc.
+ * See annotations for authorship information
  *
+ * ====================================================================
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ * ====================================================================
  */
 
 package org.dasein.cloud.aliyun.compute;
@@ -113,7 +111,7 @@ public class AliyunImage extends AbstractImageSupport<Aliyun> implements Machine
         return true;
     }
 
-    private @Nullable MachineImage toMachineImage( @Nullable JSONObject imageJson, String regionId)
+    private @Nonnull MachineImage toMachineImage(@Nonnull JSONObject imageJson, @Nonnull String regionId)
             throws JSONException, InternalException {
         String ownerAlias = imageJson.getString("ImageOwnerAlias");
         String owner = "--" + getProvider().getCloudName() + "--";
@@ -163,8 +161,9 @@ public class AliyunImage extends AbstractImageSupport<Aliyun> implements Machine
         return machineImage;
     }
 
-    private List<MachineImage> describeImages(Architecture architecture, ImageClass imageClass, Platform platform,
-            String regex, boolean matchesAny, String ownerAlias) throws InternalException, CloudException {
+    private List<MachineImage> describeImages(@Nullable Architecture architecture, @Nullable ImageClass imageClass,
+            @Nullable Platform platform, @Nullable String regex, @Nonnull boolean matchesAny,
+            @Nonnull String ownerAlias) throws InternalException, CloudException {
         ImageFilterOptions imageFilterOptions = ImageFilterOptions.getInstance();
         if (architecture != null) {
             imageFilterOptions.withArchitecture(architecture);
@@ -227,7 +226,12 @@ public class AliyunImage extends AbstractImageSupport<Aliyun> implements Machine
     @Override
     public Iterable<MachineImage> listImages(@Nullable ImageFilterOptions options)
             throws CloudException, InternalException {
-        if (options.getAccountNumber() != null && !options.getAccountNumber().isEmpty()) {
+        if (options == null) {
+            List<MachineImage> result = new ArrayList<MachineImage>();
+            result.addAll(describeImages(null, null, null, null, true, "self"));
+            result.addAll(describeImages(null, null, null, null, true, "others "));
+            return result;
+        } else if (options.getAccountNumber() != null && !options.getAccountNumber().isEmpty()) {
             if (getContext().getAccountNumber().equals(options.getAccountNumber())) {
                 return describeImages(options.getArchitecture(), options.getImageClass(), options.getPlatform(),
                         options.getRegex(), options.isMatchesAny(), "self");
@@ -320,7 +324,7 @@ public class AliyunImage extends AbstractImageSupport<Aliyun> implements Machine
         parameters.put("ImageName", options.getName());
         parameters.put("Description", options.getDescription());
         AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "CreateImage", parameters);
-        JSONObject json = method.get().asJson();
+        JSONObject json = method.post().asJson();
         String imageId;
         try {
             imageId = json.getString("ImageId");
@@ -352,18 +356,8 @@ public class AliyunImage extends AbstractImageSupport<Aliyun> implements Machine
         parameters.put("RegionId", regionId);
         parameters.put("ImageId", providerImageId);
         AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "CopyImage", parameters);
-        JSONObject json = method.get().asJson();
-        try {
-            String requestId = json.getString("RequestId");
-            if (requestId != null && !requestId.isEmpty()) {
-                return;
-            } else {
-                throw new CloudException("Response is not valid: no RequestId field");
-            }
-        } catch (JSONException jsonException) {
-            stdLogger.error("Failed to parse JSON due to field not exist", jsonException);
-            throw new InternalException(jsonException);
-        }
+        JSONObject json = method.post().asJson();
+        getProvider().validateResponse(json);
     }
 
     @Override
@@ -380,7 +374,7 @@ public class AliyunImage extends AbstractImageSupport<Aliyun> implements Machine
         parameters.put("DestinationImageName", options.getName());
         parameters.put("DestinationDescription", options.getDescription());
         AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "CopyImage", parameters);
-        JSONObject json = method.get().asJson();
+        JSONObject json = method.post().asJson();
         try {
             return json.getString("ImageId");
         } catch (JSONException jsonException) {
@@ -444,18 +438,8 @@ public class AliyunImage extends AbstractImageSupport<Aliyun> implements Machine
             i = i + 1;
         }
         AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "ModifyImageSharePermission", parameters);
-        JSONObject json = method.get().asJson();
-        try {
-            String requestId = json.getString("RequestId");
-            if (requestId != null && !requestId.isEmpty()) {
-                return;
-            } else {
-                throw new CloudException("Response is not valid: no RequestId field");
-            }
-        } catch (JSONException jsonException) {
-            stdLogger.error("Failed to parse JSON due to field not exist", jsonException);
-            throw new InternalException(jsonException);
-        }
+        JSONObject json = method.post().asJson();
+        getProvider().validateResponse(json);
     }
 
     @Override
