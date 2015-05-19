@@ -46,7 +46,10 @@ public class AliyunNetworkCommon {
 
    public static enum AliyunRouteEntryNextHopType {INSTANCE, TUNNEL};
 
-   public static final String TimeFormat = "YYYY-MM-DDThh:mmZ";
+   public static enum AliyunRouteType {SYSTEM ,CUSTOM};
+
+   //TODO check in Aliyun document says "YYYY-MM-DD'T'hh:mm'Z'", however example shows "YYYY-MM-DD'T'hh:mm:ss'Z'"
+   private  static final String TimeFormat = "YYYY-MM-DD'T'hh:mm:ss'Z'";
 
    public static boolean isEmpty (Object obj) {
       if (obj instanceof String) {
@@ -60,7 +63,7 @@ public class AliyunNetworkCommon {
    }
 
    public static Date parseFromUTCString(String source) throws InternalException {
-      SimpleDateFormat format = new SimpleDateFormat(TimeFormat);
+      final SimpleDateFormat format = new SimpleDateFormat(TimeFormat);
       TimeZone timeZone = TimeZone.getTimeZone("UTC");
       format.setTimeZone(timeZone);
       try {

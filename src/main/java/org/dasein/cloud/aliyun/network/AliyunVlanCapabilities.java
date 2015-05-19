@@ -60,18 +60,16 @@ public class AliyunVlanCapabilities extends AbstractCapabilities<Aliyun> impleme
     @Override
     public boolean allowsNewSubnetCreation() throws CloudException, InternalException {
         //will be create one subnet/vswitch during creating the vlan/vpc, not allow create by the customer.
-        return false;
+        return true;
     }
 
     @Override
     public boolean allowsMultipleTrafficTypesOverSubnet() throws CloudException, InternalException {
-        //only IPV4
         return false;
     }
 
     @Override
     public boolean allowsMultipleTrafficTypesOverVlan() throws CloudException, InternalException {
-        //only IPV4
         return false;
     }
 
@@ -82,7 +80,6 @@ public class AliyunVlanCapabilities extends AbstractCapabilities<Aliyun> impleme
 
     @Override
     public int getMaxVlanCount() throws CloudException, InternalException {
-        //TODO: not specify in the API
         return Integer.MAX_VALUE;
     }
 
@@ -107,14 +104,12 @@ public class AliyunVlanCapabilities extends AbstractCapabilities<Aliyun> impleme
     @Nonnull
     @Override
     public Requirement getRoutingTableSupport() throws CloudException, InternalException {
-        //TODO check automatically create one when create the vpc
         return Requirement.NONE;
     }
 
     @Nonnull
     @Override
     public Requirement getSubnetSupport() throws CloudException, InternalException {
-        //TODO check automatically create one when create the vpc
         return Requirement.NONE;
     }
 
@@ -159,7 +154,6 @@ public class AliyunVlanCapabilities extends AbstractCapabilities<Aliyun> impleme
 
     @Override
     public boolean supportsRawAddressRouting() throws CloudException, InternalException {
-        //TODO verify
         return false;
     }
 }
