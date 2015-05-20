@@ -31,6 +31,8 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 
     /**
      * Note: Aliyun create health check during the creation of listners, however Dasein create health check and then create listener.
+     *       Also since the healthcheck is part of listener, it will not set on during add listeners, and can be open when invoke create healthcheck
+     *       (healthcheck will be set to on and params will be filled).
      * @param toLoadBalancerId
      * @param listeners
      * @throws CloudException
@@ -253,7 +255,6 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
     @Nonnull
     @Override
     public Iterable<LoadBalancerEndpoint> listEndpoints(@Nonnull String forLoadBalancerId) throws CloudException, InternalException {
-        
         return super.listEndpoints(forLoadBalancerId);
     }
 
@@ -267,11 +268,6 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
     @Override
     public Iterable<SSLCertificate> listSSLCertificates() throws CloudException, InternalException {
         return super.listSSLCertificates();
-    }
-
-    @Override
-    public void removeDataCenters(@Nonnull String fromLoadBalancerId, @Nonnull String... dataCenterIdsToRemove) throws CloudException, InternalException {
-        super.removeDataCenters(fromLoadBalancerId, dataCenterIdsToRemove);
     }
 
     @Override
@@ -300,18 +296,61 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
     }
 
     @Override
-    public LoadBalancerHealthCheck createLoadBalancerHealthCheck(@Nullable String name, @Nullable String description, @Nullable String host, @Nullable LoadBalancerHealthCheck.HCProtocol protocol, int port, @Nullable String path, int interval, int timeout, int healthyCount, int unhealthyCount) throws CloudException, InternalException {
-        return super.createLoadBalancerHealthCheck(name, description, host, protocol, port, path, interval, timeout, healthyCount, unhealthyCount);
+    public LoadBalancerHealthCheck createLoadBalancerHealthCheck(@Nullable String name, @Nullable String description,
+                                                                 @Nullable String host, @Nullable LoadBalancerHealthCheck.HCProtocol protocol,
+                                                                 int port, @Nullable String path, int interval, int timeout, int healthyCount,
+                                                                 int unhealthyCount) throws CloudException, InternalException {
+        throw new OperationNotSupportedException("Aliyun doesn't support create health check without associated load balancer!");
     }
 
+    /**
+     * Change load balancer associated listeners healthcheck settings. add this healthcheck to all listeners.
+     * @param options health check creation options
+     * @return
+     * @throws CloudException
+     * @throws InternalException
+     */
     @Override
     public LoadBalancerHealthCheck createLoadBalancerHealthCheck(@Nonnull HealthCheckOptions options) throws CloudException, InternalException {
-        return super.createLoadBalancerHealthCheck(options);
-    }
 
-    @Override
-    public void attachHealthCheckToLoadBalancer(@Nonnull String providerLoadBalancerId, @Nonnull String providerLBHealthCheckId) throws CloudException, InternalException {
-        super.attachHealthCheckToLoadBalancer(providerLoadBalancerId, providerLBHealthCheckId);
+        //retrieve load balancer by id
+        LoadBalancer loadBalancer = getLoadBalancer(options.getProviderLoadBalancerId());
+
+        List<LbListener> listeners = getLbListenersByLoadBalancer(loadBalancer);
+        for (LbListener listener : listeners) {
+
+            Map<String, Object> params = new HashMap<String, Object>();
+            params.put("HealthCheckConnectPort", options.getPort());
+            params.put("HealthyThreshold", options.getHealthyCount());
+            params.put("UnhealthyThreshold", options.getUnhealthyCount());
+            params.put("HealthCheckConnectTimeout", options.getTimeout());
+            params.put("HealthCheckInterval", options.getInterval());
+
+            String methodName = null;
+            if (listener.getNetworkProtocol().equals(LbProtocol.HTTP)) {
+                methodName = "SetLoadBalancerHTTPListenerAttribute";
+            } else if (listener.getNetworkProtocol().equals(LbProtocol.HTTPS)) {
+                methodName = "SetLoadBalancerHTTPSListenerAttribute";
+//                params.put("ServerCertificateId", ""); TODO check it
+            } else if (listener.getNetworkProtocol().equals(LbProtocol.RAW_TCP)) {
+                methodName = "SetLoadBalancerTCPListenerAttribute";
+//                params.put("PersistenceTimeout", "");
+                AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.SLB, methodName, params);
+                method.post();
+                continue;
+            } else {
+                throw new OperationNotSupportedException("Aliyun supports HTTP, HTTPS and RAW TCP as the load balancer protocol only!");
+            }
+
+            params.put("HealthCheck", AliyunNetworkCommon.AliyunLbSwitcher.ON.name().toLowerCase());
+            params.put("HealthCheckDomain", "$_ip"); //TODO
+            params.put("HealthCheckURI", options.getPath());
+//            params.put("HealthCheckHttpCode", "")
+            AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.SLB, methodName, params);
+            method.post();
+        }
+        return LoadBalancerHealthCheck.getInstance(options.getProtocol(), options.getPort(), options.getPath(), options.getInterval(),
+                options.getTimeout(), options.getHealthyCount(), options.getUnhealthyCount());
     }
 
     @Override
@@ -335,16 +374,6 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
     }
 
     @Override
-    public void detatchHealthCheck(String loadBalancerId, String heathcheckId) throws CloudException, InternalException {
-        super.detatchHealthCheck(loadBalancerId, heathcheckId);
-    }
-
-    @Override
-    public void setFirewalls(@Nonnull String providerLoadBalancerId, @Nonnull String... firewallIds) throws CloudException, InternalException {
-        super.setFirewalls(providerLoadBalancerId, firewallIds);
-    }
-
-    @Override
     public void modifyLoadBalancerAttributes(@Nonnull String id, @Nonnull LbAttributesOptions options) throws CloudException, InternalException {
         super.modifyLoadBalancerAttributes(id, options);
     }
@@ -356,12 +385,14 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 
     @Override
     public void attachLoadBalancerToSubnets(@Nonnull String toLoadBalancerId, @Nonnull String... subnetIdsToAdd) throws CloudException, InternalException {
-        super.attachLoadBalancerToSubnets(toLoadBalancerId, subnetIdsToAdd);
+        throw new OperationNotSupportedException("Aliyun doesn't support attach load balancer to subnets operation, " +
+                "subnet should be defined during creation of load balancer!");
     }
 
     @Override
     public void detachLoadBalancerFromSubnets(@Nonnull String fromLoadBalancerId, @Nonnull String... subnetIdsToDelete) throws CloudException, InternalException {
-        super.detachLoadBalancerFromSubnets(fromLoadBalancerId, subnetIdsToDelete);
+        throw new OperationNotSupportedException("Aliyun doesn't support dettach load balancer to subnets operation, " +
+                "subnet should be defined during creation of load balancer and couldn't be dettached!");
     }
 
     /**
@@ -442,7 +473,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
         }
     }
 
-    private List<LbListener> getLBListenersByLoadBalancer(LoadBalancer loadBalancer) throws CloudException, InternalException {
+    private List<LbListener> getLbListenersByLoadBalancer(LoadBalancer loadBalancer) throws CloudException, InternalException {
         List<LbListener> listeners = new ArrayList<LbListener>();
         for (int i = 0; i < loadBalancer.getPublicPorts().length; i++) {
             LbListener listener = getLbListenerByLbAlgorithm(
@@ -487,7 +518,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
             LoadBalancer loadBalancer = LoadBalancer.getInstance(getContext().getAccountNumber(), getContext().getRegionId(), response.getString("LoadBalancerId"),
                     status, response.getString("LoadBalancerName"), null, lbType, getAddressType(), response.getString("Address"), ports);
             //Listeners
-            List<LbListener> listeners = getLBListenersByLoadBalancer(loadBalancer);
+            List<LbListener> listeners = getLbListenersByLoadBalancer(loadBalancer);
             loadBalancer.withListeners(listeners.toArray(new LbListener[listeners.size()]));
             return loadBalancer;
         } catch (JSONException e) {
