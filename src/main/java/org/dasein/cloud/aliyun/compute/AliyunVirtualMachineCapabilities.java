@@ -193,7 +193,9 @@ public class AliyunVirtualMachineCapabilities extends AbstractCapabilities<Aliyu
 
     @Override
     public boolean isBasicAnalyticsSupported() throws CloudException, InternalException {
-        return true;
+        //Aliyun's analytics has only average value, no max/min value
+        //refer http://docs.aliyun.com/?spm=5176.100054.3.1.Ym5tBh#/ecs/open-api/monitor&describeinstancemonitordata
+        return false;
     }
 
     @Override
