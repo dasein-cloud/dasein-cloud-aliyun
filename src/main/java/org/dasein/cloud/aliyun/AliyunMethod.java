@@ -240,7 +240,7 @@ public class AliyunMethod {
                 requestId = json.getString("RequestId");
                 hostId = json.getString("HostId");
             } catch (JSONException jsonException) {
-                stdLogger.error("Failed to parse JSON due to field not exist", jsonException);
+                stdLogger.error("Failed to parse JSON", jsonException);
                 throw new InternalException(jsonException);
             }
             stdLogger.error(

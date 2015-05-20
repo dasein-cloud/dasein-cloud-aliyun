@@ -147,7 +147,7 @@ public class AliyunDataCenter extends AbstractDataCenterServices<Aliyun> impleme
             }
             return dataCenters;
         } catch (JSONException jsonException) {
-            stdLogger.error("Failed to parse JSON due to field not exist", jsonException);
+            stdLogger.error("Failed to parse JSON", jsonException);
             throw new InternalException(jsonException);
         } finally {
             APITrace.end();
@@ -190,7 +190,7 @@ public class AliyunDataCenter extends AbstractDataCenterServices<Aliyun> impleme
             cache.put(context, regions);
             return regions;
         }  catch (JSONException jsonException) {
-            stdLogger.error("Failed to parse JSON due to field not exist", jsonException);
+            stdLogger.error("Failed to parse JSON", jsonException);
             throw new InternalException(jsonException);
         } finally {
             APITrace.end();

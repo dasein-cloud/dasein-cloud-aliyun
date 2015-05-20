@@ -101,7 +101,7 @@ public class AliyunImage extends AbstractImageSupport<Aliyun> implements Machine
                 return null;
             }
         } catch (JSONException jsonException) {
-            stdLogger.error("Failed to parse JSON due to field not exist", jsonException);
+            stdLogger.error("Failed to parse JSON", jsonException);
             throw new InternalException(jsonException);
         }
     }
@@ -215,7 +215,7 @@ public class AliyunImage extends AbstractImageSupport<Aliyun> implements Machine
                     break;
                 }
             } catch (JSONException jsonException) {
-                stdLogger.error("Failed to parse JSON due to field not exist", jsonException);
+                stdLogger.error("Failed to parse JSON", jsonException);
                 throw new InternalException(jsonException);
             }
         }
@@ -329,7 +329,7 @@ public class AliyunImage extends AbstractImageSupport<Aliyun> implements Machine
         try {
             imageId = json.getString("ImageId");
         } catch (JSONException jsonException) {
-            stdLogger.error("Failed to parse JSON due to field not exist", jsonException);
+            stdLogger.error("Failed to parse JSON", jsonException);
             throw new InternalException(jsonException);
         }
         //TODO: need to wait for create image complete?
@@ -378,7 +378,7 @@ public class AliyunImage extends AbstractImageSupport<Aliyun> implements Machine
         try {
             return json.getString("ImageId");
         } catch (JSONException jsonException) {
-            stdLogger.error("Failed to parse JSON due to field not exist", jsonException);
+            stdLogger.error("Failed to parse JSON", jsonException);
             throw new InternalException(jsonException);
         }
     }
@@ -412,7 +412,7 @@ public class AliyunImage extends AbstractImageSupport<Aliyun> implements Machine
                     break;
                 }
             } catch (JSONException jsonException) {
-                stdLogger.error("Failed to parse JSON due to field not exist", jsonException);
+                stdLogger.error("Failed to parse JSON", jsonException);
                 throw new InternalException(jsonException);
             }
         }

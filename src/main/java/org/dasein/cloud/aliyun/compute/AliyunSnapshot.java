@@ -115,7 +115,7 @@ public class AliyunSnapshot extends AbstractSnapshotSupport<Aliyun> implements S
                 return null;
             }
         } catch (JSONException jsonException) {
-            stdLogger.error("Failed to parse JSON due to field not exist", jsonException);
+            stdLogger.error("Failed to parse JSON", jsonException);
             throw new InternalException(jsonException);
         }
     }
@@ -151,7 +151,7 @@ public class AliyunSnapshot extends AbstractSnapshotSupport<Aliyun> implements S
                     break;
                 }
             } catch (JSONException jsonException) {
-                stdLogger.error("Failed to parse JSON due to field not exist", jsonException);
+                stdLogger.error("Failed to parse JSONt", jsonException);
                 throw new InternalException(jsonException);
             }
         }
@@ -170,7 +170,7 @@ public class AliyunSnapshot extends AbstractSnapshotSupport<Aliyun> implements S
             String snapshotId = json.getString("SnapshotId");
             return snapshotId;
         } catch (JSONException jsonException) {
-            stdLogger.error("Failed to parse JSON due to field not exist", jsonException);
+            stdLogger.error("Failed to parse JSON", jsonException);
             throw new InternalException(jsonException);
         }
     }

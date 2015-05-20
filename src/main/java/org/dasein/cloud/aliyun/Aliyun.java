@@ -177,7 +177,7 @@ public class Aliyun extends AbstractCloud {
                 throw new CloudException("Response is not valid: no RequestId field");
             }
         } catch (JSONException jsonException) {
-            stdLogger.error("Failed to parse JSON due to field not exist", jsonException);
+            stdLogger.error("Failed to parse JSON", jsonException);
             throw new InternalException(jsonException);
         }
     }

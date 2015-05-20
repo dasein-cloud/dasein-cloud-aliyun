@@ -23,6 +23,7 @@ import org.apache.log4j.Logger;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.ResourceStatus;
+import org.dasein.cloud.VisibleScope;
 import org.dasein.cloud.aliyun.Aliyun;
 import org.dasein.cloud.aliyun.AliyunMethod;
 import org.dasein.cloud.compute.AbstractVMSupport;
@@ -30,12 +31,17 @@ import org.dasein.cloud.compute.Architecture;
 import org.dasein.cloud.compute.VMLaunchOptions;
 import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.compute.VirtualMachineCapabilities;
+import org.dasein.cloud.compute.VirtualMachineLifecycle;
 import org.dasein.cloud.compute.VirtualMachineProduct;
 import org.dasein.cloud.compute.VirtualMachineProductFilterOptions;
 import org.dasein.cloud.compute.VirtualMachineSupport;
+import org.dasein.cloud.compute.VmState;
 import org.dasein.cloud.compute.VmStatistics;
+import org.dasein.cloud.compute.Volume;
 import org.dasein.cloud.compute.VolumeAttachment;
 import org.dasein.cloud.compute.VolumeCreateOptions;
+import org.dasein.cloud.network.IPVersion;
+import org.dasein.cloud.network.RawAddress;
 import org.dasein.cloud.util.Cache;
 import org.dasein.cloud.util.CacheLevel;
 import org.dasein.util.uom.storage.Gigabyte;
@@ -51,6 +57,7 @@ import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -131,6 +138,8 @@ public class AliyunVirtualMachine extends AbstractVMSupport<Aliyun> implements V
             }
         }
 
+        //only Vpc type has subnet id, should aliyun has two types of network product? Classic | Vpc
+        //refer http://docs.aliyun.com/?spm=5176.100054.3.1.Ym5tBh#/ecs/open-api/datatype&instanceattributestype
         if (withLaunchOptions.getSubnetId() != null) {
             parameters.put("VSwitchId", withLaunchOptions.getSubnetId());
             parameters.put("PrivateIpAddress", withLaunchOptions.getPrivateIp());
@@ -142,7 +151,7 @@ public class AliyunVirtualMachine extends AbstractVMSupport<Aliyun> implements V
             String instanceId = json.getString("InstanceId");
             return getVirtualMachine(instanceId);
         } catch (JSONException jsonException) {
-            stdLogger.error("Failed to parse JSON due to field not exist", jsonException);
+            stdLogger.error("Failed to parse JSON", jsonException);
             throw new InternalException(jsonException);
         }
     }
@@ -205,47 +214,228 @@ public class AliyunVirtualMachine extends AbstractVMSupport<Aliyun> implements V
                 toRemove.add(firewall);
             }
         }
-        return null;
+        for (String firewall : targetFirewalls) {
+            if (!currentFirewalls.contains(firewall)) {
+                toAdd.add(firewall);
+            }
+        }
+
+        for (String firewallId : toRemove) {
+            Map<String, Object> parameters = new HashMap<String, Object>();
+            parameters.put("InstanceId", virtualMachineId);
+            parameters.put("SecurityGroupId", firewallId);
+            AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "LeaveSecurityGroup",
+                    parameters);
+            JSONObject json = method.post().asJson();
+            getProvider().validateResponse(json);
+        }
+        for (String firewallId : toAdd) {
+            Map<String, Object> parameters = new HashMap<String, Object>();
+            parameters.put("InstanceId", virtualMachineId);
+            parameters.put("SecurityGroupId", firewallId);
+            AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "JoinSecurityGroup",
+                    parameters);
+            JSONObject json = method.post().asJson();
+            getProvider().validateResponse(json);
+        }
+
+        virtualMachine.setProviderFirewallIds(firewalls);
+        return virtualMachine;
+    }
+
+    private @Nonnull VmState toVmState(@Nonnull String status) {
+        if (status.equals("Stopped")) {
+            return VmState.STOPPED;
+        } else if (status.equals("Starting")) {
+            return VmState.PENDING;
+        } else if (status.equals("Running")) {
+            return VmState.RUNNING;
+        } else if (status.equals("Stopping")) {
+            return VmState.STOPPING;
+        } else if (status.equals("Deleted")) {
+            return VmState.TERMINATED;
+        }
+        return VmState.ERROR;
+    }
+
+    private @Nonnull VirtualMachine toVirtualMachine(@Nonnull JSONObject json) throws JSONException, InternalException, CloudException {
+        VirtualMachine virtualMachine = new VirtualMachine();
+        virtualMachine.setProviderVirtualMachineId(json.getString("InstanceId"));
+        virtualMachine.setName(json.getString("InstanceName"));
+        virtualMachine.setDescription(json.getString("Description"));
+        virtualMachine.setProviderMachineImageId(json.getString("ImageId"));
+        virtualMachine.setProviderRegionId(json.getString("RegionId"));
+        virtualMachine.setProviderDataCenterId(json.getString("ZoneId"));
+        virtualMachine.setProductId(json.getString("InstanceType"));
+        //json.getString("HostName")
+        virtualMachine.setCurrentState(toVmState(json.getString("Status")));
+
+        List<String> securityGroupIds = new ArrayList<String>();
+        JSONArray securityGroupIdsJsonArray = json.getJSONObject("SecurityGroupIds").getJSONArray("SecurityGroupId");
+        for (int i = 0; i < securityGroupIdsJsonArray.length(); i++) {
+            securityGroupIds.add(securityGroupIdsJsonArray.getString(i));
+        }
+        virtualMachine.setProviderFirewallIds(securityGroupIds.toArray(new String[] {}));
+
+        //ignore InternetMaxBandwidthIn, InternetMaxBandwidthOut, InternetChargeType
+        Date creationTime = getProvider().parseIso8601Date(json.getString("CreationTime"));
+        virtualMachine.setCreationTimestamp(creationTime.getTime());
+
+        String networkType = json.getString("InstanceNetworkType");
+        if(networkType.equals("Classic")) {
+            List<RawAddress> privateIpAddresses = new ArrayList<RawAddress>();
+            JSONArray innerIpAddressesJsonArray = json.getJSONObject("InnerIpAddress").getJSONArray("IpAddress");
+            for (int i = 0; i < innerIpAddressesJsonArray.length(); i++) {
+                privateIpAddresses.add(new RawAddress(innerIpAddressesJsonArray.getString(i), IPVersion.IPV4));
+            }
+            virtualMachine.setPrivateAddresses(privateIpAddresses.toArray(new RawAddress[] {}));
+
+            List<RawAddress> publicIpAddresses = new ArrayList<RawAddress>();
+            JSONArray publicIpAddressesJsonArray = json.getJSONObject("PublicIpAddress").getJSONArray("IpAddress");
+            for (int i = 0; i < publicIpAddressesJsonArray.length(); i++) {
+                publicIpAddresses.add(new RawAddress(publicIpAddressesJsonArray.getString(i), IPVersion.IPV4));
+            }
+            virtualMachine.setPublicAddresses(publicIpAddresses.toArray(new RawAddress[] {}));
+        } else if(networkType.equals("Vpc")) {
+            JSONObject vpcAttributesJsonObject = json.getJSONObject("VpcAttributes");
+            virtualMachine.setProviderVlanId(vpcAttributesJsonObject.getString("VpcId"));
+            virtualMachine.setProviderSubnetId(vpcAttributesJsonObject.getString("VSwitchId"));
+
+            List<RawAddress> privateIpAddresses = new ArrayList<RawAddress>();
+            JSONArray privateIpAddressesJsonArray = vpcAttributesJsonObject.getJSONObject("PrivateIpAddress")
+                    .getJSONArray("IpAddress");
+            for (int i = 0; i < privateIpAddressesJsonArray.length(); i++) {
+                privateIpAddresses.add(new RawAddress(privateIpAddressesJsonArray.getString(i), IPVersion.IPV4));
+            }
+            virtualMachine.setPrivateAddresses(privateIpAddresses.toArray(new RawAddress[] {}));
+            //ignore VpcAttributes.NatIpAddress
+
+            JSONObject eipAddressJsonObject = json.getJSONObject("EipAddress");
+            String eipAddress = eipAddressJsonObject.getString("IpAddress");
+            virtualMachine.setPublicAddresses(new RawAddress(eipAddress, IPVersion.IPV4));
+            //ignore EipAddress.AllocationId, EipAddress.InternetChargeType
+        }
+        //ignore OperationLocks
+
+        virtualMachine.setArchitecture(Architecture.I64);
+        virtualMachine.setIoOptimized(false);//no IO optimized instance
+        virtualMachine.setClonable(false);
+        virtualMachine.setPausable(false);
+        virtualMachine.setImagable(getProvider().getComputeServices().getImageSupport().getCapabilities()
+                .canImage(virtualMachine.getCurrentState()));
+        virtualMachine.setRebootable(getCapabilities().canReboot(virtualMachine.getCurrentState()));
+        virtualMachine.setPersistent(true);
+        virtualMachine.setProviderOwnerId(getContext().getAccountNumber());
+        virtualMachine.setIpForwardingAllowed(false);//no document mentions instance can be a NAT server
+        virtualMachine.setVisibleScope(VisibleScope.ACCOUNT_DATACENTER);
+        virtualMachine.setLifecycle(VirtualMachineLifecycle.NORMAL);
+        return virtualMachine;
     }
 
     @Override
-    public void disableAnalytics( @Nonnull String vmId ) throws InternalException, CloudException {
-        // NO-OP
-    }
+    public @Nullable VirtualMachine getVirtualMachine(@Nonnull String vmId) throws InternalException, CloudException {
+        String regionId = getContext().getRegionId();
+        if (regionId == null) {
+            throw new InternalException("No region was set for this request");
+        }
 
-    @Override
-    public void enableAnalytics( @Nonnull String vmId ) throws InternalException, CloudException {
-        // NO-OP
-    }
-
-    @Override
-    public @Nullable VirtualMachine getVirtualMachine( @Nonnull String vmId ) throws InternalException, CloudException {
-        return null;
-    }
-
-    @Override
-    public @Nonnull VmStatistics getVMStatistics( @Nonnull String vmId, @Nonnegative long from, @Nonnegative long to ) throws InternalException, CloudException {
-        return null;
-    }
-
-    @Override
-    public @Nonnull Iterable<VmStatistics> getVMStatisticsForPeriod( @Nonnull String vmId, @Nonnegative long from, @Nonnegative long to ) throws InternalException, CloudException {
-        return null;
-    }
-
-    @Override
-    public @Nonnull Iterable<String> listFirewalls( @Nonnull String vmId ) throws InternalException, CloudException {
-        return null;
-    }
-
-    @Override
-    public @Nonnull Iterable<ResourceStatus> listVirtualMachineStatus() throws InternalException, CloudException {
-        return null;
+        Map<String, Object> parameters = new HashMap<String, Object>();
+        parameters.put("RegionId", regionId);
+        parameters.put("InstanceIds", "[\"" + vmId + "\"]");
+        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DescribeInstances");
+        JSONObject json = method.get().asJson();
+        try {
+            JSONArray virtualMachinesJson = json.getJSONObject("Instances").getJSONArray("Instance");
+            if (virtualMachinesJson.length() >= 1) {
+                JSONObject virtualMachineJson = virtualMachinesJson.getJSONObject(0);
+                return toVirtualMachine(virtualMachineJson);
+            } else {
+                return null;
+            }
+        } catch (JSONException jsonException) {
+            stdLogger.error("Failed to parse JSON", jsonException);
+            throw new InternalException(jsonException);
+        }
     }
 
     @Override
     public @Nonnull Iterable<VirtualMachine> listVirtualMachines() throws InternalException, CloudException {
-        return null;
+        String regionId = getContext().getRegionId();
+        if (regionId == null) {
+            throw new InternalException("No region was set for this request");
+        }
+
+        List<VirtualMachine> result = new ArrayList<VirtualMachine>();
+        int pageNumber = 1;
+        int processedCount = 0;
+        while(true) {
+            Map<String, Object> parameters = new HashMap<String, Object>();
+            parameters.put("RegionId", regionId);
+            parameters.put("PageNumber", pageNumber++);
+            parameters.put("PageSize", 50);//max
+            AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DescribeInstances", parameters);
+            JSONObject json = method.get().asJson();
+            try {
+                int totalCount = json.getInt("TotalCount");
+                JSONArray virtualMachinesJson = json.getJSONObject("Instances").getJSONArray("Instance");
+                for (int i = 0; i < virtualMachinesJson.length(); i++) {
+                    JSONObject virtualMachineJson = virtualMachinesJson.getJSONObject(i);
+                    result.add(toVirtualMachine(virtualMachineJson));
+                    processedCount++;
+                }
+                if (processedCount >= totalCount) {
+                    break;
+                }
+            } catch (JSONException jsonException) {
+                stdLogger.error("Failed to parse JSON", jsonException);
+                throw new InternalException(jsonException);
+            }
+        }
+        return result;
+    }
+
+    @Override
+    public @Nonnull Iterable<String> listFirewalls( @Nonnull String vmId ) throws InternalException, CloudException {
+        return Arrays.asList(getVirtualMachine(vmId).getProviderFirewallIds());
+    }
+
+    @Override
+    public @Nonnull Iterable<ResourceStatus> listVirtualMachineStatus() throws InternalException, CloudException {
+        String regionId = getContext().getRegionId();
+        if (regionId == null) {
+            throw new InternalException("No region was set for this request");
+        }
+
+        List<ResourceStatus> result = new ArrayList<ResourceStatus>();
+        int pageNumber = 1;
+        int processedCount = 0;
+        while(true) {
+            Map<String, Object> parameters = new HashMap<String, Object>();
+            parameters.put("RegionId", regionId);
+            parameters.put("PageNumber", pageNumber++);
+            parameters.put("PageSize", 50);//max
+            AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DescribeInstanceStatus", parameters);
+            JSONObject json = method.get().asJson();
+            try {
+                int totalCount = json.getInt("TotalCount");
+                JSONArray virtualMachinesJson = json.getJSONObject("InstanceStatuses").getJSONArray("InstanceStatus");
+                for (int i = 0; i < virtualMachinesJson.length(); i++) {
+                    JSONObject virtualMachineJson = virtualMachinesJson.getJSONObject(i);
+
+                    String virtualMachineId = virtualMachineJson.getString("InstanceId");
+                    VmState virtualMachineState = toVmState(virtualMachineJson.getString("Status"));
+                    result.add(new ResourceStatus(virtualMachineId, virtualMachineState));
+                    processedCount++;
+                }
+                if (processedCount >= totalCount) {
+                    break;
+                }
+            } catch (JSONException jsonException) {
+                stdLogger.error("Failed to parse JSON", jsonException);
+                throw new InternalException(jsonException);
+            }
+        }
+        return result;
     }
 
     @Override
@@ -285,8 +475,9 @@ public class AliyunVirtualMachine extends AbstractVMSupport<Aliyun> implements V
                     products.add(product);
                 }
                 cache.put(getContext(), products);
-            } catch (JSONException e) {
-                throw new InternalException(e);
+            } catch (JSONException jsonException) {
+                stdLogger.error("Failed to parse JSON", jsonException);
+                throw new InternalException(jsonException);
             }
         }
 

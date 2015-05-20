@@ -128,7 +128,7 @@ public class AliyunVolume extends AbstractVolumeSupport<Aliyun> implements Volum
                 return null;
             }
         } catch (JSONException jsonException) {
-            stdLogger.error("Failed to parse JSON due to field not exist", jsonException);
+            stdLogger.error("Failed to parse JSON", jsonException);
             throw new InternalException(jsonException);
         }
     }
@@ -165,7 +165,7 @@ public class AliyunVolume extends AbstractVolumeSupport<Aliyun> implements Volum
                     break;
                 }
             } catch (JSONException jsonException) {
-                stdLogger.error("Failed to parse JSON due to field not exist", jsonException);
+                stdLogger.error("Failed to parse JSON", jsonException);
                 throw new InternalException(jsonException);
             }
         }
@@ -194,7 +194,7 @@ public class AliyunVolume extends AbstractVolumeSupport<Aliyun> implements Volum
             String diskId = json.getString("DiskId");
             return diskId;
         } catch (JSONException jsonException) {
-            stdLogger.error("Failed to parse JSON due to field not exist", jsonException);
+            stdLogger.error("Failed to parse JSON", jsonException);
             throw new InternalException(jsonException);
         }
     }
