@@ -54,7 +54,6 @@ import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -75,7 +74,7 @@ public class AliyunImage extends AbstractImageSupport<Aliyun> implements Machine
 
     @Override
     public ImageCapabilities getCapabilities() throws CloudException, InternalException {
-        return new AliyunMachineImageCapabilities(getProvider());
+        return new AliyunImageCapabilities(getProvider());
     }
 
     @Nullable
