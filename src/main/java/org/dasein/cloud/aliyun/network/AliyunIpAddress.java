@@ -48,36 +48,17 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
         super(provider);
     }
 
-    /**
-     * This is not a common Dasein API.
-     * Allocate ip address for instance/server, this method will not be called by Dasein,
-     * however it may be called by the computing in order to make an instance work.
-     * @param serverId instance id
-     * @return public id address
-     */
-//    public String assign(@Nonnull String serverId) throws CloudException, InternalException {
-//        Map<String, Object> params = new HashMap<String, Object>();
-//        params.put("InstanceId", serverId);
-//        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "AllocatePublicIpAddress", params);
-//        JSONObject response = method.post().asJson();
-//        try {
-//            return response.getString("IpAddress");
-//        } catch (JSONException e) {
-//            stdLogger.error("An exception occurs during assign public ip address for server!", e);
-//            throw new InternalException(e);
-//        }
-//    }
-
     public void assign(@Nonnull String addressId, @Nonnull String serverId) throws InternalException, CloudException {
         Map<String, Object> params = new HashMap<String, Object>();
         params.put("AllocationId", addressId);
         params.put("InstanceId", serverId);
         AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "AssociateEipAddress", params);
-        method.post();
+        JSONObject response = method.post().asJson();
+        getProvider().validateResponse(response);
     }
 
     public void assignToNetworkInterface(@Nonnull String addressId, @Nonnull String nicId) throws InternalException, CloudException {
-        //NO-OP
+        throw new OperationNotSupportedException("Aliyun doesn't support assign IP address to Network Interface!");
     }
 
     public String forward(@Nonnull String addressId, int publicPort, @Nonnull Protocol protocol, int privatePort, @Nonnull String onServerId)
@@ -170,7 +151,8 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
         Map<String, Object> params = new HashMap<String, Object>();
         params.put("AllocationId", addressId);
         AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "ReleaseEipAddress", params);
-        method.post();
+        JSONObject response = method.post().asJson();
+        getProvider().validateResponse(response);
     }
 
     public void releaseFromServer(@Nonnull String addressId) throws InternalException, CloudException {
@@ -181,13 +163,17 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
             params.put("AllocationId", addressId);
             params.put("InstanceId", instanceId);
             AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "UnassociateEipAddresss", params);
-            method.post();
+            JSONObject response = method.post().asJson();
+            getProvider().validateResponse(response);
+        } else {
+            stdLogger.warn("releaseFromServer failed: either ip address or server id is empty!");
+            throw new InternalException("Release From Server Failed: either IP address or Server ID is empty!");
         }
     }
 
     public String request(@Nonnull IPVersion version) throws InternalException, CloudException {
         if (!version.equals(IPVersion.IPV4)) {
-            throw new OperationNotSupportedException("Aliyun supports IPV4 ip address only!");
+            throw new InternalException("Aliyun supports IPV4 ip address only!");
         }
         Map<String, Object> params = new HashMap<String, Object>();
         params.put("RegionId", getContext().getRegionId());
@@ -202,11 +188,11 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
     }
 
     public String requestForVLAN(@Nonnull IPVersion version) throws InternalException, CloudException {
-        throw new OperationNotSupportedException("Aliyun doesn't support request for vlan!");
+        return requestForVLAN(version, null);
     }
 
     public String requestForVLAN(@Nonnull IPVersion version, @Nonnull String vlanId) throws InternalException, CloudException {
-        throw new OperationNotSupportedException("Aliyun doesn't support request for vlan!");
+        return request(version);
     }
 
     /**
@@ -220,7 +206,7 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
      */
     public static boolean isPublicIpAddress(String ipAddress) throws InternalException {
         if (!InetAddressUtils.isIPv4Address(ipAddress)) {
-            throw new OperationNotSupportedException("Aliyun supports IPV4 address only!");
+            throw new InternalException("Aliyun supports IPV4 address only!");
         }
         if (ipAddress.startsWith("10.") || ipAddress.startsWith("192.168.")) {
             return false;
@@ -235,22 +221,18 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
         return true;
     }
 
-    private IpAddress toIpAddress(JSONObject jsonObject) throws InternalException {
+    private IpAddress toIpAddress(JSONObject response) throws InternalException {
         try {
             IpAddress ipAddress = new IpAddress();
-            ipAddress.setAddress(jsonObject.getString("IpAddress"));
-            if (!AliyunNetworkCommon.isEmpty(jsonObject.getString("InstanceId"))) {
-                ipAddress.setServerId(jsonObject.getString("InstanceId"));
+            ipAddress.setAddress(response.getString("IpAddress"));
+            ipAddress.setAddressType(AddressType.PUBLIC);
+            ipAddress.setForVlan(true);
+            ipAddress.setIpAddressId(response.getString("AllocationId"));
+            ipAddress.setRegionId(response.getString("RegionId"));
+            if (!AliyunNetworkCommon.isEmpty(response.getString("InstanceId"))) {
+                ipAddress.setServerId(response.getString("InstanceId"));
             }
-            ipAddress.setRegionId(jsonObject.getString("RegionId"));
             ipAddress.setVersion(IPVersion.IPV4);
-            //TODO check forVlan (Aliyun support assign ip to vm) and AddressType, AWS assigned while Google not.
-            ipAddress.setForVlan(false);
-            if (!isPublicIpAddress(ipAddress.getRawAddress().getIpAddress())) {
-                ipAddress.setAddressType(AddressType.PRIVATE);
-            } else {
-                ipAddress.setAddressType(AddressType.PUBLIC);
-            }
             return ipAddress;
         } catch (JSONException e) {
             throw new InternalException(e);

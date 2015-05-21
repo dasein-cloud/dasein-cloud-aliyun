@@ -48,7 +48,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
             //validate network protocol
             if (listener.getNetworkProtocol() == null || !listener.getNetworkProtocol().equals(LbProtocol.HTTP) ||
                     !listener.getNetworkProtocol().equals(LbProtocol.HTTPS) || !listener.getNetworkProtocol().equals(LbProtocol.RAW_TCP)) {
-                throw new OperationNotSupportedException("Aliyun supports HTTP, HTTPS and RAW TCP as the load balancer algorithms only!");
+                throw new InternalException("Aliyun supports HTTP, HTTPS and RAW TCP as the load balancer algorithms only!");
             }
 
             Map<String, Object> params = new HashMap<String, Object>();
@@ -62,14 +62,14 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
                 } else if (listener.getAlgorithm().equals(LbAlgorithm.LEAST_CONN)) {
                     params.put("Scheduler", AliyunNetworkCommon.AliyunLbScheduleAlgorithm.WLC.name().toLowerCase());
                 } else {
-                    throw new OperationNotSupportedException("Aliyun supports weighted round robin and weighted least connection scheduler algorithms only!");
+                    throw new InternalException("Aliyun supports weighted round robin and weighted least connection scheduler algorithms only!");
                 }
             }
 
             if (listener.getNetworkProtocol().equals(LbProtocol.RAW_TCP)) {
                 //CreateLoadBalancerTCPListener
                 AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.SLB, "CreateLoadBalancerTCPListener", params);
-                method.post();
+                getProvider().validateResponse(method.post().asJson());
                 continue;
             }
 
@@ -85,18 +85,18 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
             } else if (listener.getPersistence() == null) {
                 params.put("StickySession", AliyunNetworkCommon.AliyunLbSwitcher.OFF.name().toLowerCase());
             } else {
-                throw new OperationNotSupportedException("Aliyun supports Cookie as the load balancer persistence type only!");
+                throw new InternalException("Aliyun supports Cookie as the load balancer persistence type only!");
             }
 
             if (listener.getNetworkProtocol().equals(LbProtocol.HTTP)) {
                 //CreateLoadBalancerHTTPListener
                 AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.SLB, "CreateLoadBalancerHTTPListener", params);
-                method.post();
+                getProvider().validateResponse(method.post().asJson());
             } else if (listener.getNetworkProtocol().equals(LbProtocol.HTTPS)) {
                 //CreateLoadBalancerHTTPSListener
                 params.put("ServerCertificateId", getSSLCertificate(listener.getSslCertificateName()).getProviderCertificateId());
                 AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.SLB, "CreateLoadBalancerHTTPSListener", params);
-                method.post();
+                getProvider().validateResponse(method.post().asJson());
             }
         }
     }
@@ -109,7 +109,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
             LbListener listener = listeners[i];
             params.put("ListenerPort", listener.getPublicPort());
             AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.SLB, "DeleteLoadBalancerListener", params);
-            method.post();
+            getProvider().validateResponse(method.post().asJson());
         }
     }
 
@@ -127,7 +127,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
             params.put("LoadBalancerId", toLoadBalancerId);
             params.put("BackendServers", jsonArray.toString());
             AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.SLB, "AddBackendServers", params);
-            method.post();
+            getProvider().validateResponse(method.post().asJson());
         } catch (JSONException e) {
             stdLogger.error("An exception occurs during add backend servers!", e);
             throw new InternalException(e);
@@ -146,7 +146,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
             if (options.getProviderSubnetIds().length == 1) {
                 params.put("VSwitchId", options.getProviderSubnetIds()[0]);
             } else {
-                throw new OperationNotSupportedException("Aliyun supports add load balancer to only one subnet!");
+                throw new InternalException("Aliyun supports add load balancer to only one subnet!");
             }
         }
         if (options.getType() != null) {
@@ -336,10 +336,10 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
                 methodName = "SetLoadBalancerTCPListenerAttribute";
 //                params.put("PersistenceTimeout", "");
                 AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.SLB, methodName, params);
-                method.post();
+                getProvider().validateResponse(method.post().asJson());
                 continue;
             } else {
-                throw new OperationNotSupportedException("Aliyun supports HTTP, HTTPS and RAW TCP as the load balancer protocol only!");
+                throw new InternalException("Aliyun supports HTTP, HTTPS and RAW TCP as the load balancer protocol only!");
             }
 
             params.put("HealthCheck", AliyunNetworkCommon.AliyunLbSwitcher.ON.name().toLowerCase());
@@ -347,7 +347,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
             params.put("HealthCheckURI", options.getPath());
 //            params.put("HealthCheckHttpCode", "")
             AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.SLB, methodName, params);
-            method.post();
+            getProvider().validateResponse(method.post().asJson());
         }
         return LoadBalancerHealthCheck.getInstance(options.getProtocol(), options.getPort(), options.getPath(), options.getInterval(),
                 options.getTimeout(), options.getHealthyCount(), options.getUnhealthyCount());
@@ -444,7 +444,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
         } else if (protocol.equals(LbProtocol.RAW_TCP)) {
             methodName = "DescribeLoadBalancerTCPListenerAttribute";
         } else {
-            throw new OperationNotSupportedException("Aliyun supports HTTP, HTTPS, RAW TCP as the load balancer protocol only!");
+            throw new InternalException("Aliyun supports HTTP, HTTPS, RAW TCP as the load balancer protocol only!");
         }
 
         AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.SLB, methodName, params);

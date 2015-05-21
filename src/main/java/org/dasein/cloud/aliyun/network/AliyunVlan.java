@@ -66,7 +66,7 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
     @Override
     public Route addRouteToVirtualMachine(@Nonnull String routingTableId, @Nonnull IPVersion version, @Nullable String destinationCidr, @Nonnull String vmId) throws CloudException, InternalException {
         if (!version.equals(IPVersion.IPV4)) {
-            throw new OperationNotSupportedException("Aliyun only support IPV4!");
+            throw new InternalException("Aliyun only support IPV4!");
         }
         Map<String, Object> params = new HashMap<String, Object>();
         params.put("RouteTableId", routingTableId);
@@ -77,7 +77,8 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
             params.put("NextHopId", vmId);
         }
         AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "CreateRouteEntry", params);
-        method.post();
+        JSONObject response = method.post().asJson();
+        getProvider().validateResponse(response);
         return Route.getRouteToVirtualMachine(IPVersion.IPV4, destinationCidr, getContext().getAccountNumber(), vmId);
     }
 
@@ -518,7 +519,8 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
             params.put("DestinationCidrBlock", destinationCidr);
             params.put("NextHopId", nextHopId);
             method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DeleteRouteEntry", params);
-            method.post();
+            response = method.post().asJson();
+            getProvider().validateResponse(response);
         }
     }
 
@@ -532,7 +534,8 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
         Map<String, Object> params = new HashMap<String, Object>();
         params.put("VSwitchId", providerSubnetId);
         AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DeleteVSwitch", params);
-        method.post();
+        JSONObject response = method.post().asJson();
+        getProvider().validateResponse(response);
     }
 
     @Override
