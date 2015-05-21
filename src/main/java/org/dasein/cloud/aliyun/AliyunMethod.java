@@ -91,6 +91,7 @@ public class AliyunMethod {
     private Category category;
     private String action;
     private Map<String, Object> parameters;
+    private boolean generateClientToken;
 
     public AliyunMethod(Aliyun aliyun, Category category, String action) {
         this.aliyun = aliyun;
@@ -99,11 +100,20 @@ public class AliyunMethod {
         this.parameters = new HashMap<String, Object>();
     }
 
+    public AliyunMethod(Aliyun aliyun, Category category, String action, boolean generateClientToken) {
+        this(aliyun, category, action);
+        this.generateClientToken = generateClientToken;
+    }
+
     public AliyunMethod(Aliyun aliyun, Category category, String action, Map<String, Object> parameters) {
-        this.aliyun = aliyun;
-        this.category = category;
-        this.action = action;
+        this(aliyun, category, action);
         this.parameters = parameters;
+    }
+
+    public AliyunMethod(Aliyun aliyun, Category category, String action, Map<String, Object> parameters,
+            boolean generateClientToken) {
+        this(aliyun, category, action, parameters);
+        this.generateClientToken = generateClientToken;
     }
 
     private String urlEncode(String value) throws InternalException {
