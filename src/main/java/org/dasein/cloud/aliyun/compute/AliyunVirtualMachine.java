@@ -145,7 +145,7 @@ public class AliyunVirtualMachine extends AbstractVMSupport<Aliyun> implements V
             parameters.put("PrivateIpAddress", withLaunchOptions.getPrivateIp());
         }
 
-        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "CreateInstance", parameters);
+        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "CreateInstance", parameters, true);
         JSONObject json = method.post().asJson();
         try {
             String instanceId = json.getString("InstanceId");

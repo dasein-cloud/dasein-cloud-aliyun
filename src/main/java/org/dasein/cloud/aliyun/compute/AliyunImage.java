@@ -294,7 +294,7 @@ public class AliyunImage extends AbstractImageSupport<Aliyun> implements Machine
                     .getVirtualMachine(options.getVirtualMachineId());
 
             if (VmState.RUNNING.equals(virtualMachine.getCurrentState())) {
-                computeServices.getVirtualMachineSupport().stop(options.getVirtualMachineId(), true);
+                computeServices.getVirtualMachineSupport().stop(options.getVirtualMachineId());
                 virtualMachineStopped = true;
             }
         }
@@ -322,7 +322,7 @@ public class AliyunImage extends AbstractImageSupport<Aliyun> implements Machine
         parameters.put("SnapshotId", snapshotId);
         parameters.put("ImageName", options.getName());
         parameters.put("Description", options.getDescription());
-        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "CreateImage", parameters);
+        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "CreateImage", parameters, true);
         JSONObject json = method.post().asJson();
         String imageId;
         try {
@@ -372,7 +372,7 @@ public class AliyunImage extends AbstractImageSupport<Aliyun> implements Machine
         parameters.put("DestinationRegionId", options.getTargetRegionId());
         parameters.put("DestinationImageName", options.getName());
         parameters.put("DestinationDescription", options.getDescription());
-        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "CopyImage", parameters);
+        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "CopyImage", parameters, true);
         JSONObject json = method.post().asJson();
         try {
             return json.getString("ImageId");

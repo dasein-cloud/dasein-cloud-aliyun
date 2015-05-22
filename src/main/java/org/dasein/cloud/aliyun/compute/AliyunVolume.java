@@ -188,7 +188,7 @@ public class AliyunVolume extends AbstractVolumeSupport<Aliyun> implements Volum
             parameters.put("Size", options.getVolumeSize().getQuantity().intValue());
         }
         parameters.put("SnapshotId", options.getSnapshotId());
-        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "CreateDisk", parameters);
+        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "CreateDisk", parameters, true);
         JSONObject json = method.post().asJson();
         try {
             String diskId = json.getString("DiskId");

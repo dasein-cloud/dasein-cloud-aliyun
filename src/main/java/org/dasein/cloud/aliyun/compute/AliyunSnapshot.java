@@ -164,7 +164,7 @@ public class AliyunSnapshot extends AbstractSnapshotSupport<Aliyun> implements S
         parameters.put("DiskId", options.getVolumeId());
         parameters.put("SnapshotName", options.getName());
         parameters.put("Description", options.getDescription());
-        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "CreateSnapshot", parameters);
+        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "CreateSnapshot", parameters, true);
         JSONObject json = method.post().asJson();
         try {
             String snapshotId = json.getString("SnapshotId");
