@@ -82,14 +82,13 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
         try {
             JSONArray eipAddresses = response.getJSONObject("EipAddresses").getJSONArray("EipAddress");
             for (int i = 0; i < eipAddresses.length(); i++) {
-                JSONObject eipAddress = eipAddresses.getJSONObject(i);
-                return toIpAddress(eipAddress);
+                return toIpAddress(eipAddresses.getJSONObject(i));
             }
+            return null;
         } catch (JSONException e) {
             stdLogger.error("An exception occurs during Describe EIP Address!", e);
             throw new InternalException(e);
         }
-        return null;
     }
 
     public boolean isSubscribed() throws CloudException, InternalException {
@@ -114,6 +113,13 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
         }
     }
 
+    /**
+     * Return status contains: Associating, Unassociating, InUse and Avaiable
+     * @param version the version of the IP protocol for which you are looking for IP addresses
+     * @return resourceStatus list
+     * @throws InternalException
+     * @throws CloudException
+     */
     public Iterable<ResourceStatus> listIpPoolStatus(@Nonnull IPVersion version) throws InternalException, CloudException {
         if (!version.equals(IPVersion.IPV4)) {
             return Collections.emptyList();
@@ -132,9 +138,7 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
                 JSONArray eipAddresses = response.getJSONObject("EipAddresses").getJSONArray("EipAddress");
                 for (int i = 0; i < eipAddresses.length(); i++) {
                     JSONObject eipAddress = eipAddresses.getJSONObject(i);
-                    if (eipAddress.getString("Status") != null && eipAddress.getString("Status").toLowerCase().equals(AliyunNetworkCommon.AliyunEipStatus.AVAILABLE.name().toLowerCase())) {
-                        resourceStatuses.add(new ResourceStatus(eipAddress.getString("AllocationId"), true));
-                    }
+                    resourceStatuses.add(new ResourceStatus(eipAddress.getString("AllocationId"), eipAddress.getString("Status")));
                 }
                 maxPageNumber = response.getInt("TotalCount") / AliyunNetworkCommon.DefaultPageSize
                         + (response.getInt("TotalCount") % AliyunNetworkCommon.DefaultPageSize > 0 ? 1 : 0);
@@ -159,15 +163,11 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
         Map<String, Object> params = new HashMap<String, Object>();
         IpAddress ipAddress = getIpAddress(addressId);
         if (ipAddress != null && !AliyunNetworkCommon.isEmpty(ipAddress.getServerId())) {
-            String instanceId = ipAddress.getServerId();
             params.put("AllocationId", addressId);
-            params.put("InstanceId", instanceId);
+            params.put("InstanceId", ipAddress.getServerId());
             AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "UnassociateEipAddresss", params);
             JSONObject response = method.post().asJson();
             getProvider().validateResponse(response);
-        } else {
-            stdLogger.warn("releaseFromServer failed: either ip address or server id is empty!");
-            throw new InternalException("Release From Server Failed: either IP address or Server ID is empty!");
         }
     }
 
@@ -177,7 +177,7 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
         }
         Map<String, Object> params = new HashMap<String, Object>();
         params.put("RegionId", getContext().getRegionId());
-        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "AllocateEipAddress", params);
+        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "AllocateEipAddress", params, true);
         JSONObject response = method.post().asJson();
         try{
             return response.getString("AllocationId");
@@ -232,6 +232,7 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
             if (!AliyunNetworkCommon.isEmpty(response.getString("InstanceId"))) {
                 ipAddress.setServerId(response.getString("InstanceId"));
             }
+            ipAddress.setReserved(false); //TODO
             ipAddress.setVersion(IPVersion.IPV4);
             return ipAddress;
         } catch (JSONException e) {
