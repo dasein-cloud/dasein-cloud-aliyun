@@ -116,8 +116,7 @@ public class AliyunVlanCapabilities extends AbstractCapabilities<Aliyun> impleme
     @Nullable
     @Override
     public VisibleScope getVLANVisibleScope() {
-        //TODO unknown
-        return null;
+        return VisibleScope.ACCOUNT_REGION;
     }
 
     @Nonnull
