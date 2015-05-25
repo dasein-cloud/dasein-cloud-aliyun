@@ -30,6 +30,7 @@ import org.dasein.cloud.dc.Region;
 import org.dasein.cloud.util.APITrace;
 import org.dasein.cloud.util.Cache;
 import org.dasein.cloud.util.CacheLevel;
+import org.dasein.cloud.util.requester.DriverToCoreMapper;
 import org.dasein.util.uom.time.TimePeriod;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -99,7 +100,7 @@ public class AliyunDataCenter extends AbstractDataCenterServices<Aliyun> impleme
     }
 
     @Override
-    public @Nonnull Iterable<DataCenter> listDataCenters(@Nonnull String providerRegionId) throws InternalException, CloudException {
+    public @Nonnull Iterable<DataCenter> listDataCenters(@Nonnull final String providerRegionId) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "listDataCenters");
         try {
             ProviderContext context = getProvider().getContext();
@@ -118,37 +119,44 @@ public class AliyunDataCenter extends AbstractDataCenterServices<Aliyun> impleme
                     return dataCenters;
                 }
             }
-            dataCenters = new ArrayList<DataCenter>();
 
             Map<String, Object> parameters = new HashMap<String, Object>();
             parameters.put("RegionId", providerRegionId);
             AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DescribeZones",
                     parameters);
+            dataCenters = method.get().asPojo(new DriverToCoreMapper<JSONObject, Collection<DataCenter>>() {
+                @Override
+                public Collection<DataCenter> mapFrom(JSONObject json) {
+                    try {
+                        Collection<DataCenter> result = new ArrayList<DataCenter>();
 
-            JSONObject json = method.get().asJson();
-
-            JSONArray dataCentersJson = json.getJSONObject("Zones").getJSONArray("Zone");
-            for (int i = 0; i < dataCentersJson.length(); i++) {
-                JSONObject dataCenterJson = dataCentersJson.getJSONObject(i);
-                String zoneId = dataCenterJson.getString("ZoneId");
-                DataCenter dataCenter = new DataCenter(zoneId, zoneId, providerRegionId, true, true);
-                JSONArray resourceTypesJson = dataCenterJson.getJSONObject("AvailableResourceCreation").getJSONArray("ResourceTypes");
-                List<String> resourceTypes = new ArrayList<String>();
-                for (int j = 0; j < resourceTypesJson.length(); j++) {
-                    resourceTypes.add(resourceTypesJson.getString(j));
+                        JSONArray dataCentersJson = json.getJSONObject("Zones").getJSONArray("Zone");
+                        for (int i = 0; i < dataCentersJson.length(); i++) {
+                            JSONObject dataCenterJson = dataCentersJson.getJSONObject(i);
+                            String zoneId = dataCenterJson.getString("ZoneId");
+                            DataCenter dataCenter = new DataCenter(zoneId, zoneId, providerRegionId, true, true);
+                            JSONArray resourceTypesJson = dataCenterJson.getJSONObject("AvailableResourceCreation")
+                                    .getJSONArray("ResourceTypes");
+                            List<String> resourceTypes = new ArrayList<String>();
+                            for (int j = 0; j < resourceTypesJson.length(); j++) {
+                                resourceTypes.add(resourceTypesJson.getString(j));
+                            }
+                            dataCenter.setCompute(resourceTypes.contains("Instance"));
+                            dataCenter.setStorage(resourceTypes.contains("Disk"));
+                            result.add(dataCenter);
+                        }
+                        return result;
+                    }  catch (JSONException jsonException) {
+                        stdLogger.error("Failed to parse JSON", jsonException);
+                        throw new RuntimeException(jsonException.getMessage());
+                    }
                 }
-                dataCenter.setCompute(resourceTypes.contains("Instance"));
-                dataCenter.setStorage(resourceTypes.contains("Disk"));
-                dataCenters.add(dataCenter);
-            }
+            });
 
             if (cache != null) {
                 cache.put(context, dataCenters);
             }
             return dataCenters;
-        } catch (JSONException jsonException) {
-            stdLogger.error("Failed to parse JSON", jsonException);
-            throw new InternalException(jsonException);
         } finally {
             APITrace.end();
         }
@@ -169,29 +177,36 @@ public class AliyunDataCenter extends AbstractDataCenterServices<Aliyun> impleme
             if (regions != null) {
                 return regions;
             }
-            regions = new ArrayList<Region>();
 
             AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DescribeRegions");
-            JSONObject json = method.get().asJson();
-
-            JSONArray regionsJson = json.getJSONObject("Regions").getJSONArray("Region");
-            for (int i = 0; i < regionsJson.length(); i++) {
-                JSONObject regionJson = regionsJson.getJSONObject(i);
-                String regionId = regionJson.getString("RegionId");
-                Region region = new Region(regionId, regionId, true, true);
-                if (regionId.equals("cn-hongkong")) {
-                    region.setJurisdiction("HK");
-                } else {
-                    region.setJurisdiction(regionId.substring(0, regionId.indexOf('-')).toUpperCase(Locale.ENGLISH));
+            regions = method.get().asPojo(new DriverToCoreMapper<JSONObject, Collection<Region>>() {
+                @Override
+                public Collection<Region> mapFrom(JSONObject json) {
+                    try {
+                        Collection<Region> result = new ArrayList<Region>();
+                        JSONArray regionsJson = json.getJSONObject("Regions").getJSONArray("Region");
+                        for (int i = 0; i < regionsJson.length(); i++) {
+                            JSONObject regionJson = regionsJson.getJSONObject(i);
+                            String regionId = regionJson.getString("RegionId");
+                            Region region = new Region(regionId, regionId, true, true);
+                            if (regionId.equals("cn-hongkong")) {
+                                region.setJurisdiction("HK");
+                            } else {
+                                region.setJurisdiction(
+                                        regionId.substring(0, regionId.indexOf('-')).toUpperCase(Locale.ENGLISH));
+                            }
+                            result.add(region);
+                        }
+                        return result;
+                    } catch (JSONException jsonException) {
+                        stdLogger.error("Failed to parse JSON", jsonException);
+                        throw new RuntimeException(jsonException.getMessage());
+                    }
                 }
-                regions.add(region);
-            }
+            });
 
             cache.put(context, regions);
             return regions;
-        }  catch (JSONException jsonException) {
-            stdLogger.error("Failed to parse JSON", jsonException);
-            throw new InternalException(jsonException);
         } finally {
             APITrace.end();
         }
