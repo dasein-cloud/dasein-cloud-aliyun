@@ -19,9 +19,14 @@
 package org.dasein.cloud.aliyun.network;
 
 import org.dasein.cloud.InternalException;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.text.ParseException;
 
 import java.text.SimpleDateFormat;
+import java.util.Collection;
 import java.util.Date;
 import java.util.TimeZone;
 
@@ -57,7 +62,11 @@ public class AliyunNetworkCommon {
 
    public static enum AliyunLbPersistenceType {INSERT, SERVER};
 
+   public static enum AliyunLbEndpointState {NORMAL, ABNORMAL, UNAVAILABLE};
+
    public static final int DefaultWeight = 100;
+
+   public static final String HealthCheckIdPrefix = "hc-";
 
    public static enum AliyunLbHealthCheckDomain {
       SERVER_IP("$_ip"), CUSTOMIZE("");
@@ -78,6 +87,12 @@ public class AliyunNetworkCommon {
    public static boolean isEmpty (Object obj) {
       if (obj instanceof String) {
          if (obj == null || ((String) obj).trim().length() == 0) {
+            return true;
+         } else {
+            return false;
+         }
+      } else if (obj instanceof Collection) {
+         if (obj == null || ((Collection) obj).size() <= 0) {
             return true;
          } else {
             return false;

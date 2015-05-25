@@ -52,29 +52,6 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
         super(provider);
     }
 
-    //TODO check VPN support
-    @Override
-    public Route addRouteToGateway(@Nonnull String routingTableId, @Nonnull IPVersion version, @Nullable String destinationCidr, @Nonnull String gatewayId) throws CloudException, InternalException {
-        if (!version.equals(IPVersion.IPV4)) {
-            throw new InternalException("Aliyun supports IPV4 only!");
-        }
-        Map<String, Object> params = new HashMap<String, Object>();
-        params.put("RouteTableId", routingTableId);
-        params.put("DestinationCidrBlock", destinationCidr);
-        if (!AliyunNetworkCommon.isEmpty(gatewayId)) {
-            params.put("NextHopType", AliyunNetworkCommon.toUpperCaseFirstLetter(
-                    AliyunNetworkCommon.AliyunRouteEntryNextHopType.INSTANCE.name().toLowerCase()));
-            params.put("NextHopId", gatewayId);
-        } else {
-            stdLogger.warn("Add route to gateway, you must specify the gateway ID!");
-            throw new InternalException("Add route to gateway, you must specify the gateway ID!");
-        }
-        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "CreateRouteEntry", params, true);
-        JSONObject response = method.post().asJson();
-        getProvider().validateResponse(response);
-        return Route.getRouteToGateway(IPVersion.IPV4, destinationCidr, gatewayId);
-    }
-
     /**
      * Cidr block 100.64.0.0/10 in aliyun is reserved for use.
      * Note: in Aliyun the nextHopIp can be empty, however, this can only be created by the System.
@@ -94,6 +71,7 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
         Map<String, Object> params = new HashMap<String, Object>();
         params.put("RouteTableId", routingTableId);
         params.put("DestinationCidrBlock", destinationCidr);
+        //TODO support INSTANCE only (not support TUNNEL)
         if (!AliyunNetworkCommon.isEmpty(vmId)) {
             params.put("NextHopType", AliyunNetworkCommon.toUpperCaseFirstLetter(
                     AliyunNetworkCommon.AliyunRouteEntryNextHopType.INSTANCE.name().toLowerCase()));
@@ -514,7 +492,7 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
     }
 
     /**
-     * retrieve routing table associated resource ids
+     * retrieve routing table associated resource ids (such as VlanId, VRouterId)
      * @param routingTableId routing table id
      * @return map contains(key:value): "VlanId": vlan Id; "VRouterId": vrouter id
      * @throws InternalException
@@ -672,23 +650,11 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
         }
     }
 
-//    private String    destinationCidr;
-//    private String    gatewayAddress;
-//    private String    gatewayId;
-//    private String    gatewayOwnerId;
-//    private String    gatewayNetworkInterfaceId;
-//    private String    gatewayVirtualMachineId;
-//    private IPVersion version
     private Route toRoute (JSONObject response) throws InternalException {
         try {
-            //Response contains RouteTableId, DestinationCidrBlock, Type(System/Custom), NextHopId, Status(Pending/Available/Modifying)
-            //TODO unsure if the Route next hop is INSTANCE or TUNNEL.
-            Route.getRouteToGateway(IPVersion.IPV4, response.getString("DestinationCidrBlock"),
-                    response.getString("InstanceId"));
-            Route.getRouteToVirtualMachine(IPVersion.IPV4, response.getString("DestinationCidrBlock"),
+            //TODO unsure if the Route next hop is INSTANCE or TUNNEL from the API. not support TUNNEL.
+            return Route.getRouteToVirtualMachine(IPVersion.IPV4, response.getString("DestinationCidrBlock"),
                     getContext().getAccountNumber(), response.getString("InstanceId"));
-
-            return null;
         } catch (JSONException e) {
             throw new InternalException(e);
         }
