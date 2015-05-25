@@ -51,6 +51,7 @@ import org.apache.log4j.Logger;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.ProviderContext;
+import org.dasein.cloud.util.requester.DriverToCoreMapper;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -467,6 +468,14 @@ public class AliyunMethod {
                 stdLogger.error("Response.asJSON(): Failed to parse response due to a JSON error: " + jsonException
                         .getMessage());
                 throw new CloudException(jsonException);
+            }
+        }
+
+        public <T> T asPojo(DriverToCoreMapper<JSONObject, T> mapper) throws CloudException, InternalException {
+            try {
+                return mapper.mapFrom(asJson());
+            } catch (Exception exception) {
+                throw new InternalException(exception.getMessage());
             }
         }
 
