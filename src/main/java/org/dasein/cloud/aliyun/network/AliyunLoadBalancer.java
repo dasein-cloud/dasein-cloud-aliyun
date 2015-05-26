@@ -811,10 +811,10 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
     }
 
     private LoadBalancer toLoadBalancer (JSONObject response) throws JSONException, CloudException, InternalException {
-        //TODO status of Dasein and Aliyun doesn't match
+        //TODO check status mapping
         LoadBalancerState status = LoadBalancerState.PENDING;
         if (!AliyunNetworkCommon.isEmpty(response.getString("LoadBalancerStatus"))) {
-            if (response.getString("LoadBalancerStatus").toUpperCase().equals(LoadBalancerState.ACTIVE.name().toUpperCase())) {
+            if (response.getString("LoadBalancerStatus").toUpperCase().equals(AliyunNetworkCommon.AliyunLbState.ACTIVE.name().toUpperCase())) {
                 status = LoadBalancerState.ACTIVE;
             }
         }
@@ -833,15 +833,15 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
         //TODO check addressType, setServerIds has been deprecated (API not support)
         LoadBalancer loadBalancer = LoadBalancer.getInstance(getContext().getAccountNumber(), getContext().getRegionId(), response.getString("LoadBalancerId"),
                 status, response.getString("LoadBalancerName"), null, lbType, getAddressType(), response.getString("Address"), ports);
-        //Listeners, include HTTP, HTTPS, TCP type listeners
-        List<LbListener> listeners = new ArrayList<LbListener>();
-        listeners.addAll(getLbListeners(loadBalancer.getProviderLoadBalancerId(), 0, null));
+        //Listeners
+        List<LbListener> listeners = getLbListeners(loadBalancer.getProviderLoadBalancerId(), 0, null);
         loadBalancer.withListeners(listeners.toArray(new LbListener[listeners.size()]));
         return loadBalancer;
     }
 
     private LbListener toListener(JSONObject response, LbProtocol lbProtocol)
             throws JSONException, InternalException, CloudException {
+
         int publicPort = response.getInt("ListenerPort");
         int privatePort = response.getInt("BackendServerPort");
 
@@ -851,27 +851,21 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
             algorithm = LbAlgorithm.LEAST_CONN;
         }
 
-        //generate listener instance by specific type
-        if (lbProtocol.equals(LbProtocol.RAW_TCP)) {
-            //TODO check if this can be remove
-            return new LbListener(algorithm, null, lbProtocol, publicPort, privatePort, null);
-        } else {
-            LbPersistence persistence = LbPersistence.NONE;
-            if (!AliyunNetworkCommon.isEmpty(response.getString("StickySession"))
-                    && response.getString("StickySession").toUpperCase().equals(AliyunNetworkCommon.AliyunLbSwitcher.ON.name().toUpperCase())) {
-                persistence = LbPersistence.COOKIE;
-            }
+        LbPersistence persistence = LbPersistence.NONE;
+        if (!AliyunNetworkCommon.isEmpty(response.getString("StickySession"))
+                && response.getString("StickySession").toUpperCase().equals(AliyunNetworkCommon.AliyunLbSwitcher.ON.name().toUpperCase())) {
+            persistence = LbPersistence.COOKIE;
+        }
 
-            String certificateName = null;
-            if (!AliyunNetworkCommon.isEmpty(response.getString("ServerCertificateId"))) {
-                for (SSLCertificate certificate : listSSLCertificates()) {
-                    if (certificate.getProviderCertificateId().equals(response.getString("ServerCertificateId"))) {
-                        certificateName = certificate.getCertificateName();
-                    }
+        String certificateName = null;
+        if (!AliyunNetworkCommon.isEmpty(response.getString("ServerCertificateId"))) {
+            for (SSLCertificate certificate : listSSLCertificates()) {
+                if (certificate.getProviderCertificateId().equals(response.getString("ServerCertificateId"))) {
+                    certificateName = certificate.getCertificateName();
                 }
             }
-            return new LbListener(algorithm, persistence, lbProtocol, publicPort, privatePort, certificateName);
         }
+        return new LbListener(algorithm, persistence, lbProtocol, publicPort, privatePort, certificateName);
     }
 
     private SSLCertificate toSSLCertificate (JSONObject response) throws JSONException, InternalException, CloudException {
@@ -879,13 +873,18 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
     }
 
     private LoadBalancerHealthCheck toHealthCheck (JSONObject response, LoadBalancerHealthCheck.HCProtocol protocol) throws JSONException, InternalException, CloudException {
-        LoadBalancerHealthCheck healthCheck = LoadBalancerHealthCheck.getInstance(protocol, response.getInt("HealthCheckConnectPort"),
-                null, response.getInt("HealthCheckInterval"), response.getInt("HealthCheckTimeout"),
-                response.getInt("HealthyThreshold"), response.getInt("UnhealthyThreshold"));
-        if (protocol.equals(LoadBalancerHealthCheck.HCProtocol.HTTP) || protocol.equals(LoadBalancerHealthCheck.HCProtocol.HTTPS)) {
-            healthCheck.setPath(response.getString("HealthCheckURI"));
+        if (!AliyunNetworkCommon.isEmpty(response.getString("HealthCheck"))
+                && response.getString("HealthCheck").toUpperCase().equals(AliyunNetworkCommon.AliyunLbSwitcher.OFF.name().toUpperCase())) {
+            return null;
+        } else {
+            LoadBalancerHealthCheck healthCheck = LoadBalancerHealthCheck.getInstance(protocol, response.getInt("HealthCheckConnectPort"),
+                    null, response.getInt("HealthCheckInterval"), response.getInt("HealthCheckTimeout"),
+                    response.getInt("HealthyThreshold"), response.getInt("UnhealthyThreshold"));
+            if (protocol.equals(LoadBalancerHealthCheck.HCProtocol.HTTP) || protocol.equals(LoadBalancerHealthCheck.HCProtocol.HTTPS)) {
+                healthCheck.setPath(response.getString("HealthCheckURI"));
+            }
+            return healthCheck;
         }
-        return healthCheck;
     }
 
 }

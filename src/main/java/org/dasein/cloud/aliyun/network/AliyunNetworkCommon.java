@@ -56,6 +56,7 @@ public class AliyunNetworkCommon {
    public static enum AliyunLbScheduleAlgorithm {WRR, WLC};
    public static enum AliyunLbSwitcher {ON, OFF};
    public static enum AliyunLbPersistenceType {INSERT, SERVER};
+   public static enum AliyunLbState {INACTIVE, ACTIVE, LOCKED};
    public static enum AliyunLbEndpointState {NORMAL, ABNORMAL, UNAVAILABLE};
    public static enum AliyunLbListenerState {STARTING, RUNNING, CONFIGURING, STOPPING, STOPPED};
    public static final int DefaultWeight = 100;
