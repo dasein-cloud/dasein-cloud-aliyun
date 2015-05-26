@@ -41,45 +41,26 @@ public class AliyunNetworkCommon {
 
    public static final int DefaultPageSize = 10; //from 10 to 50
 
+   //Firewall
    public static enum AliyunFirewallPermission {ACCEPT, DROP};
-
    public static enum AliyunFirewallNicType {INTERNET, INTRANET};
-
    public static final String IpProtocolAll = "ALL";
 
+   //Network
    public static enum AliyunEipStatus {ASSOCIATING, UNASSOCIATING, INUSE, AVAILABLE};
-
    public static enum AliyunRouteEntryNextHopType {INSTANCE, TUNNEL};
-
    public static enum AliyunRouteType {SYSTEM ,CUSTOM};
-
    public static enum AliyunLbNetworkType {INTERNET, INTRANET};
 
-   //WRR: weighted round-robin, WLC: weighted least connection
+   //Load Balancer
    public static enum AliyunLbScheduleAlgorithm {WRR, WLC};
-
    public static enum AliyunLbSwitcher {ON, OFF};
-
    public static enum AliyunLbPersistenceType {INSERT, SERVER};
-
    public static enum AliyunLbEndpointState {NORMAL, ABNORMAL, UNAVAILABLE};
-
+   public static enum AliyunLbListenerState {STARTING, RUNNING, CONFIGURING, STOPPING, STOPPED};
    public static final int DefaultWeight = 100;
-
-   public static final String HealthCheckIdPrefix = "hc-";
-
-   public static enum AliyunLbHealthCheckDomain {
-      SERVER_IP("$_ip"), CUSTOMIZE("");
-      private final String value;
-      AliyunLbHealthCheckDomain (String value) {
-         this.value = value;
-      }
-      public String getValue() {
-         return value;
-      }
-   };
-
    public static final int DefaultPersistenceTimeout = 5 * 60;
+   public static final int DefaultBandwidth = 100; //TODO check (range: 1-1000Mbps)
 
    //TODO check in Aliyun document says "YYYY-MM-DD'T'hh:mm'Z'", however example shows "YYYY-MM-DD'T'hh:mm:ss'Z'"
    private  static final String TimeFormat = "YYYY-MM-DD'T'hh:mm:ss'Z'";
