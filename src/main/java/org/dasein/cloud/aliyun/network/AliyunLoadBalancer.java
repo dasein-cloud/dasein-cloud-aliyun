@@ -264,8 +264,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
     public SSLCertificate createSSLCertificate(@Nonnull SSLCertificateCreateOptions options) throws CloudException, InternalException {
         Map<String, Object> params = new HashMap<String, Object>();
         params.put("RegionId", getContext().getRegionId());
-        //TODO check, set the current timestamp as the ServerCertificate, Not sure what this field is used for
-        params.put("ServerCertificate", new Date().getTime());
+        params.put("ServerCertificate", options.getCertificateBody());
         if (!AliyunNetworkCommon.isEmpty(options.getCertificateName())) {
             params.put("ServerCertificateName", options.getCertificateName());
         }
@@ -974,7 +973,8 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
     }
 
     private SSLCertificate toSSLCertificate (JSONObject response) throws JSONException, InternalException, CloudException {
-        return SSLCertificate.getInstance(response.getString("ServerCertificateName"), response.getString("ServerCertificateId"), null, null, null, null);
+        return SSLCertificate.getInstance(response.getString("ServerCertificateName"), response.getString("ServerCertificateId"), null,
+                response.getString("ServerCertificate"), null, null);
     }
 
     private LoadBalancerHealthCheck toHealthCheck (JSONObject response,

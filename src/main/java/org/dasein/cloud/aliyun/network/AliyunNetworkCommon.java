@@ -61,7 +61,7 @@ public class AliyunNetworkCommon {
    public static enum AliyunLbListenerState {STARTING, RUNNING, CONFIGURING, STOPPING, STOPPED};
    public static final int DefaultWeight = 100;
    public static final int DefaultPersistenceTimeout = 5 * 60;
-   public static final int DefaultBandwidth = 100; //TODO check (range: 1-1000Mbps)
+   public static final int DefaultBandwidth = -1;
 
    //TODO check in Aliyun document says "YYYY-MM-DD'T'hh:mm'Z'", however example shows "YYYY-MM-DD'T'hh:mm:ss'Z'"
    private  static final String TimeFormat = "YYYY-MM-DD'T'hh:mm:ss'Z'";
