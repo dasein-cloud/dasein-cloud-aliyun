@@ -54,14 +54,16 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
         params.put("AllocationId", addressId);
         params.put("InstanceId", serverId);
         AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "AssociateEipAddress", params);
-        method.post();
+        JSONObject response = method.post().asJson();
+        getProvider().validateResponse(response);
     }
 
     public void assignToNetworkInterface(@Nonnull String addressId, @Nonnull String nicId) throws InternalException, CloudException {
-        //NO-OP
+        throw new OperationNotSupportedException("Aliyun doesn't support assign IP address to Network Interface!");
     }
 
-    public String forward(@Nonnull String addressId, int publicPort, @Nonnull Protocol protocol, int privatePort, @Nonnull String onServerId) throws InternalException, CloudException {
+    public String forward(@Nonnull String addressId, int publicPort, @Nonnull Protocol protocol, int privatePort, @Nonnull String onServerId)
+            throws InternalException, CloudException {
         throw new OperationNotSupportedException("Aliyun doesn't support IP forward!");
     }
 
@@ -81,38 +83,60 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
         try {
             JSONArray eipAddresses = response.getJSONObject("EipAddresses").getJSONArray("EipAddress");
             for (int i = 0; i < eipAddresses.length(); i++) {
-                JSONObject eipAddress = eipAddresses.getJSONObject(i);
-                return toIpAddress(eipAddress);
+                return toIpAddress(eipAddresses.getJSONObject(i));
             }
+            return null;
         } catch (JSONException e) {
             stdLogger.error("An exception occurs during Describe EIP Address!", e);
             throw new InternalException(e);
         }
-        return null;
     }
 
     public boolean isSubscribed() throws CloudException, InternalException {
         return true;
     }
 
-    public Future<Iterable<IpAddress>> listIpPoolConcurrently(@Nonnull IPVersion version, boolean unassignedOnly) throws InternalException, CloudException {
-        ListIpPoolCallable callable = new ListIpPoolCallable(version, unassignedOnly);
-        return threadPool.submit(callable);
-    }
-
     public Iterable<IpAddress> listIpPool(@Nonnull IPVersion version, boolean unassignedOnly) throws InternalException, CloudException {
-        try {
-            Future<Iterable<IpAddress>> task = listIpPoolConcurrently(version, unassignedOnly);
-            return task.get();
-        } catch (ExecutionException e) {
-            stdLogger.error("An exception occurs during list ip pool!", e);
-            throw new InternalException(e);
-        } catch (InterruptedException e) {
-            stdLogger.error("An exception occurs during list ip pool!", e);
-            throw new InternalException(e);
+        if (!version.equals(IPVersion.IPV4)) {
+            return Collections.emptyList();
         }
+        Map<String, Object> params = new HashMap<String, Object>();
+        params.put("RegionId", getContext().getRegionId());
+        params.put("PageSize", AliyunNetworkCommon.DefaultPageSize);
+        if (unassignedOnly) {
+            params.put("Status", "Available");
+        }
+        List<IpAddress> ipAddresses = new ArrayList<IpAddress>();
+        int currentPageNumber = 1;
+        int maxPageNumber = 1;
+        do {
+            params.put("PageNumber", currentPageNumber);
+            AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DescribeEipAddresses", params);
+            JSONObject response = method.get().asJson();
+            try {
+                JSONArray eipAddresses = response.getJSONObject("EipAddresses").getJSONArray("EipAddress");
+                for (int i = 0; i < eipAddresses.length(); i++) {
+                    JSONObject eipAddress = eipAddresses.getJSONObject(i);
+                    ipAddresses.add(toIpAddress(eipAddress));
+                }
+                maxPageNumber = response.getInt("TotalCount") / AliyunNetworkCommon.DefaultPageSize
+                        + (response.getInt("TotalCount") % AliyunNetworkCommon.DefaultPageSize > 0 ? 1 : 0);
+                currentPageNumber++;
+            } catch (JSONException e) {
+                stdLogger.error("An exception occurs during Describe Eip Addresses!", e);
+                throw new InternalException(e);
+            }
+        } while (currentPageNumber < maxPageNumber);
+        return ipAddresses;
     }
 
+    /**
+     * Return status contains: Associating, Unassociating, InUse and Avaiable
+     * @param version the version of the IP protocol for which you are looking for IP addresses
+     * @return resourceStatus list
+     * @throws InternalException
+     * @throws CloudException
+     */
     public Iterable<ResourceStatus> listIpPoolStatus(@Nonnull IPVersion version) throws InternalException, CloudException {
         if (!version.equals(IPVersion.IPV4)) {
             return Collections.emptyList();
@@ -131,9 +155,7 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
                 JSONArray eipAddresses = response.getJSONObject("EipAddresses").getJSONArray("EipAddress");
                 for (int i = 0; i < eipAddresses.length(); i++) {
                     JSONObject eipAddress = eipAddresses.getJSONObject(i);
-                    if (eipAddress.getString("Status") != null && eipAddress.getString("Status").toLowerCase().equals(AliyunNetworkCommon.AliyunEipStatus.AVAILABLE.name().toLowerCase())) {
-                        resourceStatuses.add(new ResourceStatus(eipAddress.getString("AllocationId"), true));
-                    }
+                    resourceStatuses.add(new ResourceStatus(eipAddress.getString("AllocationId"), eipAddress.getString("Status")));
                 }
                 maxPageNumber = response.getInt("TotalCount") / AliyunNetworkCommon.DefaultPageSize
                         + (response.getInt("TotalCount") % AliyunNetworkCommon.DefaultPageSize > 0 ? 1 : 0);
@@ -150,28 +172,29 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
         Map<String, Object> params = new HashMap<String, Object>();
         params.put("AllocationId", addressId);
         AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "ReleaseEipAddress", params);
-        method.post();
+        JSONObject response = method.post().asJson();
+        getProvider().validateResponse(response);
     }
 
     public void releaseFromServer(@Nonnull String addressId) throws InternalException, CloudException {
         Map<String, Object> params = new HashMap<String, Object>();
         IpAddress ipAddress = getIpAddress(addressId);
         if (ipAddress != null && !AliyunNetworkCommon.isEmpty(ipAddress.getServerId())) {
-            String instanceId = ipAddress.getServerId();
             params.put("AllocationId", addressId);
-            params.put("InstanceId", instanceId);
+            params.put("InstanceId", ipAddress.getServerId());
             AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "UnassociateEipAddresss", params);
-            method.post();
+            JSONObject response = method.post().asJson();
+            getProvider().validateResponse(response);
         }
     }
 
     public String request(@Nonnull IPVersion version) throws InternalException, CloudException {
         if (!version.equals(IPVersion.IPV4)) {
-            throw new OperationNotSupportedException("Aliyun supports IPV4 ip address only!");
+            throw new InternalException("Aliyun supports IPV4 ip address only!");
         }
         Map<String, Object> params = new HashMap<String, Object>();
         params.put("RegionId", getContext().getRegionId());
-        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "AllocateEipAddress", params);
+        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "AllocateEipAddress", params, true);
         JSONObject response = method.post().asJson();
         try{
             return response.getString("AllocationId");
@@ -182,11 +205,11 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
     }
 
     public String requestForVLAN(@Nonnull IPVersion version) throws InternalException, CloudException {
-        throw new OperationNotSupportedException("Aliyun doesn't support request for vlan!");
+        return requestForVLAN(version, null);
     }
 
     public String requestForVLAN(@Nonnull IPVersion version, @Nonnull String vlanId) throws InternalException, CloudException {
-        throw new OperationNotSupportedException("Aliyun doesn't support request for vlan!");
+        return request(version);
     }
 
     /**
@@ -200,7 +223,7 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
      */
     public static boolean isPublicIpAddress(String ipAddress) throws InternalException {
         if (!InetAddressUtils.isIPv4Address(ipAddress)) {
-            throw new OperationNotSupportedException("Aliyun supports IPV4 address only!");
+            throw new InternalException("Aliyun supports IPV4 address only!");
         }
         if (ipAddress.startsWith("10.") || ipAddress.startsWith("192.168.")) {
             return false;
@@ -215,69 +238,22 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
         return true;
     }
 
-    private IpAddress toIpAddress(JSONObject jsonObject) throws InternalException {
+    private IpAddress toIpAddress(JSONObject response) throws InternalException {
         try {
             IpAddress ipAddress = new IpAddress();
-            ipAddress.setAddress(jsonObject.getString("IpAddress"));
-            if (!AliyunNetworkCommon.isEmpty(jsonObject.getString("InstanceId"))) {
-                ipAddress.setServerId(jsonObject.getString("InstanceId"));
+            ipAddress.setAddress(response.getString("IpAddress"));
+            ipAddress.setAddressType(AddressType.PUBLIC);
+            ipAddress.setForVlan(true);
+            ipAddress.setIpAddressId(response.getString("AllocationId"));
+            ipAddress.setRegionId(response.getString("RegionId"));
+            if (!AliyunNetworkCommon.isEmpty(response.getString("InstanceId"))) {
+                ipAddress.setServerId(response.getString("InstanceId"));
             }
-            ipAddress.setRegionId(jsonObject.getString("RegionId"));
+            ipAddress.setReserved(false); //TODO
             ipAddress.setVersion(IPVersion.IPV4);
-            //TODO check forVlan (Aliyun support assign ip to vm) and AddressType, AWS assigned while Google not.
-            ipAddress.setForVlan(false);
-            if (!isPublicIpAddress(ipAddress.getRawAddress().getIpAddress())) {
-                ipAddress.setAddressType(AddressType.PRIVATE);
-            } else {
-                ipAddress.setAddressType(AddressType.PUBLIC);
-            }
             return ipAddress;
         } catch (JSONException e) {
             throw new InternalException(e);
-        }
-    }
-
-    protected class ListIpPoolCallable implements Callable<Iterable<IpAddress>> {
-        IPVersion version;
-        boolean unassignedOnly;
-
-        public ListIpPoolCallable( IPVersion version, boolean unassignedOnly ) {
-            this.version = version;
-            this.unassignedOnly = unassignedOnly;
-        }
-
-        public Iterable<IpAddress> call() throws CloudException, InternalException {
-            if (!version.equals(IPVersion.IPV4)) {
-                return Collections.emptyList();
-            }
-            Map<String, Object> params = new HashMap<String, Object>();
-            params.put("RegionId", getContext().getRegionId());
-            params.put("PageSize", AliyunNetworkCommon.DefaultPageSize);
-            if (unassignedOnly) {
-                params.put("Status", "Available");
-            }
-            List<IpAddress> ipAddresses = new ArrayList<IpAddress>();
-            int currentPageNumber = 1;
-            int maxPageNumber = 1;
-            do {
-                params.put("PageNumber", currentPageNumber);
-                AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DescribeEipAddresses", params);
-                JSONObject response = method.get().asJson();
-                try {
-                    JSONArray eipAddresses = response.getJSONObject("EipAddresses").getJSONArray("EipAddress");
-                    for (int i = 0; i < eipAddresses.length(); i++) {
-                        JSONObject eipAddress = eipAddresses.getJSONObject(i);
-                        ipAddresses.add(toIpAddress(eipAddress));
-                    }
-                    maxPageNumber = response.getInt("TotalCount") / AliyunNetworkCommon.DefaultPageSize
-                            + (response.getInt("TotalCount") % AliyunNetworkCommon.DefaultPageSize > 0 ? 1 : 0);
-                    currentPageNumber++;
-                } catch (JSONException e) {
-                    stdLogger.error("An exception occurs during Describe Eip Addresses!", e);
-                    throw new InternalException(e);
-                }
-            } while (currentPageNumber < maxPageNumber);
-            return ipAddresses;
         }
     }
 }
