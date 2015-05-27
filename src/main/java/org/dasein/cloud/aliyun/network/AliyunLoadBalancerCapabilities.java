@@ -1,3 +1,21 @@
+/**
+ * Copyright (C) 2009-2015 Dell, Inc.
+ * See annotations for authorship information
+ *
+ * ====================================================================
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ * ====================================================================
+ */
 package org.dasein.cloud.aliyun.network;
 
 import org.dasein.cloud.*;
@@ -11,7 +29,10 @@ import java.util.Collections;
 import java.util.Locale;
 
 /**
- * Created by jwang7 on 5/19/2015.
+ * Created by Jane Wang on 5/19/2015.
+ *
+ * @author Jane Wang
+ * @since 2015.05.01
  */
 public class AliyunLoadBalancerCapabilities extends AbstractCapabilities<Aliyun> implements LoadBalancerCapabilities {
 
@@ -27,7 +48,7 @@ public class AliyunLoadBalancerCapabilities extends AbstractCapabilities<Aliyun>
 
     @Override
     public int getMaxPublicPorts() throws CloudException, InternalException {
-        return Integer.MAX_VALUE;
+        return 10;
     }
 
     @Nonnull
@@ -40,12 +61,12 @@ public class AliyunLoadBalancerCapabilities extends AbstractCapabilities<Aliyun>
     @Nullable
     @Override
     public VisibleScope getLoadBalancerVisibleScope() {
-        return VisibleScope.ACCOUNT_GLOBAL; //TODO: not sure GLOBAL:classic, DATACENTER:vswitch
+        return VisibleScope.ACCOUNT_REGION;
     }
 
     @Override
     public boolean healthCheckRequiresLoadBalancer() throws CloudException, InternalException {
-        return false;
+        return true;
     }
 
     @Override
@@ -68,7 +89,7 @@ public class AliyunLoadBalancerCapabilities extends AbstractCapabilities<Aliyun>
     @Nonnull
     @Override
     public Requirement identifyVlanOnCreateRequirement() throws CloudException, InternalException {
-        return Requirement.NONE;
+        return Requirement.OPTIONAL;
     }
 
     @Nonnull
