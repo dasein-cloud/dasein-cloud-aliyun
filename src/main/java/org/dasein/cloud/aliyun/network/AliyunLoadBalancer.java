@@ -4,7 +4,6 @@ import org.apache.log4j.Logger;
 import org.dasein.cloud.*;
 import org.dasein.cloud.aliyun.Aliyun;
 import org.dasein.cloud.aliyun.AliyunMethod;
-import org.dasein.cloud.ci.ConvergedHttpLoadBalancer;
 import org.dasein.cloud.network.*;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -31,6 +30,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
     }
 
     /**
+     * Create and Start Load Balanacer Listener
      * Note: Aliyun create health check during the creation of listners, however Dasein create health check and then create listener.
      * Solution: 1. If the load balancer doesn't have health check (classified by type: HTTP, HTTPS and TCP): 
      * 				turn off the health check for the listener with the same type.
@@ -149,17 +149,38 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
             
             AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.SLB, methodName, params);
             getProvider().validateResponse(method.post().asJson());
+            
+            //2. start listener
+            params = new HashMap<String, Object>();
+            params.put("LoadBalancerId", toLoadBalancerId);
+            params.put("ListenerPort", listener.getPublicPort());
+            method = new AliyunMethod(getProvider(), AliyunMethod.Category.SLB, "StartLoadBalancerListener", params);
+            getProvider().validateResponse(method.post().asJson());
         }
     }
 
+    /**
+     * stop first and then remove listener
+     * @param toLoadBalancerId
+     * @param listeners
+     * @throws CloudException
+     * @throws InternalException
+     */
     @Override
     public void removeListeners(@Nonnull String toLoadBalancerId, @Nullable LbListener[] listeners) throws CloudException, InternalException {
-        Map<String, Object> params = new HashMap<String, Object>();
-        params.put("LoadBalancerId", toLoadBalancerId);
         for (int i = 0; i < listeners.length; i++) {
             LbListener listener = listeners[i];
+            //1. stop listener
+            Map<String, Object> params = new HashMap<String, Object>();
+            params.put("LoadBalancerId", toLoadBalancerId);
             params.put("ListenerPort", listener.getPublicPort());
-            AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.SLB, "DeleteLoadBalancerListener", params);
+            AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.SLB, "StopLoadBalancerListener", params);
+            getProvider().validateResponse(method.post().asJson());
+            //2. remove listener
+            params = new HashMap<String, Object>();
+            params.put("LoadBalancerId", toLoadBalancerId);
+            params.put("ListenerPort", listener.getPublicPort());
+            method = new AliyunMethod(getProvider(), AliyunMethod.Category.SLB, "DeleteLoadBalancerListener", params);
             getProvider().validateResponse(method.post().asJson());
         }
     }
@@ -782,8 +803,6 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
                 } catch (InternalException e) {
                     stdLogger.warn("Not find listener with port " + port + " and protocol " + lbProtocol.name()
                             + " for load balancer with id " + loadBalancerId, e);
-                } finally {
-                    continue;
                 }
             }
         }
@@ -885,6 +904,18 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
             }
             return healthCheck;
         }
+    }
+
+    private String generateLoadBalancerHealthCheckId (String loadBalancerId, String listenerId, LbProtocol listenerProtocol) {
+        LoadBalancerHealthCheck.HCProtocol protocol = null;
+        if (listenerProtocol.equals(LbProtocol.HTTP)) {
+            protocol = LoadBalancerHealthCheck.HCProtocol.HTTP;
+        } else if (listenerProtocol.equals(LbProtocol.HTTPS)) {
+            protocol = LoadBalancerHealthCheck.HCProtocol.HTTPS;
+        } else if (listenerProtocol.equals(LbProtocol.RAW_TCP)) {
+            protocol = LoadBalancerHealthCheck.HCProtocol.TCP;
+        }
+        return loadBalancerId + ":" + listenerId + ":" + protocol.name().toUpperCase();
     }
 
 }
