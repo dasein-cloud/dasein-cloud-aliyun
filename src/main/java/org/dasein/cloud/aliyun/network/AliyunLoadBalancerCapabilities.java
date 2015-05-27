@@ -6,6 +6,8 @@ import org.dasein.cloud.network.*;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Locale;
 
 /**
@@ -20,24 +22,25 @@ public class AliyunLoadBalancerCapabilities extends AbstractCapabilities<Aliyun>
     @Nonnull
     @Override
     public LoadBalancerAddressType getAddressType() throws CloudException, InternalException {
-        return null;
+        return LoadBalancerAddressType.IP;
     }
 
     @Override
     public int getMaxPublicPorts() throws CloudException, InternalException {
-        return 0;
+        return Integer.MAX_VALUE;
     }
 
     @Nonnull
     @Override
-    public String getProviderTermForLoadBalancer(@Nonnull Locale locale) {
-        return "Server Load Balancer (SLB)";
+    public String getProviderTermForLoadBalancer(@Nonnull Locale locale)
+    {
+        return "SLB";
     }
 
     @Nullable
     @Override
     public VisibleScope getLoadBalancerVisibleScope() {
-        return null; //TODO unknown
+        return VisibleScope.ACCOUNT_GLOBAL; //TODO: not sure GLOBAL:classic, DATACENTER:vswitch
     }
 
     @Override
@@ -47,36 +50,36 @@ public class AliyunLoadBalancerCapabilities extends AbstractCapabilities<Aliyun>
 
     @Override
     public Requirement healthCheckRequiresName() throws CloudException, InternalException {
-        return null;
+        return Requirement.NONE;
     }
 
     @Nonnull
     @Override
     public Requirement identifyEndpointsOnCreateRequirement() throws CloudException, InternalException {
-        return null;
+        return Requirement.NONE;
     }
 
     @Nonnull
     @Override
     public Requirement identifyListenersOnCreateRequirement() throws CloudException, InternalException {
-        return null;
+        return Requirement.NONE;
     }
 
     @Nonnull
     @Override
     public Requirement identifyVlanOnCreateRequirement() throws CloudException, InternalException {
-        return null;
+        return Requirement.NONE;
     }
 
     @Nonnull
     @Override
     public Requirement identifyHealthCheckOnCreateRequirement() throws CloudException, InternalException {
-        return null;
+        return Requirement.NONE;
     }
 
     @Override
     public boolean isAddressAssignedByProvider() throws CloudException, InternalException {
-        return false;
+        return true;
     }
 
     /**
@@ -93,41 +96,41 @@ public class AliyunLoadBalancerCapabilities extends AbstractCapabilities<Aliyun>
     @Nonnull
     @Override
     public Iterable<LbAlgorithm> listSupportedAlgorithms() throws CloudException, InternalException {
-        return null;
+        return Collections.unmodifiableList(Arrays.asList(LbAlgorithm.ROUND_ROBIN, LbAlgorithm.LEAST_CONN));
     }
 
     @Nonnull
     @Override
     public Iterable<LbEndpointType> listSupportedEndpointTypes() throws CloudException, InternalException {
-        return null;
+        return Collections.singletonList(LbEndpointType.VM);
     }
 
     @Nonnull
     @Override
     public Iterable<IPVersion> listSupportedIPVersions() throws CloudException, InternalException {
-        return null;
+        return Collections.singletonList(IPVersion.IPV4);
     }
 
     @Nonnull
     @Override
     public Iterable<LbPersistence> listSupportedPersistenceOptions() throws CloudException, InternalException {
-        return null;
+        return Collections.unmodifiableList(Arrays.asList(LbPersistence.NONE, LbPersistence.COOKIE, LbPersistence.SUBNET));
     }
 
     @Nonnull
     @Override
     public Iterable<LbProtocol> listSupportedProtocols() throws CloudException, InternalException {
-        return null;
+        return Collections.unmodifiableList(Arrays.asList(LbProtocol.HTTP, LbProtocol.HTTPS, LbProtocol.RAW_TCP));
     }
 
     @Override
     public boolean supportsAddingEndpoints() throws CloudException, InternalException {
-        return false;
+        return true;
     }
 
     @Override
     public boolean supportsMonitoring() throws CloudException, InternalException {
-        return false;
+        return true;
     }
 
     @Override
