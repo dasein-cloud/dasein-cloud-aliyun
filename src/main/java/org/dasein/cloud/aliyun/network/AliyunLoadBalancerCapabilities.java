@@ -135,7 +135,7 @@ public class AliyunLoadBalancerCapabilities extends AbstractCapabilities<Aliyun>
     @Nonnull
     @Override
     public Iterable<LbPersistence> listSupportedPersistenceOptions() throws CloudException, InternalException {
-        return Collections.unmodifiableList(Arrays.asList(LbPersistence.NONE, LbPersistence.COOKIE, LbPersistence.SUBNET));
+        return Collections.unmodifiableList(Arrays.asList(LbPersistence.NONE, LbPersistence.COOKIE));
     }
 
     @Nonnull

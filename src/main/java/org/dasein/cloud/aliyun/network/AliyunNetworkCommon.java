@@ -39,7 +39,11 @@ import java.util.TimeZone;
  */
 public class AliyunNetworkCommon {
 
-   public static final int DefaultPageSize = 10; //from 10 to 50
+   public static final int DefaultPageSize = 10; //from 10 to 50, default is 10
+
+   //ip address
+   public static enum InternetChargeType {PayByBandwidth, PayByTraffic};
+   public static final String DefaultIpAddressBandwidth = "5Mbps"; //default ip address bandwidth
 
    //Firewall
    public static enum AliyunFirewallPermission {ACCEPT, DROP};
@@ -56,12 +60,13 @@ public class AliyunNetworkCommon {
    public static enum AliyunLbScheduleAlgorithm {WRR, WLC};
    public static enum AliyunLbSwitcher {ON, OFF};
    public static enum AliyunLbPersistenceType {INSERT, SERVER};
+   public static enum LoadBalancerAddressType {INTERNET, INTRANET};
    public static enum AliyunLbState {INACTIVE, ACTIVE, LOCKED};
    public static enum AliyunLbEndpointState {NORMAL, ABNORMAL, UNAVAILABLE};
    public static enum AliyunLbListenerState {STARTING, RUNNING, CONFIGURING, STOPPING, STOPPED};
-   public static final int DefaultWeight = 100;
+   public static final int DefaultServerWeight = 100;
    public static final int DefaultPersistenceTimeout = 5 * 60;
-   public static final int DefaultBandwidth = -1;
+   public static final int DefaultLoadBalancerBandwidth = -1;
 
    //TODO check in Aliyun document says "YYYY-MM-DD'T'hh:mm'Z'", however example shows "YYYY-MM-DD'T'hh:mm:ss'Z'"
    private  static final String TimeFormat = "YYYY-MM-DD'T'hh:mm:ss'Z'";

@@ -91,7 +91,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
             params.put("LoadBalancerId", toLoadBalancerId);
             params.put("ListenerPort", listener.getPublicPort());
             params.put("BackendServerPort", listener.getPrivatePort());
-            params.put("Bandwidth", AliyunNetworkCommon.DefaultBandwidth);
+            params.put("Bandwidth", AliyunNetworkCommon.DefaultLoadBalancerBandwidth);
 
             //scheduler
             if (listener.getAlgorithm() != null) {
@@ -108,12 +108,12 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
             if (listener.getNetworkProtocol().equals(LbProtocol.HTTP) || listener.getNetworkProtocol().equals(LbProtocol.HTTPS)){
                 if (listener.getPersistence().equals(LbPersistence.NONE)) {
                     params.put("StickySession", AliyunNetworkCommon.AliyunLbSwitcher.OFF.name().toLowerCase());
-                } else {
+                } else if (listener.getPersistence().equals(LbPersistence.COOKIE)) {
                     params.put("StickySession", AliyunNetworkCommon.AliyunLbSwitcher.ON.name().toLowerCase());
-                    if (listener.getPersistence().equals(LbPersistence.SUBNET)) {
+                    if (!AliyunNetworkCommon.isEmpty(listener.getCookie())) { //no cookie, slb insert
                         params.put("StickySessionType", AliyunNetworkCommon.AliyunLbPersistenceType.INSERT.name().toLowerCase());
                         params.put("CookieTimeout", AliyunNetworkCommon.DefaultPersistenceTimeout);
-                    } else if (listener.getPersistence().equals(LbPersistence.COOKIE)) {
+                    } else { //cookie, server insert
                         params.put("StickySessionType", AliyunNetworkCommon.AliyunLbPersistenceType.SERVER.name().toLowerCase());
                         params.put("Cookie", listener.getCookie());
                     }
@@ -187,17 +187,10 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
     public void removeListeners(@Nonnull String toLoadBalancerId, @Nullable LbListener[] listeners) throws CloudException, InternalException {
         for (int i = 0; i < listeners.length; i++) {
             LbListener listener = listeners[i];
-            //1. stop listener
             Map<String, Object> params = new HashMap<String, Object>();
             params.put("LoadBalancerId", toLoadBalancerId);
             params.put("ListenerPort", listener.getPublicPort());
-            AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.SLB, "StopLoadBalancerListener", params);
-            getProvider().validateResponse(method.post().asJson());
-            //2. remove listener
-            params = new HashMap<String, Object>();
-            params.put("LoadBalancerId", toLoadBalancerId);
-            params.put("ListenerPort", listener.getPublicPort());
-            method = new AliyunMethod(getProvider(), AliyunMethod.Category.SLB, "DeleteLoadBalancerListener", params);
+            AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.SLB, "DeleteLoadBalancerListener", params);
             getProvider().validateResponse(method.post().asJson());
         }
     }
@@ -209,7 +202,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
             for (String serverIdToAdd : serverIdsToAdd) {
                 JSONObject jsonObject = new JSONObject();
                 jsonObject.put("ServerId", serverIdToAdd);
-                jsonObject.put("Weight", AliyunNetworkCommon.DefaultWeight);
+                jsonObject.put("Weight", AliyunNetworkCommon.DefaultServerWeight);
                 jsonArray.put(jsonObject);
             }
             Map<String, Object> params = new HashMap<String, Object>();
@@ -238,9 +231,10 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
                 throw new InternalException("Aliyun supports add load balancer to only one subnet!");
             }
         }
-        if (options.getType() != null) {
-            params.put("AddressType", options.getType().name().toLowerCase());
+        if (options.getType() != null && options.getType().equals(LbType.INTERNAL)) {
+            params.put("AddressType", AliyunNetworkCommon.LoadBalancerAddressType.INTRANET.name().toLowerCase());
         }
+        params.put("InternetChargeType", AliyunNetworkCommon.InternetChargeType.PayByTraffic.name());
         AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.SLB, "CreateLoadBalancer", params, true);
         JSONObject response = method.post().asJson();
         try {
@@ -347,34 +341,37 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
     @Override
     public Iterable<LoadBalancerEndpoint> listEndpoints(@Nonnull String forLoadBalancerId) throws CloudException, InternalException {
         try {
-            List<LoadBalancerEndpoint> loadBalancerEndpoints = new ArrayList<LoadBalancerEndpoint>();
-            Map<String, Object> params = new HashMap<String, Object>();
-            params.put("LoadBalancerId", forLoadBalancerId);
-            AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.SLB, "DescribeLoadBalancerAttribute", params);
-            JSONObject response = method.get().asJson();
-
-            JSONArray listenerPorts = response.getJSONObject("ListenerPorts").getJSONArray("ListenerPorts");
-            //search out state by listener port and retrieve associated backend servers
-            for (int i = 0; i < listenerPorts.length(); i++) {
-                params = new HashMap<String, Object>();
+            Map<String, LoadBalancerEndpoint> loadBalancerEndpointMap = new HashMap<String, LoadBalancerEndpoint>();
+            LoadBalancer loadBalancer = getLoadBalancer(forLoadBalancerId);
+            int[] listenerPorts = loadBalancer.getPublicPorts();
+            for (int i = 0; i < listenerPorts.length; i++) {
+                Map<String, Object> params = new HashMap<String, Object>();
                 params.put("LoadBalancerId", forLoadBalancerId);
-                params.put("ListenerPort", listenerPorts.getInt(i));
-                method = new AliyunMethod(getProvider(), AliyunMethod.Category.SLB, "DescribeHealthStatus", params);
-                response = method.get().asJson();
+                params.put("ListenerPort", listenerPorts[i]);
+                AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.SLB, "DescribeHealthStatus", params);
+                JSONObject response = method.get().asJson();
 
                 JSONArray backendServers = response.getJSONObject("BackendServers").getJSONArray("BackendServer");
                 for (int j = 0; j < backendServers.length(); j++) {
                     JSONObject backendServer = backendServers.getJSONObject(j);
+                    String serverId = backendServer.getString("ServerId");
                     LbEndpointState state = LbEndpointState.INACTIVE;
                     if (backendServer.getString("ServerHealthStatus").toUpperCase().equals(
-                            AliyunNetworkCommon.AliyunLbEndpointState.NORMAL.name().toUpperCase())) {
+                            AliyunNetworkCommon.AliyunLbEndpointState.NORMAL.name())) {
                         state = LbEndpointState.ACTIVE;
                     }
-                    String serverId = response.getString("ServerId");
-                    loadBalancerEndpoints.add(LoadBalancerEndpoint.getInstance(LbEndpointType.VM, serverId, state));
+                    if (!loadBalancerEndpointMap.containsKey(serverId)) { //not contain
+                        loadBalancerEndpointMap.put(serverId, LoadBalancerEndpoint.getInstance(LbEndpointType.VM, serverId, state));
+                    } else { //already contains
+                        LoadBalancerEndpoint endpoint = loadBalancerEndpointMap.get(serverId);
+                        if (state.equals(LbEndpointState.INACTIVE) && endpoint.getCurrentState().equals(LbEndpointState.ACTIVE)) {
+                            loadBalancerEndpointMap.remove(serverId);
+                            loadBalancerEndpointMap.put(serverId, LoadBalancerEndpoint.getInstance(LbEndpointType.VM, serverId, LbEndpointState.INACTIVE));
+                        }
+                    }
                 }
             }
-            return loadBalancerEndpoints;
+            return loadBalancerEndpointMap.values();
         } catch (JSONException e) {
             stdLogger.error("An exception occurs during listEndpoints for load balander with id " + forLoadBalancerId, e);
             throw new InternalException(e);
@@ -455,7 +452,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
                 Map<String, Object> params = new HashMap<String, Object>();
                 params.put("LoadBalancerId", loadBalancer.getProviderLoadBalancerId());
                 params.put("ListenerPort", listeners.get(0).getPublicPort());
-                params.put("Bandwidth", AliyunNetworkCommon.DefaultBandwidth);
+                params.put("Bandwidth", AliyunNetworkCommon.DefaultLoadBalancerBandwidth);
                 params.put("ServerCertificateId", certificate.getProviderCertificateId());
                 AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.SLB, "SetLoadBalancerHTTPSListenerAttribute", params);
                 JSONObject response = method.post().asJson();
@@ -513,7 +510,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
                 //listener common settings, keep it the same
                 params.put("LoadBalancerId", loadBalancer.getProviderLoadBalancerId());
                 params.put("ListenerPort", listener.getPublicPort());
-                params.put("Bandwidth", AliyunNetworkCommon.DefaultBandwidth);
+                params.put("Bandwidth", AliyunNetworkCommon.DefaultLoadBalancerBandwidth);
                 //algorithm
                 AliyunNetworkCommon.AliyunLbScheduleAlgorithm algorithm = AliyunNetworkCommon.AliyunLbScheduleAlgorithm.WRR;
                 if (listener.getAlgorithm().equals(LbAlgorithm.LEAST_CONN)) {
@@ -550,7 +547,11 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
                 if (protocol.equals(LbProtocol.HTTP) || protocol.equals(LbProtocol.HTTPS)) {
                     params.put("HealthCheck", AliyunNetworkCommon.AliyunLbSwitcher.ON.name().toLowerCase());
                     params.put("HealthCheckURI", options.getPath());
-                    params.put("HealthCheckDomain", "$_ip");
+                    if (!AliyunNetworkCommon.isEmpty(options.getHost())) {
+                        params.put("HealthCheckDomain", options.getHost());
+                    } else {
+                        params.put("HealthCheckDomain", "$_ip");
+                    }
                 }
 
                 AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.SLB, methodName, params);
@@ -618,7 +619,6 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
             throw new InternalException("Aliyun support HTTP, HTTPS and TCP protocol only!");
         }
         try {
-            LoadBalancerHealthCheck healthCheck = null;
             LoadBalancer loadBalancer = getLoadBalancer(options.getProviderLoadBalancerId());
             List<LbListener> listeners = getLbListeners(loadBalancer.getProviderLoadBalancerId(), 0, protocol);
             Map<String, Object> params = new HashMap<String, Object>();
@@ -644,7 +644,11 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
                 if (!AliyunNetworkCommon.isEmpty(options.getPath())) {
                     params.put("HealthCheckURI", options.getPath());
                 }
-                params.put("HealthCheckDomain", "$_ip");
+                if (!AliyunNetworkCommon.isEmpty(options.getHost())) {
+                    params.put("HealthCheckDomain", options.getHost());
+                } else {
+                    params.put("HealthCheckDomain", "$_ip");
+                }
                 params.put("HealthCheck", AliyunNetworkCommon.AliyunLbSwitcher.ON.name().toLowerCase());
             }
             //modify attribute for all listeners
@@ -682,13 +686,13 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
                     Map<String, Object> params = new HashMap<String, Object>();
                     params.put("LoadBalancerId", providerLoadBalancerId);
                     params.put("ListenerPort", listener.getPublicPort());
-                    params.put("Bandwidth", AliyunNetworkCommon.DefaultBandwidth);
+                    params.put("Bandwidth", AliyunNetworkCommon.DefaultLoadBalancerBandwidth);
                     //set to default
-                    params.put("HealthCheckConnectPort", 0);
-                    params.put("HealthyThreshold", 0);
-                    params.put("UnhealthyThreshold", 0);
-                    params.put("HealthCheckConnectTimeout", 0);
-                    params.put("HealthCheckInterval", 0);
+                    params.put("HealthCheckConnectPort", 1);
+                    params.put("HealthyThreshold", 1);
+                    params.put("UnhealthyThreshold", 1);
+                    params.put("HealthCheckConnectTimeout", 1);
+                    params.put("HealthCheckInterval", 1);
                     String methodName = null;
                     if (protocol.equals(LbProtocol.RAW_TCP)) {
                         methodName = "SetLoadBalancerTCPListenerAttribute";
@@ -715,7 +719,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
     private Map<String, Object> appendParamsByListener (Map<String, Object> params, LbListener listener)
             throws JSONException, CloudException, InternalException{
         params.put("ListenerPort", listener.getPublicPort());
-        params.put("Bandwidth", AliyunNetworkCommon.DefaultBandwidth);
+        params.put("Bandwidth", AliyunNetworkCommon.DefaultLoadBalancerBandwidth);
         //scheduler
         AliyunNetworkCommon.AliyunLbScheduleAlgorithm algorithm = AliyunNetworkCommon.AliyunLbScheduleAlgorithm.WRR;
         if (listener.getAlgorithm().equals(LbAlgorithm.LEAST_CONN)) {
@@ -728,12 +732,12 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
                 params.put("StickySession", AliyunNetworkCommon.AliyunLbSwitcher.OFF.name().toLowerCase());
             } else if (listener.getPersistence().equals(LbPersistence.COOKIE)) {
                 params.put("StickySession", AliyunNetworkCommon.AliyunLbSwitcher.ON.name().toLowerCase());
-                if (listener.getPersistence().equals(LbPersistence.SUBNET)) {
-                    params.put("StickySessionType", AliyunNetworkCommon.AliyunLbPersistenceType.INSERT.name().toLowerCase());
-                    params.put("CookieTimeout", AliyunNetworkCommon.DefaultPersistenceTimeout);
-                } else if (listener.getPersistence().equals(LbPersistence.COOKIE)) {
+                if (!AliyunNetworkCommon.isEmpty(listener.getCookie())) { //server insert
                     params.put("StickySessionType", AliyunNetworkCommon.AliyunLbPersistenceType.SERVER.name().toLowerCase());
                     params.put("Cookie", listener.getCookie());
+                } else { //slb insert
+                    params.put("StickySessionType", AliyunNetworkCommon.AliyunLbPersistenceType.INSERT.name().toLowerCase());
+                    params.put("CookieTimeout", AliyunNetworkCommon.DefaultPersistenceTimeout);
                 }
             }
         }
@@ -864,8 +868,6 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
                 methodName = "DescribeLoadBalancerHTTPSListenerAttribute";
             } else if (lbProtocol.equals(LbProtocol.RAW_TCP)) {
                 methodName = "DescribeLoadBalancerTCPListenerAttribute";
-            } else {
-                continue; //NO-OP
             }
             for (int port : portList) {
                 params.put("ListenerPort", port);
@@ -914,8 +916,9 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
             }
         }
         LbType lbType = LbType.EXTERNAL;
-        if (!AliyunNetworkCommon.isEmpty(response.getString("AddressType"))) {
-            lbType = LbType.valueOf(response.getString("AddressType").toUpperCase());
+        if (!AliyunNetworkCommon.isEmpty(response.getString("AddressType"))
+                && response.getString("AddressType").equals(AliyunNetworkCommon.LoadBalancerAddressType.INTRANET.name().toLowerCase())) {
+            lbType = LbType.INTERNAL;
         }
         List<Integer> publicPorts = new ArrayList<Integer>();
         for (int i = 0; i < response.getJSONObject("ListenerPorts").getJSONArray("ListenerPort").length(); i++) {
@@ -951,13 +954,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
         LbPersistence persistence = LbPersistence.NONE;
         if (!AliyunNetworkCommon.isEmpty(response.getString("StickySession"))
                 && response.getString("StickySession").toUpperCase().equals(AliyunNetworkCommon.AliyunLbSwitcher.ON.name().toUpperCase())) {
-            if (response.getString("StickySessionType").toUpperCase().equals(
-                    AliyunNetworkCommon.AliyunLbPersistenceType.INSERT.name().toUpperCase())) {
-                persistence = LbPersistence.SUBNET;
-            } else if (response.getString("StickySessionType").toUpperCase().equals(
-                    AliyunNetworkCommon.AliyunLbPersistenceType.SERVER.name().toUpperCase())) {
-                persistence = LbPersistence.COOKIE;
-            }
+            persistence = LbPersistence.COOKIE;
         }
 
         //certificate
