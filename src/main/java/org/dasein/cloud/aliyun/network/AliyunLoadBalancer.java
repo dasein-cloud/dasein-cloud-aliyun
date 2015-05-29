@@ -74,9 +74,9 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
             //scheduler
             if (listener.getAlgorithm() != null) {
                 if (listener.getAlgorithm().equals(LbAlgorithm.ROUND_ROBIN)) {
-                    params.put("Scheduler", AliyunNetworkCommon.AliyunLbScheduleAlgorithm.WRR.name().toLowerCase());
+                    params.put("Scheduler", AliyunNetworkCommon.AliyunLbScheduleAlgorithm.wrr.name());
                 } else if (listener.getAlgorithm().equals(LbAlgorithm.LEAST_CONN)) {
-                    params.put("Scheduler", AliyunNetworkCommon.AliyunLbScheduleAlgorithm.WLC.name().toLowerCase());
+                    params.put("Scheduler", AliyunNetworkCommon.AliyunLbScheduleAlgorithm.wlc.name());
                 } else {
                     throw new InternalException("Aliyun supports weighted round robin and weighted least connection scheduler algorithms only!");
                 }
@@ -85,14 +85,14 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
             //persistence and cookie
             if (listener.getNetworkProtocol().equals(LbProtocol.HTTP) || listener.getNetworkProtocol().equals(LbProtocol.HTTPS)){
                 if (listener.getPersistence().equals(LbPersistence.NONE)) {
-                    params.put("StickySession", AliyunNetworkCommon.AliyunLbSwitcher.OFF.name().toLowerCase());
+                    params.put("StickySession", AliyunNetworkCommon.AliyunLbSwitcher.off.name());
                 } else if (listener.getPersistence().equals(LbPersistence.COOKIE)) {
-                    params.put("StickySession", AliyunNetworkCommon.AliyunLbSwitcher.ON.name().toLowerCase());
-                    if (!AliyunNetworkCommon.isEmpty(listener.getCookie())) { //no cookie, slb insert
-                        params.put("StickySessionType", AliyunNetworkCommon.AliyunLbPersistenceType.INSERT.name().toLowerCase());
+                    params.put("StickySession", AliyunNetworkCommon.AliyunLbSwitcher.on.name());
+                    if (!getProvider().isEmpty(listener.getCookie())) { //no cookie, slb insert
+                        params.put("StickySessionType", AliyunNetworkCommon.AliyunLbPersistenceType.insert.name());
                         params.put("CookieTimeout", AliyunNetworkCommon.DefaultPersistenceTimeout);
                     } else { //cookie, server insert
-                        params.put("StickySessionType", AliyunNetworkCommon.AliyunLbPersistenceType.SERVER.name().toLowerCase());
+                        params.put("StickySessionType", AliyunNetworkCommon.AliyunLbPersistenceType.server.name());
                         params.put("Cookie", listener.getCookie());
                     }
                 }
@@ -101,18 +101,9 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
             }
 
             //health check
-            //translate listener protocol to health check protocol
-            LoadBalancerHealthCheck.HCProtocol protocol = null;
-            if (listener.getNetworkProtocol().equals(LbProtocol.HTTP)) {
-                protocol = LoadBalancerHealthCheck.HCProtocol.HTTP;
-            } else if (listener.getNetworkProtocol().equals(LbProtocol.HTTPS)) {
-                protocol = LoadBalancerHealthCheck.HCProtocol.HTTPS;
-            } else if (listener.getNetworkProtocol().equals(LbProtocol.RAW_TCP)) {
-                protocol = LoadBalancerHealthCheck.HCProtocol.TCP;
-            }
             LoadBalancerHealthCheck healthCheck = null;
             try {
-                healthCheck = getLoadBalancerHealthCheckByProtocol(toLoadBalancerId, protocol);
+                healthCheck = getLoadBalancerHealthCheckByProtocol(toLoadBalancerId, listener.getNetworkProtocol());
                 if (healthCheck != null) {
                     params.put("HealthCheckConnectPort", healthCheck.getPort());
                     params.put("HealthyThreshold", healthCheck.getHealthyCount());
@@ -120,18 +111,22 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
                     params.put("HealthCheckConnectTimeout", healthCheck.getTimeout());
                     params.put("HealthCheckInterval", healthCheck.getInterval());
                     if (listener.getNetworkProtocol().equals(LbProtocol.HTTP) || listener.getNetworkProtocol().equals(LbProtocol.HTTPS)) {
-                        params.put("HealthCheck", AliyunNetworkCommon.AliyunLbSwitcher.ON.name().toLowerCase());
-                        params.put("HealthCheckDomain", "$_ip");
+                        params.put("HealthCheck", AliyunNetworkCommon.AliyunLbSwitcher.on.name());
+                        if (!getProvider().isEmpty(healthCheck.getHost())) {
+                            params.put("HealthCheckDomain", healthCheck.getHost());
+                        } else {
+                            params.put("HealthCheckDomain", "$_ip");
+                        }
                         params.put("HealthCheckURI", healthCheck.getPath());
-
                     }
                 } else {
                     if (listener.getNetworkProtocol().equals(LbProtocol.HTTP) || listener.getNetworkProtocol().equals(LbProtocol.HTTPS)) {
-                        params.put("HealthCheck", AliyunNetworkCommon.AliyunLbSwitcher.OFF.name().toLowerCase());
+                        params.put("HealthCheck", AliyunNetworkCommon.AliyunLbSwitcher.off.name());
                     }
                 }
             } catch (JSONException e) {
-                stdLogger.error("An exception occurs during get health check for load balancer " + toLoadBalancerId + " by protocol " + protocol.name());
+                stdLogger.error("An exception occurs during get health check for load balancer " + toLoadBalancerId +
+                        " by protocol " + listener.getNetworkProtocol().name());
             }
 
             //invoke method name
@@ -208,7 +203,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
     public String createLoadBalancer(@Nonnull LoadBalancerCreateOptions options) throws CloudException, InternalException {
         Map<String, Object> params = new HashMap<String, Object>();
         params.put("RegionId", getContext().getRegionId());
-        if (!AliyunNetworkCommon.isEmpty(options.getName())) {
+        if (!getProvider().isEmpty(options.getName())) {
             params.put("LoadBalancerName", options.getName());
         }
         if (options.getProviderSubnetIds() != null && options.getProviderSubnetIds().length > 0) {
@@ -219,7 +214,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
             }
         }
         if (options.getType() != null && options.getType().equals(LbType.INTERNAL)) {
-            params.put("AddressType", AliyunNetworkCommon.LoadBalancerAddressType.INTRANET.name().toLowerCase());
+            params.put("AddressType", AliyunNetworkCommon.LoadBalancerAddressType.intranet.name());
         }
         params.put("InternetChargeType", AliyunNetworkCommon.InternetChargeType.PayByTraffic.name());
         AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.SLB, "CreateLoadBalancer", params, true);
@@ -246,7 +241,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
         Map<String, Object> params = new HashMap<String, Object>();
         params.put("RegionId", getContext().getRegionId());
         params.put("ServerCertificate", options.getCertificateBody());
-        if (!AliyunNetworkCommon.isEmpty(options.getCertificateName())) {
+        if (!getProvider().isEmpty(options.getCertificateName())) {
             params.put("ServerCertificateName", options.getCertificateName());
         }
         params.put("PrivateKey", options.getPrivateKey());
@@ -343,8 +338,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
                     JSONObject backendServer = backendServers.getJSONObject(j);
                     String serverId = backendServer.getString("ServerId");
                     LbEndpointState state = LbEndpointState.INACTIVE;
-                    if (backendServer.getString("ServerHealthStatus").toUpperCase().equals(
-                            AliyunNetworkCommon.AliyunLbEndpointState.NORMAL.name())) {
+                    if (backendServer.getString("ServerHealthStatus").equals(AliyunNetworkCommon.AliyunLbEndpointState.normal.name())) {
                         state = LbEndpointState.ACTIVE;
                     }
                     if (!loadBalancerEndpointMap.containsKey(serverId)) { //not contain
@@ -435,7 +429,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
             loadBalancer = getLoadBalancerByName(options.getLoadBalancerName());
             List<LbListener> listeners = getLbListeners(loadBalancer.getProviderLoadBalancerId(), port, LbProtocol.HTTPS);
             //Only one listener listen at a specific port
-            if (!AliyunNetworkCommon.isEmpty(listeners)) {
+            if (!getProvider().isEmpty(listeners)) {
                 Map<String, Object> params = new HashMap<String, Object>();
                 params.put("LoadBalancerId", loadBalancer.getProviderLoadBalancerId());
                 params.put("ListenerPort", listeners.get(0).getPublicPort());
@@ -473,74 +467,40 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
         try {
 
             //translate healtch check protocol to listener protocol
-            LbProtocol protocol = null;
             String methodName = null;
             if (options.getProtocol().equals(LoadBalancerHealthCheck.HCProtocol.HTTP)) {
-                protocol = LbProtocol.HTTP;
                 methodName = "SetLoadBalancerHTTPListenerAttribute";
             } else if (options.getProtocol().equals(LoadBalancerHealthCheck.HCProtocol.HTTPS)) {
-                protocol = LbProtocol.HTTPS;
                 methodName = "SetLoadBalancerHTTPSListenerAttribute";
             } else if (options.getProtocol().equals(LoadBalancerHealthCheck.HCProtocol.TCP)) {
-                protocol = LbProtocol.RAW_TCP;
                 methodName = "SetLoadBalancerTCPListenerAttribute";
             } else {
                 throw new InternalException("Aliyun supports HTTP, HTTPS and TCP as the health check protocol only!");
             }
 
             //find the same protocol listener and set the healthcheck ON and also the related fields.
-            List<LbListener> listeners = getLbListeners(loadBalancer.getProviderLoadBalancerId(), 0, protocol);
+            List<LbListener> listeners = getLbListeners(loadBalancer.getProviderLoadBalancerId(), 0, options.getProtocol());
             for (LbListener listener : listeners) {
 
                 Map<String, Object> params = new HashMap<String, Object>();
-
-                //listener common settings, keep it the same
-                params.put("LoadBalancerId", loadBalancer.getProviderLoadBalancerId());
-                params.put("ListenerPort", listener.getPublicPort());
-                params.put("Bandwidth", AliyunNetworkCommon.DefaultLoadBalancerBandwidth);
-                //algorithm
-                AliyunNetworkCommon.AliyunLbScheduleAlgorithm algorithm = AliyunNetworkCommon.AliyunLbScheduleAlgorithm.WRR;
-                if (listener.getAlgorithm().equals(LbAlgorithm.LEAST_CONN)) {
-                    algorithm = AliyunNetworkCommon.AliyunLbScheduleAlgorithm.WLC;
-                }
-                //scheduler
-                params.put("Scheduler", algorithm.name().toLowerCase());
-                //sticky, cookie
-                if (listener.getPersistence().equals(LbPersistence.NONE)) {
-                    params.put("StickySession", AliyunNetworkCommon.AliyunLbSwitcher.OFF.name().toLowerCase());
-                } else if (listener.getPersistence().equals(LbPersistence.COOKIE)) {
-                    if (protocol.equals(LbProtocol.HTTP) || protocol.equals(LbProtocol.HTTPS)) {
-                        params.put("StickySession", AliyunNetworkCommon.AliyunLbSwitcher.ON.name().toLowerCase());
-                        params.put("StickySessionType", AliyunNetworkCommon.AliyunLbPersistenceType.INSERT.name().toLowerCase());
-                        params.put("CookieTimeout", AliyunNetworkCommon.DefaultPersistenceTimeout);
-                        params.put("Cookie", listener.getCookie());
-                    }
-                } else {
-                    throw new InternalException("Aliyun support Cookie as the sticky session type only!");
-                }
-                //certificate
-                if (protocol.equals(LbProtocol.HTTPS)) {
-                    SSLCertificate sslCertificate = getSSLCertificate(listener.getSslCertificateName());
-                    params.put("ServerCertificateId", sslCertificate.getProviderCertificateId());
-                }
-
                 //health check
                 params.put("HealthCheckConnectPort", options.getPort());
                 params.put("HealthyThreshold", options.getHealthyCount());
                 params.put("UnhealthyThreshold", options.getUnhealthyCount());
                 params.put("HealthCheckConnectTimeout", options.getTimeout());
                 params.put("HealthCheckInterval", options.getInterval());
-
-                if (protocol.equals(LbProtocol.HTTP) || protocol.equals(LbProtocol.HTTPS)) {
-                    params.put("HealthCheck", AliyunNetworkCommon.AliyunLbSwitcher.ON.name().toLowerCase());
+                if (options.getProtocol().equals(LoadBalancerHealthCheck.HCProtocol.HTTP)
+                        || options.getProtocol().equals(LoadBalancerHealthCheck.HCProtocol.HTTPS)) {
+                    params.put("HealthCheck", AliyunNetworkCommon.AliyunLbSwitcher.on.name());
                     params.put("HealthCheckURI", options.getPath());
-                    if (!AliyunNetworkCommon.isEmpty(options.getHost())) {
+                    if (!getProvider().isEmpty(options.getHost())) {
                         params.put("HealthCheckDomain", options.getHost());
                     } else {
                         params.put("HealthCheckDomain", "$_ip");
                     }
                 }
-
+                //append listener params
+                params = appendParamsByListener(params, listener);
                 AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.SLB, methodName, params);
                 getProvider().validateResponse(method.post().asJson());
             }
@@ -561,7 +521,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
             for (LoadBalancer loadBalancer : loadBalancers) {
                 List<LoadBalancerHealthCheck> loadBalancerHealthChecks = getLoadBalancerHealthChecks(loadBalancer.getProviderLoadBalancerId());
                 for (LoadBalancerHealthCheck healthCheck : loadBalancerHealthChecks) {
-                    if (healthCheck != null && (opts == null || opts.matches(healthCheck))) {
+                    if (opts == null || opts.matches(healthCheck)) {
                         healthChecks.add(healthCheck);
                     }
                 }
@@ -590,16 +550,12 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
     @Override
     public LoadBalancerHealthCheck modifyHealthCheck(@Nonnull String providerLBHealthCheckId, @Nonnull HealthCheckOptions options)
             throws InternalException, CloudException {
-        LbProtocol protocol = null;
         String methodName = null;
         if (options.getProtocol().equals(LoadBalancerHealthCheck.HCProtocol.HTTP)) {
-            protocol = LbProtocol.HTTP;
             methodName = "SetLoadBalancerHTTPListenerAttribute";
         } else if (options.getProtocol().equals(LoadBalancerHealthCheck.HCProtocol.HTTPS)) {
-            protocol = LbProtocol.HTTPS;
             methodName = "SetLoadBalancerHTTPSListenerAttribute";
         } else if (options.getProtocol().equals(LoadBalancerHealthCheck.HCProtocol.TCP)) {
-            protocol = LbProtocol.RAW_TCP;
             methodName = "SetLoadBalancerTCPListenerAttribute";
         } else {
             stdLogger.error("Aliyun support HTTP, HTTPS and TCP protocol only!");
@@ -607,36 +563,26 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
         }
         try {
             LoadBalancer loadBalancer = getLoadBalancer(options.getProviderLoadBalancerId());
-            List<LbListener> listeners = getLbListeners(loadBalancer.getProviderLoadBalancerId(), 0, protocol);
+            List<LbListener> listeners = getLbListeners(loadBalancer.getProviderLoadBalancerId(), 0, options.getProtocol());
             Map<String, Object> params = new HashMap<String, Object>();
             //health check
-            if (options.getHealthyCount() > 0) {
-                params.put("HealthyThreshold", options.getHealthyCount());
-            }
-            if (options.getUnhealthyCount() > 0) {
-                params.put("UnhealthyThreshold", options.getUnhealthyCount());
-            }
-            if (options.getInterval() > 0) {
-                params.put("HealthCheckInterval", options.getInterval());
-            }
-            if (options.getTimeout() > 0) {
-                params.put("HealthCheckTimeout", options.getTimeout());
-            }
-            if (options.getPort() > 0) {
-                params.put("HealthCheckConnectPort", options.getPort());
-            }
+            params.put("HealthyThreshold", options.getHealthyCount());
+            params.put("UnhealthyThreshold", options.getUnhealthyCount());
+            params.put("HealthCheckInterval", options.getInterval());
+            params.put("HealthCheckTimeout", options.getTimeout());
+            params.put("HealthCheckConnectPort", options.getPort());
             //type specific params
             if (options.getProtocol().equals(LoadBalancerHealthCheck.HCProtocol.HTTP)
                     || options.getProtocol().equals(LoadBalancerHealthCheck.HCProtocol.HTTPS)) {
-                if (!AliyunNetworkCommon.isEmpty(options.getPath())) {
+                if (!getProvider().isEmpty(options.getPath())) {
                     params.put("HealthCheckURI", options.getPath());
                 }
-                if (!AliyunNetworkCommon.isEmpty(options.getHost())) {
+                if (!getProvider().isEmpty(options.getHost())) {
                     params.put("HealthCheckDomain", options.getHost());
                 } else {
                     params.put("HealthCheckDomain", "$_ip");
                 }
-                params.put("HealthCheck", AliyunNetworkCommon.AliyunLbSwitcher.ON.name().toLowerCase());
+                params.put("HealthCheck", AliyunNetworkCommon.AliyunLbSwitcher.on.name());
             }
             //modify attribute for all listeners
             for (LbListener listener : listeners) {
@@ -684,7 +630,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
                     if (protocol.equals(LbProtocol.RAW_TCP)) {
                         methodName = "SetLoadBalancerTCPListenerAttribute";
                     } else {
-                        params.put("HealthCheck", AliyunNetworkCommon.AliyunLbSwitcher.OFF.name().toLowerCase());
+                        params.put("HealthCheck", AliyunNetworkCommon.AliyunLbSwitcher.off.name());
                         if (protocol.equals(LbProtocol.HTTP)) {
                             methodName = "SetLoadBalancerHTTPListenerAttribute";
                         } else if (protocol.equals(LbProtocol.HTTPS)) {
@@ -708,22 +654,22 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
         params.put("ListenerPort", listener.getPublicPort());
         params.put("Bandwidth", AliyunNetworkCommon.DefaultLoadBalancerBandwidth);
         //scheduler
-        AliyunNetworkCommon.AliyunLbScheduleAlgorithm algorithm = AliyunNetworkCommon.AliyunLbScheduleAlgorithm.WRR;
+        AliyunNetworkCommon.AliyunLbScheduleAlgorithm algorithm = AliyunNetworkCommon.AliyunLbScheduleAlgorithm.wrr;
         if (listener.getAlgorithm().equals(LbAlgorithm.LEAST_CONN)) {
-            algorithm = AliyunNetworkCommon.AliyunLbScheduleAlgorithm.WLC;
+            algorithm = AliyunNetworkCommon.AliyunLbScheduleAlgorithm.wlc;
         }
         params.put("Scheduler", algorithm.name().toLowerCase());
         //sticky, cookie
         if (listener.getNetworkProtocol().equals(LbProtocol.HTTP) || listener.getNetworkProtocol().equals(LbProtocol.HTTPS)) {
             if (listener.getPersistence().equals(LbPersistence.NONE)) {
-                params.put("StickySession", AliyunNetworkCommon.AliyunLbSwitcher.OFF.name().toLowerCase());
+                params.put("StickySession", AliyunNetworkCommon.AliyunLbSwitcher.off.name());
             } else if (listener.getPersistence().equals(LbPersistence.COOKIE)) {
-                params.put("StickySession", AliyunNetworkCommon.AliyunLbSwitcher.ON.name().toLowerCase());
-                if (!AliyunNetworkCommon.isEmpty(listener.getCookie())) { //server insert
-                    params.put("StickySessionType", AliyunNetworkCommon.AliyunLbPersistenceType.SERVER.name().toLowerCase());
+                params.put("StickySession", AliyunNetworkCommon.AliyunLbSwitcher.on.name());
+                if (!getProvider().isEmpty(listener.getCookie())) { //server insert
+                    params.put("StickySessionType", AliyunNetworkCommon.AliyunLbPersistenceType.server.name());
                     params.put("Cookie", listener.getCookie());
                 } else { //slb insert
-                    params.put("StickySessionType", AliyunNetworkCommon.AliyunLbPersistenceType.INSERT.name().toLowerCase());
+                    params.put("StickySessionType", AliyunNetworkCommon.AliyunLbPersistenceType.insert.name());
                     params.put("CookieTimeout", AliyunNetworkCommon.DefaultPersistenceTimeout);
                 }
             }
@@ -751,7 +697,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
         List<LbProtocol> protocols = Arrays.asList(LbProtocol.HTTP, LbProtocol.HTTPS, LbProtocol.RAW_TCP);
         for (LbProtocol protocol : protocols) {
             List<LbListener> listeners = getLbListeners(loadBalancer.getProviderLoadBalancerId(), 0, protocol);
-            if (!AliyunNetworkCommon.isEmpty(listeners)) {
+            if (!getProvider().isEmpty(listeners)) {
                 Map<String, Object> params = new HashMap<String, Object>();
                 params.put("LoadBalancerId", loadBalancer.getProviderLoadBalancerId());
                 params.put("ListenerPort", listeners.get(0).getPublicPort());
@@ -796,7 +742,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
         for (int i = 0; i < response.getJSONObject("LoadBalancers").getJSONArray("LoadBalancer").length(); i++) {
             JSONObject simpleLoadBalancer = response.getJSONObject("LoadBalancers").getJSONArray("LoadBalancer").getJSONObject(i);
             LoadBalancerState status = LoadBalancerState.PENDING;
-            if (!AliyunNetworkCommon.isEmpty(simpleLoadBalancer.getString("LoadBalancerStatus")) &&
+            if (!getProvider().isEmpty(simpleLoadBalancer.getString("LoadBalancerStatus")) &&
                     simpleLoadBalancer.getString("LoadBalancerStatus").toUpperCase().equals(LoadBalancerState.ACTIVE.name().toUpperCase())) {
                 status = LoadBalancerState.ACTIVE;
             }
@@ -805,6 +751,21 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
                     null, null, null));
         }
         return loadBalancers;
+    }
+
+    private List<LbListener> getLbListeners (String loadBalancerId, int listenerPort, LoadBalancerHealthCheck.HCProtocol hcProtocol)
+            throws JSONException, InternalException, CloudException {
+        LbProtocol protocol = null;
+        if (hcProtocol.equals(LoadBalancerHealthCheck.HCProtocol.TCP)) {
+            protocol = LbProtocol.RAW_TCP;
+        } else if (hcProtocol.equals(LoadBalancerHealthCheck.HCProtocol.HTTP)) {
+            protocol = LbProtocol.HTTP;
+        } else if (hcProtocol.equals(LoadBalancerHealthCheck.HCProtocol.HTTPS)) {
+            protocol = LbProtocol.HTTPS;
+        } else {
+            throw new InternalException("Aliyun supports tcp, http and https as the health check protocols only!");
+        }
+        return getLbListeners(loadBalancerId, listenerPort, protocol);
     }
 
     /**
@@ -873,6 +834,20 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
         return listeners;
     }
 
+    private LoadBalancerHealthCheck getLoadBalancerHealthCheckByProtocol (String loadBalancerId, LbProtocol protocol) throws InternalException, CloudException, JSONException {
+        LoadBalancerHealthCheck.HCProtocol hcProtocol = null;
+        if (protocol.equals(LbProtocol.HTTP)) {
+            hcProtocol = LoadBalancerHealthCheck.HCProtocol.HTTP;
+        } else if (protocol.equals(LbProtocol.HTTPS)) {
+            hcProtocol = LoadBalancerHealthCheck.HCProtocol.HTTPS;
+        } else if (protocol.equals(LbProtocol.RAW_TCP)) {
+            hcProtocol = LoadBalancerHealthCheck.HCProtocol.TCP;
+        } else {
+            throw new InternalException("Aliyun support http, https and tcp as load balancer protocols only!");
+        }
+        return getLoadBalancerHealthCheckByProtocol(loadBalancerId, hcProtocol);
+    }
+
     private LoadBalancerHealthCheck getLoadBalancerHealthCheckByProtocol (String loadBalancerId, LoadBalancerHealthCheck.HCProtocol protocol)
             throws InternalException, CloudException, JSONException {
         List<LoadBalancerHealthCheck> healthChecks = getLoadBalancerHealthChecks(loadBalancerId);
@@ -895,19 +870,19 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 
     private LoadBalancer toLoadBalancer (JSONObject response) throws JSONException, CloudException, InternalException {
         LoadBalancerState status = LoadBalancerState.PENDING;
-        if (!AliyunNetworkCommon.isEmpty(response.getString("LoadBalancerStatus"))) {
-            if (response.getString("LoadBalancerStatus").toUpperCase().equals(AliyunNetworkCommon.AliyunLbState.ACTIVE.name().toUpperCase())) {
-                status = LoadBalancerState.ACTIVE;
-            }
+        if (!getProvider().isEmpty(response.getString("LoadBalancerStatus"))
+                && response.getString("LoadBalancerStatus").equals(AliyunNetworkCommon.AliyunLbState.active.name())) {
+            status = LoadBalancerState.ACTIVE;
         }
         LbType lbType = LbType.EXTERNAL;
-        if (!AliyunNetworkCommon.isEmpty(response.getString("AddressType"))
-                && response.getString("AddressType").equals(AliyunNetworkCommon.LoadBalancerAddressType.INTRANET.name().toLowerCase())) {
+        if (!getProvider().isEmpty(response.getString("AddressType"))
+                && response.getString("AddressType").equals(AliyunNetworkCommon.LoadBalancerAddressType.intranet.name())) {
             lbType = LbType.INTERNAL;
         }
         List<Integer> publicPorts = new ArrayList<Integer>();
-        for (int i = 0; i < response.getJSONObject("ListenerPorts").getJSONArray("ListenerPort").length(); i++) {
-            publicPorts.add(response.getJSONObject("ListenerPorts").getJSONArray("ListenerPort").getInt(i));
+        JSONArray listenerPorts = response.getJSONObject("ListenerPorts").getJSONArray("ListenerPort");
+        for (int i = 0; i < listenerPorts.length(); i++) {
+            publicPorts.add(listenerPorts.getInt(i));
         }
         int[] ports = new int[publicPorts.size()];
         for (int i = 0; i < publicPorts.size(); i++) {
@@ -916,7 +891,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
         LoadBalancer loadBalancer = LoadBalancer.getInstance(getContext().getAccountNumber(), getContext().getRegionId(), response.getString("LoadBalancerId"),
                 status, response.getString("LoadBalancerName"), null, lbType, getAddressType(), response.getString("Address"), ports);
         //Listeners
-        List<LbListener> listeners = getLbListeners(loadBalancer.getProviderLoadBalancerId(), 0, null);
+        List<LbListener> listeners = getLbListeners(loadBalancer.getProviderLoadBalancerId(), 0, (LbProtocol) null);
         loadBalancer.withListeners(listeners.toArray(new LbListener[listeners.size()]));
         return loadBalancer;
     }
@@ -930,21 +905,21 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 
         //algorithm
         LbAlgorithm algorithm = LbAlgorithm.ROUND_ROBIN;
-        if (!AliyunNetworkCommon.isEmpty(response.getString("Scheduler"))
-                && response.getString("Scheduler").toUpperCase().equals(AliyunNetworkCommon.AliyunLbScheduleAlgorithm.WLC.name().toUpperCase())) {
+        if (!getProvider().isEmpty(response.getString("Scheduler"))
+                && response.getString("Scheduler").toUpperCase().equals(AliyunNetworkCommon.AliyunLbScheduleAlgorithm.wlc.name().toUpperCase())) {
             algorithm = LbAlgorithm.LEAST_CONN;
         }
 
         //persistence/sticky and cookie
         LbPersistence persistence = LbPersistence.NONE;
-        if (!AliyunNetworkCommon.isEmpty(response.getString("StickySession"))
-                && response.getString("StickySession").toUpperCase().equals(AliyunNetworkCommon.AliyunLbSwitcher.ON.name().toUpperCase())) {
+        if (!getProvider().isEmpty(response.getString("StickySession"))
+                && response.getString("StickySession").equals(AliyunNetworkCommon.AliyunLbSwitcher.on.name())) {
             persistence = LbPersistence.COOKIE;
         }
 
         //certificate
         String certificateName = null;
-        if (!AliyunNetworkCommon.isEmpty(response.getString("ServerCertificateId"))) {
+        if (!getProvider().isEmpty(response.getString("ServerCertificateId"))) {
             for (SSLCertificate certificate : listSSLCertificates()) {
                 if (certificate.getProviderCertificateId().equals(response.getString("ServerCertificateId"))) {
                     certificateName = certificate.getCertificateName();
@@ -962,8 +937,8 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
     private LoadBalancerHealthCheck toHealthCheck (JSONObject response,
                                                    LoadBalancerHealthCheck.HCProtocol protocol, String loadBalancerId, int listenerPort)
             throws JSONException, InternalException, CloudException {
-        if (!AliyunNetworkCommon.isEmpty(response.getString("HealthCheck"))
-                && response.getString("HealthCheck").toUpperCase().equals(AliyunNetworkCommon.AliyunLbSwitcher.OFF.name().toUpperCase())) {
+        if (!getProvider().isEmpty(response.getString("HealthCheck"))
+                && response.getString("HealthCheck").equals(AliyunNetworkCommon.AliyunLbSwitcher.off.name())) {
             return null;
         } else {
             String path = null;

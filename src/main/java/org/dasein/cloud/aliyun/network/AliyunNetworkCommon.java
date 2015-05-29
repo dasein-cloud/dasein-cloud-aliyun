@@ -42,69 +42,29 @@ public class AliyunNetworkCommon {
    public static final int DefaultPageSize = 10; //from 10 to 50, default is 10
 
    //ip address
+   public static enum IpAddressStatus {Associating, Unassociating, InUse, Available};
    public static enum InternetChargeType {PayByBandwidth, PayByTraffic};
-   public static final String DefaultIpAddressBandwidth = "5Mbps"; //default ip address bandwidth
+   public static final String DefaultIpAddressBandwidth = "5Mbps";
 
    //Firewall
-   public static enum AliyunFirewallPermission {ACCEPT, DROP};
-   public static enum AliyunFirewallNicType {INTERNET, INTRANET};
-   public static final String IpProtocolAll = "ALL";
+   public static enum FirewallPermission {accept, drop};
+   public static enum FirewallNicType {internet, intranet};
+   public static enum FirewallIpProtocol {tcp, udp, icmp, gre, all};
 
    //Network
-   public static enum AliyunEipStatus {ASSOCIATING, UNASSOCIATING, INUSE, AVAILABLE};
-   public static enum AliyunRouteEntryNextHopType {INSTANCE, TUNNEL};
-   public static enum AliyunRouteType {SYSTEM ,CUSTOM};
-   public static enum AliyunLbNetworkType {INTERNET, INTRANET};
+   public static enum RouteEntryNextHopType {instance, tunnel};
+   public static enum VlanStatus {Pending, Available};
+   public static enum SubnetStatus {Pending, Available};
 
    //Load Balancer
-   public static enum AliyunLbScheduleAlgorithm {WRR, WLC};
-   public static enum AliyunLbSwitcher {ON, OFF};
-   public static enum AliyunLbPersistenceType {INSERT, SERVER};
-   public static enum LoadBalancerAddressType {INTERNET, INTRANET};
-   public static enum AliyunLbState {INACTIVE, ACTIVE, LOCKED};
-   public static enum AliyunLbEndpointState {NORMAL, ABNORMAL, UNAVAILABLE};
-   public static enum AliyunLbListenerState {STARTING, RUNNING, CONFIGURING, STOPPING, STOPPED};
+   public static enum AliyunLbScheduleAlgorithm {wrr, wlc};
+   public static enum AliyunLbSwitcher {on, off};
+   public static enum AliyunLbPersistenceType {insert, server};
+   public static enum LoadBalancerAddressType {internet, intranet};
+   public static enum AliyunLbState {inactive, active, locked};
+   public static enum AliyunLbEndpointState {normal, abnormal, unavailable};
    public static final int DefaultServerWeight = 50;
    public static final int DefaultPersistenceTimeout = 5 * 60;
    public static final int DefaultLoadBalancerBandwidth = -1;
-
-   //TODO check in Aliyun document says "YYYY-MM-DD'T'hh:mm'Z'", however example shows "YYYY-MM-DD'T'hh:mm:ss'Z'"
-   private  static final String TimeFormat = "YYYY-MM-DD'T'hh:mm:ss'Z'";
-
-   public static boolean isEmpty (Object obj) {
-      if (obj instanceof String) {
-         if (obj == null || ((String) obj).trim().length() == 0) {
-            return true;
-         } else {
-            return false;
-         }
-      } else if (obj instanceof Collection) {
-         if (obj == null || ((Collection) obj).size() <= 0) {
-            return true;
-         } else {
-            return false;
-         }
-      }
-      return false;
-   }
-
-   public static Date parseFromUTCString(String source) throws InternalException {
-      final SimpleDateFormat format = new SimpleDateFormat(TimeFormat);
-      TimeZone timeZone = TimeZone.getTimeZone("UTC");
-      format.setTimeZone(timeZone);
-      try {
-         return format.parse(source);
-      } catch (ParseException e) {
-         throw new InternalException(e);
-      }
-   }
-
-   public static String toUpperCaseFirstLetter(String s)
-   {
-      if(Character.isUpperCase(s.charAt(0)))
-         return s;
-      else
-         return (new StringBuilder()).append(Character.toUpperCase(s.charAt(0))).append(s.substring(1)).toString();
-   }
 
 }

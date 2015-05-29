@@ -41,7 +41,6 @@ import java.util.concurrent.*;
 public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
 
     private static final Logger stdLogger = Aliyun.getStdLogger(AliyunIpAddress.class);
-    private static final ExecutorService threadPool = Executors.newFixedThreadPool(10);
 
     private transient volatile AliyunIpAddressCapabilities capabilities;
 
@@ -104,7 +103,7 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
         params.put("RegionId", getContext().getRegionId());
         params.put("PageSize", AliyunNetworkCommon.DefaultPageSize);
         if (unassignedOnly) {
-            params.put("Status", "Available");
+            params.put("Status", AliyunNetworkCommon.IpAddressStatus.Available.name());
         }
         List<IpAddress> ipAddresses = new ArrayList<IpAddress>();
         int currentPageNumber = 1;
@@ -179,7 +178,7 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
     public void releaseFromServer(@Nonnull String addressId) throws InternalException, CloudException {
         Map<String, Object> params = new HashMap<String, Object>();
         IpAddress ipAddress = getIpAddress(addressId);
-        if (ipAddress != null && !AliyunNetworkCommon.isEmpty(ipAddress.getServerId())) {
+        if (ipAddress != null && !getProvider().isEmpty(ipAddress.getServerId())) {
             params.put("AllocationId", addressId);
             params.put("InstanceId", ipAddress.getServerId());
             AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "UnassociateEipAddresss", params);
@@ -248,10 +247,10 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
             ipAddress.setForVlan(true);
             ipAddress.setIpAddressId(response.getString("AllocationId"));
             ipAddress.setRegionId(response.getString("RegionId"));
-            if (!AliyunNetworkCommon.isEmpty(response.getString("InstanceId"))) {
+            if (!getProvider().isEmpty(response.getString("InstanceId"))) {
                 ipAddress.setServerId(response.getString("InstanceId"));
             }
-            ipAddress.setReserved(false); //TODO
+            ipAddress.setReserved(false);
             ipAddress.setVersion(IPVersion.IPV4);
             return ipAddress;
         } catch (JSONException e) {
