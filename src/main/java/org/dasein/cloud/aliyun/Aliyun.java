@@ -35,7 +35,9 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.Collection;
 import java.util.Date;
+import java.util.Map;
 import java.util.SimpleTimeZone;
 
 /**
@@ -166,6 +168,30 @@ public class Aliyun extends AbstractCloud {
         } catch (ParseException parseException) {
             throw new InternalException("Could not parse date: " + date);
         }
+    }
+
+    public boolean isEmpty(CharSequence cs) {
+        return cs == null || cs.length() == 0;
+    }
+
+    public boolean isEmpty(Collection coll) {
+        return (coll == null || coll.isEmpty());
+    }
+
+    public String capitalize(String str) {
+        int strLen;
+        if (str == null || (strLen = str.length()) == 0) {
+            return str;
+        }
+        return new StringBuilder(strLen).append(Character.toTitleCase(str.charAt(0))).append(str.substring(1))
+                .toString();
+    }
+
+    public void addValueIfNotEmpty(@Nonnull Map<String, Object> parameters, @Nonnull String key, String value) {
+        if (isEmpty(value)) {
+            return;
+        }
+        parameters.put(key, value);
     }
 
     public void validateResponse(JSONObject json) throws CloudException, InternalException {
