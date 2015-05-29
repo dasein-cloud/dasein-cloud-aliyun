@@ -64,7 +64,7 @@ public class AliyunNetworkCommon {
    public static enum AliyunLbState {INACTIVE, ACTIVE, LOCKED};
    public static enum AliyunLbEndpointState {NORMAL, ABNORMAL, UNAVAILABLE};
    public static enum AliyunLbListenerState {STARTING, RUNNING, CONFIGURING, STOPPING, STOPPED};
-   public static final int DefaultServerWeight = 100;
+   public static final int DefaultServerWeight = 50;
    public static final int DefaultPersistenceTimeout = 5 * 60;
    public static final int DefaultLoadBalancerBandwidth = -1;
 

@@ -63,30 +63,8 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
     public void addListeners(@Nonnull String toLoadBalancerId, @Nullable LbListener[] listeners) throws CloudException, InternalException {
 
         for (int i = 0; i < listeners.length; i++) {
-
             LbListener listener = listeners[i];
-
-            //translate listener protocol to health check protocol
-            LoadBalancerHealthCheck.HCProtocol protocol = null;
-            if (listener.getNetworkProtocol().equals(LbProtocol.HTTP)) {
-                protocol = LoadBalancerHealthCheck.HCProtocol.HTTP;
-            } else if (listener.getNetworkProtocol().equals(LbProtocol.HTTPS)) {
-                protocol = LoadBalancerHealthCheck.HCProtocol.HTTPS;
-            } else if (listener.getNetworkProtocol().equals(LbProtocol.RAW_TCP)) {
-                protocol = LoadBalancerHealthCheck.HCProtocol.TCP;
-            } else {
-                stdLogger.error("Aliyun supports HTTP, HTTPS and TCP as the health check protocol only!");
-                throw new InternalException("Aliyun supports HTTP, HTTPS and TCP as the health check protocol only!");
-            }
-
-            //validate network protocol
-            if (listener.getNetworkProtocol() == null || !listener.getNetworkProtocol().equals(LbProtocol.HTTP) ||
-                    !listener.getNetworkProtocol().equals(LbProtocol.HTTPS) || !listener.getNetworkProtocol().equals(LbProtocol.RAW_TCP)) {
-                throw new InternalException("Aliyun supports HTTP, HTTPS and RAW TCP as the load balancer algorithms only!");
-            }
-
             Map<String, Object> params = new HashMap<String, Object>();
-
             //common
             params.put("LoadBalancerId", toLoadBalancerId);
             params.put("ListenerPort", listener.getPublicPort());
@@ -123,6 +101,15 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
             }
 
             //health check
+            //translate listener protocol to health check protocol
+            LoadBalancerHealthCheck.HCProtocol protocol = null;
+            if (listener.getNetworkProtocol().equals(LbProtocol.HTTP)) {
+                protocol = LoadBalancerHealthCheck.HCProtocol.HTTP;
+            } else if (listener.getNetworkProtocol().equals(LbProtocol.HTTPS)) {
+                protocol = LoadBalancerHealthCheck.HCProtocol.HTTPS;
+            } else if (listener.getNetworkProtocol().equals(LbProtocol.RAW_TCP)) {
+                protocol = LoadBalancerHealthCheck.HCProtocol.TCP;
+            }
             LoadBalancerHealthCheck healthCheck = null;
             try {
                 healthCheck = getLoadBalancerHealthCheckByProtocol(toLoadBalancerId, protocol);
@@ -623,19 +610,19 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
             List<LbListener> listeners = getLbListeners(loadBalancer.getProviderLoadBalancerId(), 0, protocol);
             Map<String, Object> params = new HashMap<String, Object>();
             //health check
-            if (options.getHealthyCount() >= 0) {
+            if (options.getHealthyCount() > 0) {
                 params.put("HealthyThreshold", options.getHealthyCount());
             }
-            if (options.getUnhealthyCount() >= 0) {
+            if (options.getUnhealthyCount() > 0) {
                 params.put("UnhealthyThreshold", options.getUnhealthyCount());
             }
-            if (options.getInterval() >= 0) {
+            if (options.getInterval() > 0) {
                 params.put("HealthCheckInterval", options.getInterval());
             }
-            if (options.getTimeout() >= 0) {
+            if (options.getTimeout() > 0) {
                 params.put("HealthCheckTimeout", options.getTimeout());
             }
-            if (options.getPort() >= 0) {
+            if (options.getPort() > 0) {
                 params.put("HealthCheckConnectPort", options.getPort());
             }
             //type specific params
@@ -808,7 +795,6 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
         JSONObject response = method.get().asJson();
         for (int i = 0; i < response.getJSONObject("LoadBalancers").getJSONArray("LoadBalancer").length(); i++) {
             JSONObject simpleLoadBalancer = response.getJSONObject("LoadBalancers").getJSONArray("LoadBalancer").getJSONObject(i);
-            //TODO check status
             LoadBalancerState status = LoadBalancerState.PENDING;
             if (!AliyunNetworkCommon.isEmpty(simpleLoadBalancer.getString("LoadBalancerStatus")) &&
                     simpleLoadBalancer.getString("LoadBalancerStatus").toUpperCase().equals(LoadBalancerState.ACTIVE.name().toUpperCase())) {
@@ -908,7 +894,6 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
     }
 
     private LoadBalancer toLoadBalancer (JSONObject response) throws JSONException, CloudException, InternalException {
-        //TODO check status mapping
         LoadBalancerState status = LoadBalancerState.PENDING;
         if (!AliyunNetworkCommon.isEmpty(response.getString("LoadBalancerStatus"))) {
             if (response.getString("LoadBalancerStatus").toUpperCase().equals(AliyunNetworkCommon.AliyunLbState.ACTIVE.name().toUpperCase())) {
