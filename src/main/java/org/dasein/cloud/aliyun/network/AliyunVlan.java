@@ -44,31 +44,50 @@ import java.util.*;
  */
 public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
 
-    private class RouteTableId {
+    /**
+     * IdGenerator contains vlanId, subnetId, vrouterId, routeTableId.
+     * All vlan, subnet/vswitch, vrouter and route table ids will be transformed
+     */
+    protected class IdGenerator {
 
-        private String vpcId;
+        private String vlanId;
+        private String subnetId;
         private String vrouterId;
         private String routeTableId;
 
-        public RouteTableId (String generateId) {
+        public IdGenerator (String generateId) {
             if (!getProvider().isEmpty(generateId)) {
                 String[] segments = generateId.split(":");
-                if (segments.length == 3) {
-                    this.vpcId = segments[0];
-                    this.vrouterId = segments[1];
-                    this.routeTableId = segments[2];
+                if (segments.length == 4) {
+                    if (!getProvider().isEmpty(segments[0])) {
+                        this.vlanId = segments[0];
+                    }
+                    if (!getProvider().isEmpty(segments[1])) {
+                        this.subnetId = segments[1];
+                    }
+                    if (!getProvider().isEmpty(segments[2])) {
+                        this.vrouterId = segments[2];
+                    }
+                    if (!getProvider().isEmpty(segments[3])) {
+                        this.routeTableId = segments[3];
+                    }
                 }
             }
         }
 
-        public RouteTableId (String vpcId, String vrouterId, String routingTableId) {
-            this.vpcId = vpcId;
+        public IdGenerator (String vlanId, String subnetId, String vrouterId, String routeTableId) {
+            this.vlanId = vlanId;
+            this.subnetId = subnetId;
             this.vrouterId = vrouterId;
-            this.routeTableId = routingTableId;
+            this.routeTableId = routeTableId;
         }
 
-        public String getVpcId() {
-            return vpcId;
+        public String getVlanId() {
+            return vlanId;
+        }
+
+        public String getSubnetId() {
+            return subnetId;
         }
 
         public String getVrouterId() {
@@ -79,10 +98,25 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
             return routeTableId;
         }
 
-        public String toString () {
-            return this.vpcId + ":" + this.vrouterId + ":" + this.routeTableId;
+        public String toString() {
+            String id = "";
+            if (!getProvider().isEmpty(this.vlanId)) {
+                id += this.vlanId;
+            }
+            id += ":";
+            if (!getProvider().isEmpty(this.subnetId)) {
+                id += this.subnetId;
+            }
+            id += ":";
+            if (!getProvider().isEmpty(this.vrouterId)) {
+                id += this.vrouterId;
+            }
+            id += ":";
+            if (!getProvider().isEmpty(this.routeTableId)) {
+                id += this.routeTableId;
+            }
+            return id;
         }
-
     }
 
     private static final Logger stdLogger = Aliyun.getStdLogger(AliyunVlan.class);
@@ -110,7 +144,7 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
             throw new InternalException("Aliyun supports IPV4 only!");
         }
         Map<String, Object> params = new HashMap<String, Object>();
-        params.put("RouteTableId", routingTableId);
+        params.put("RouteTableId", new IdGenerator(routingTableId).getRouteTableId());
         params.put("DestinationCidrBlock", destinationCidr);
         if (!getProvider().isEmpty(vmId)) {
             params.put("NextHopType", getProvider().capitalize(
@@ -132,7 +166,8 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
         Map<String, Object> params = new HashMap<String, Object>();
         params.put("ZoneId", options.getProviderDataCenterId());
         params.put("CidrBlock", options.getCidr());
-        params.put("VpcId", options.getProviderVlanId());
+        IdGenerator vlanId = new IdGenerator(options.getProviderVlanId());
+        params.put("VpcId", vlanId.getVlanId());
         if (!getProvider().isEmpty(options.getName())) {
             params.put("VSwitchName", options.getName());
         }
@@ -142,7 +177,7 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
         AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "CreateVSwitch", params, true);
         JSONObject response = method.post().asJson();
         try {
-            return getSubnet(response.getString("VSwitchId"));
+            return getSubnet(new IdGenerator(vlanId.getVlanId(), response.getString("VSwitchId"), null, null).toString());
         } catch (JSONException e) {
             stdLogger.error("An exception occurs during create subnet!", e);
             throw new InternalException(e);
@@ -179,7 +214,7 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
         AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "CreateVpc", params, true);
         JSONObject response = method.post().asJson();
         try {
-            return getVlan(response.getString("VpcId"));
+            return getVlan(new IdGenerator(response.getString("VpcId"), null, response.getString("VRouterId"), response.getString("RouteTableId")).toString());
         } catch (JSONException e) {
             stdLogger.error("An exception occurs during createVlan!", e);
             throw new InternalException(e);
@@ -230,16 +265,16 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
      */
     @Override
     public RoutingTable getRoutingTableForVlan(@Nonnull String vlanId) throws CloudException, InternalException {
-        String vrouterId = getAssociatedVRouterIdByVlan(vlanId);
-        if (!getProvider().isEmpty(vrouterId)) {
+        IdGenerator idGenerator = new IdGenerator(vlanId);
+        if (!getProvider().isEmpty(idGenerator.getVrouterId())) {
             Map<String, Object> params = new HashMap<String, Object>();
-            params.put("VRouterId", vrouterId);
+            params.put("VRouterId", idGenerator.getVrouterId());
             AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DescribeRouteTables", params);
             JSONObject response = method.get().asJson();
             try {
                 JSONArray routingTables = response.getJSONObject("RouteTables").getJSONArray("RouteTable");
                 for (int i = 0; i < routingTables.length(); i++) {
-                    return toRoutingTable(routingTables.getJSONObject(i), vlanId);
+                    return toRoutingTable(routingTables.getJSONObject(i), idGenerator.getVlanId());
                 }
                 return null;
             } catch (JSONException e) {
@@ -261,19 +296,18 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
      */
     @Override
     public RoutingTable getRoutingTable(@Nonnull String id) throws CloudException, InternalException {
-        //parse id into routeTableId
-        RouteTableId routeTableId = new RouteTableId(id);
+        IdGenerator idGenerator = new IdGenerator(id);
         // get routing table instance by router id and routing table id. and use vpcId (retrieve above) to set the vpc field.
-        if (!getProvider().isEmpty(routeTableId.getVrouterId())) {
+        if (!getProvider().isEmpty(idGenerator.getVrouterId())) {
             Map<String, Object> params = new HashMap<String, Object>();
-            params.put("VRouterId", routeTableId.getVrouterId());
-            params.put("RouteTableId", id);
+            params.put("VRouterId", idGenerator.getVrouterId());
+            params.put("RouteTableId", idGenerator.getRouteTableId());
             AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DescribeRouteTables", params);
             JSONObject response = method.get().asJson();
             try {
                 JSONArray routingTables = response.getJSONObject("RouteTables").getJSONArray("RouteTable");
                 for (int i = 0; i < routingTables.length(); i++) {
-                    return toRoutingTable(routingTables.getJSONObject(i), routeTableId.getVpcId());
+                    return toRoutingTable(routingTables.getJSONObject(i), idGenerator.getVlanId());
                 }
                 return null;
             } catch (JSONException e) {
@@ -287,17 +321,17 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
 
     @Override
     public Subnet getSubnet(@Nonnull String subnetId) throws CloudException, InternalException {
-        String vlanId = getAssociatedVlanIdBySubnet(subnetId);
-        if (!getProvider().isEmpty(vlanId)) {
+        IdGenerator idGenerator = new IdGenerator(subnetId);
+        if (!getProvider().isEmpty(idGenerator.getVlanId())) {
             Map<String, Object> params = new HashMap<String, Object>();
-            params.put("VpcId", vlanId);
-            params.put("VSwitchId", subnetId);
+            params.put("VpcId", idGenerator.getVlanId());
+            params.put("VSwitchId", idGenerator.getSubnetId());
             AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DescribeVSwitches", params);
             JSONObject response = method.get().asJson();
             try {
                 JSONArray subnets = response.getJSONObject("VSwitches").getJSONArray("VSwitch");
                 for (int i = 0; i < subnets.length(); i++) {
-                    return toSubnet(subnets.getJSONObject(i));
+                    return toSubnet(subnets.getJSONObject(i)); //TODO check transform
                 }
                 return null;
             } catch (JSONException e) {
@@ -313,7 +347,7 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
     public VLAN getVlan(@Nonnull String vlanId) throws CloudException, InternalException {
         Map<String, Object> params = new HashMap<String, Object>();
         params.put("RegionId", getContext().getRegionId());
-        params.put("VpcId", vlanId);
+        params.put("VpcId", new IdGenerator(vlanId).getVlanId());
         AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DescribeVpcs", params);
         JSONObject response = method.get().asJson();
         try {
@@ -342,6 +376,7 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
         PopulatorThread<Networkable> populator = new PopulatorThread<Networkable>(new JiteratorPopulator<Networkable>() {
             @Override
             public void populate(@Nonnull Jiterator<Networkable> iterator) throws Exception {
+                IdGenerator idGenerator = new IdGenerator(inVlanId);
                 NetworkServices service = getProvider().getNetworkServices();
                 if (service != null) {
                     //IP Address Support
@@ -349,7 +384,7 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
                     if (ipAddressSupport != null) {
                         for (IpAddress ipAddress : ipAddressSupport.listIpPool(IPVersion.IPV4, false)) {
                             if (!getProvider().isEmpty(ipAddress.getProviderVlanId())
-                                    && ipAddress.getProviderVlanId().equals(inVlanId)) {
+                                    && ipAddress.getProviderVlanId().equals(idGenerator.getVlanId())) {
                                 iterator.push(ipAddress);
                             }
                         }
@@ -359,24 +394,24 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
                     if (firewallSupport != null) {
                         for (Firewall firewall : firewallSupport.list()) {
                             if (!getProvider().isEmpty(firewall.getProviderVlanId())
-                                    && firewall.getProviderVlanId().equals(inVlanId)) {
+                                    && firewall.getProviderVlanId().equals(idGenerator.getVlanId())) {
                                 iterator.push(firewall);
                             }
                         }
                     }
                     //Routing Table
-                    for (RoutingTable routingTable : listRoutingTablesForVlan(inVlanId)) {
+                    for (RoutingTable routingTable : listRoutingTablesForVlan(idGenerator.getVlanId())) {
                         iterator.push(routingTable);
                     }
                     //Subnet
-                    for (Subnet subnet: listSubnets(inVlanId)) {
+                    for (Subnet subnet: listSubnets(idGenerator.getVlanId())) {
                         iterator.push(subnet);
                     }
                     //Load Balancers
                     LoadBalancerSupport loadBalancerSupport = service.getLoadBalancerSupport();
                     for (LoadBalancer loadBalancer : loadBalancerSupport.listLoadBalancers()) {
                         if (!getProvider().isEmpty(loadBalancer.getProviderVlanId())
-                                && loadBalancer.getProviderVlanId().equals(inVlanId)) {
+                                && loadBalancer.getProviderVlanId().equals(idGenerator.getVlanId())) {
                             iterator.push(loadBalancer);
                         }
                     }
@@ -388,7 +423,7 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
                     if (virtualMachineSupport != null) {
                         for (VirtualMachine virtualMachine : virtualMachineSupport.listVirtualMachines()) {
                             if (!getProvider().isEmpty(virtualMachine.getProviderVlanId())
-                                    && virtualMachine.getProviderVlanId().equals(inVlanId)) {
+                                    && virtualMachine.getProviderVlanId().equals(idGenerator.getVlanId())) {
                                 iterator.push(virtualMachine);
                             }
                         }
@@ -411,7 +446,7 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
     @Override
     public Iterable<RoutingTable> listRoutingTablesForVlan(@Nonnull String vlanId) throws CloudException, InternalException {
         List<RoutingTable> routingTables = new ArrayList<RoutingTable>();
-        routingTables.add(getRoutingTableForVlan(vlanId));
+        routingTables.add(getRoutingTableForVlan(new IdGenerator(vlanId).getVlanId()));
         return routingTables;
     }
 
@@ -420,7 +455,7 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
     public Iterable<Subnet> listSubnets(@Nullable String vlanId) throws CloudException, InternalException {
         List<Subnet> subnets = new ArrayList<Subnet>();
         Map<String, Object> params = new HashMap<String, Object>();
-        params.put("VpcId", vlanId);
+        params.put("VpcId", new IdGenerator(vlanId).getVlanId());
         params.put("PageSize", AliyunNetworkCommon.DefaultPageSize);
         int totalPageNumber = 1;
         int currentPageNumber = 1;
@@ -451,7 +486,7 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
         Iterator<VLAN> vlanIter = listVlans().iterator();
         while (vlanIter.hasNext()) {
             VLAN vlan = vlanIter.next();
-            resourceStatus.add(new ResourceStatus(vlan.getProviderVlanId(), vlan.getCurrentState()));
+            resourceStatus.add(new ResourceStatus(vlan.getProviderVlanId(), vlan.getCurrentState())); //TODO check transform
         }
         return resourceStatus;
     }
@@ -513,8 +548,7 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
         //remove route from routing table
         if (!getProvider().isEmpty(nextHopId)) {
             Map<String, Object> params = new HashMap<String, Object>();
-            RouteTableId routeTableId = new RouteTableId(routingTableId);
-            params.put("RouteTableId", routeTableId.getRouteTableId());
+            params.put("RouteTableId", new IdGenerator(routingTableId).getRouteTableId());
             params.put("DestinationCidrBlock", destinationCidr);
             params.put("NextHopId", nextHopId);
             AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DeleteRouteEntry", params);
@@ -530,7 +564,7 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
     @Override
     public void removeSubnet(String providerSubnetId) throws CloudException, InternalException {
         Map<String, Object> params = new HashMap<String, Object>();
-        params.put("VSwitchId", providerSubnetId);
+        params.put("VSwitchId", new IdGenerator(providerSubnetId).getSubnetId());
         AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DeleteVSwitch", params);
         JSONObject response = method.post().asJson();
         getProvider().validateResponse(response);
@@ -541,53 +575,6 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
         return true;
     }
 
-    private String getAssociatedVRouterIdByVlan (String vlanId) throws InternalException, CloudException {
-        Map<String, Object> params = new HashMap<String, Object>();
-        params.put("RegionId", getContext().getRegionId());
-        params.put("VpcId", vlanId);
-        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DescribeVpcs", params);
-        JSONObject response = method.get().asJson();
-        try {
-            JSONArray vpcsResponse = response.getJSONObject("Vpcs").getJSONArray("Vpc");
-            for (int i = 0; i < vpcsResponse.length(); i++) {
-                JSONObject vlan = vpcsResponse.getJSONObject(i);
-                return vlan.getString("VRouterId");
-            }
-            return null;
-        } catch (JSONException e) {
-            throw new InternalException(e);
-        }
-    }
-
-    private String getAssociatedVlanIdBySubnet (String subnetId) throws InternalException, CloudException {
-        Map<String, Object> params = new HashMap<String, Object>();
-        params.put("RegionId", getContext().getRegionId());
-        int totalPageNumber = 1;
-        int currentPageNumber = 1;
-        do {
-            params.put("PageNumber", currentPageNumber);
-            AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DescribeVpcs", params);
-            JSONObject response = method.get().asJson();
-            try {
-                JSONArray vlansResponse = response.getJSONObject("Vpcs").getJSONArray("Vpc");
-                for (int i = 0; i < vlansResponse.length(); i++) {
-                    JSONArray subnetsResponse = vlansResponse.getJSONObject(i).getJSONObject("VSwitchIds").getJSONArray("VSwitchId");
-                    for (int j = 0; j < subnetsResponse.length(); j++) {
-                        if (subnetsResponse.getString(j).equals(subnetId)) {
-                            return vlansResponse.getJSONObject(i).getString("VpcId");
-                        }
-                    }
-                }
-                totalPageNumber = response.getInt("TotalCount") / AliyunNetworkCommon.DefaultPageSize +
-                        response.getInt("TotalCount") % AliyunNetworkCommon.DefaultPageSize > 0 ? 1 : 0;
-                currentPageNumber++;
-            } catch (JSONException e) {
-                throw new InternalException(e);
-            }
-        } while (currentPageNumber < totalPageNumber);
-        return null;
-    }
-
     private Subnet toSubnet (JSONObject response) throws InternalException {
         try {
             //cidr, currentState, description, name, providerOwnerId, providerRegionId, providerSubnetId, providerVlanId
@@ -596,8 +583,9 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
                     response.getString("Status").equals(AliyunNetworkCommon.SubnetStatus.Available)) {
                 state = SubnetState.AVAILABLE;
             }
-            Subnet subnet = Subnet.getInstance(getContext().getAccountNumber(), getContext().getRegionId(), response.getString("VpcId"),
-                    response.getString("VSwitchId"), state, response.getString("VSwitchName"), response.getString("Description"),
+            IdGenerator idGenerator = new IdGenerator(response.getString("VpcId"), response.getString("VSwitchId"), null, null);
+            Subnet subnet = Subnet.getInstance(getContext().getAccountNumber(), getContext().getRegionId(), idGenerator.getVlanId(),
+                    idGenerator.toString(), state, response.getString("VSwitchName"), response.getString("Description"),
                     response.getString("CidrBlock"));
             //availableIpAddresses
             if (response.getInt("AvailableIpAddressCount") > 0) {
@@ -628,7 +616,7 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
             vlan.setName(response.getString("VpcName"));
             vlan.setProviderOwnerId(getContext().getAccountNumber());
             vlan.setProviderRegionId(response.getString("RegionId"));
-            vlan.setProviderVlanId(response.getString("VpcId"));
+            vlan.setProviderVlanId(new IdGenerator(response.getString("VpcId"), null, response.getString("VRouterId"), null).toString());
             vlan.setSupportedTraffic(IPVersion.IPV4);
             vlan.setVisibleScope(VisibleScope.ACCOUNT_REGION);
             return vlan;
@@ -655,9 +643,8 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
             routingTable.setProviderRegionId(getContext().getRegionId());
             routingTable.setProviderVlanId(vlanId);
             //translate routing table id
-            RouteTableId routeTableId = new RouteTableId(
-                    routingTable.getProviderVlanId(), response.getString("VRouterId"), response.getString("RouteTableId"));
-            routingTable.setProviderRoutingTableId(routeTableId.toString());
+            routingTable.setProviderRoutingTableId(new IdGenerator(
+                    vlanId, null, response.getString("VRouterId"), response.getString("RouteTableId")).toString());
             List<Route> routes = new ArrayList<Route>();
             JSONArray routesResponse = response.getJSONObject("RouteEntrys").getJSONArray("RouteEntry");
             for (int i = 0; i < routesResponse.length(); i++) {
