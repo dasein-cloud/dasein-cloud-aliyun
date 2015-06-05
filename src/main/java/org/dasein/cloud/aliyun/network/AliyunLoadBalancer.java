@@ -77,7 +77,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
         if (options.getType() != null && options.getType().equals(LbType.INTERNAL)) {
             params.put("AddressType", AliyunNetworkCommon.LoadBalancerAddressType.intranet.name());
         }
-        params.put("InternetChargeType", AliyunNetworkCommon.InternetChargeType.paybytraffic.name());
+        params.put("InternetChargeType", AliyunNetworkCommon.InternetChargeType.PayByTraffic.name().toLowerCase());
         params.put("Bandwidth", 1000);
         AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.SLB, "CreateLoadBalancer", params, true);
         JSONObject response = method.post().asJson();
@@ -726,9 +726,9 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
         for (int i = 0; i < portsJSONArray.length(); i++) {
             ports[i] = portsJSONArray.getInt(i);
         }
-
+        String description = "load balancer " + id;
         LoadBalancer loadBalancer = LoadBalancer
-                .getInstance(getContext().getAccountNumber(), region, id, status, name, null, lbType, addressType,
+                .getInstance(getContext().getAccountNumber(), region, id, status, name, description, lbType, addressType,
                         address, null, VisibleScope.ACCOUNT_REGION, ports);
         loadBalancer.createdAt(getProvider().parseIso8601Date(response.getString("CreateTime")).getTime());
         if ("vpc".equals(response.getString("NetworkType"))) {
@@ -741,6 +741,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
             List<LbListener> listeners = describeListeners(loadBalancer.getProviderLoadBalancerId());
             loadBalancer.withListeners(listeners.toArray(new LbListener[listeners.size()]));
         }
+        loadBalancer.supportingTraffic(IPVersion.IPV4);
         return loadBalancer;
     }
 
@@ -827,12 +828,14 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
         int healthThreshold = listenerJson.getInt("HealthyThreshold");
         int unhealthyThreshold = listenerJson.getInt("UnhealthyThreshold");
         String healthCheckId = new LbListenerHealthCheckIdentity(loadBalancerId, lbProtocol, listenerPort).toString();
-        LoadBalancerHealthCheck healthCheck = LoadBalancerHealthCheck.getInstance(healthCheckId, null, null, httpDomain,
-                hcProtocol, healthCheckPort, httpPath, healthCheckInterval,
+        String healthCheckName = "health check - " + healthCheckId;
+        String healthCheckDescription = "health check for load balancer " + loadBalancerId +
+                " listener listens at port " + listenerPort;
+        LoadBalancerHealthCheck healthCheck = LoadBalancerHealthCheck.getInstance(healthCheckId, healthCheckName,
+                healthCheckDescription, httpDomain, hcProtocol, healthCheckPort, httpPath, healthCheckInterval,
                 healthCheckTimeout, healthThreshold, unhealthyThreshold);
-
         healthCheck.addListener(toListener(loadBalancerId, listenerJson, lbProtocol));
-
+        healthCheck.addProviderLoadBalancerId(loadBalancerId);
         return healthCheck;
     }
 

@@ -71,11 +71,6 @@ public class AliyunLoadBalancerCapabilities extends AbstractCapabilities<Aliyun>
     }
 
     @Override
-    public boolean healthCheckRequiresListener() throws CloudException, InternalException {
-        return true;
-    }
-
-    @Override
     public Requirement healthCheckRequiresName() throws CloudException, InternalException {
         return Requirement.NONE;
     }
@@ -166,14 +161,4 @@ public class AliyunLoadBalancerCapabilities extends AbstractCapabilities<Aliyun>
         return false;
     }
 
-    @Override
-    public boolean supportsSslCertificateStore() throws CloudException, InternalException {
-        return true;
-    }
-
-    @Nonnull
-    @Override
-    public NamingConstraints getLoadBalancerNamingConstraints() throws CloudException, InternalException {
-        return NamingConstraints.getAlphaNumeric(1, 80).withRegularExpression("[a-zA-Z0-9_\\-\\.\\/]{1,80}");
-    }
 }

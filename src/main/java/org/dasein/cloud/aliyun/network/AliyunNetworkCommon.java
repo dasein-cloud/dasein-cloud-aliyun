@@ -43,7 +43,7 @@ public class AliyunNetworkCommon {
 
    //ip address
    public static enum IpAddressStatus {Associating, Unassociating, InUse, Available};
-   public static enum InternetChargeType {paybybandwidth, paybytraffic};
+   public static enum InternetChargeType {PayByBandwidth, PayByTraffic};
    public static final String DefaultIpAddressBandwidth = "5Mbps";
 
    //Firewall
