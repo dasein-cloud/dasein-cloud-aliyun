@@ -21,6 +21,7 @@ package org.dasein.cloud.aliyun.network;
 import org.dasein.cloud.*;
 import org.dasein.cloud.aliyun.Aliyun;
 import org.dasein.cloud.network.*;
+import org.dasein.cloud.util.NamingConstraints;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -66,6 +67,11 @@ public class AliyunLoadBalancerCapabilities extends AbstractCapabilities<Aliyun>
 
     @Override
     public boolean healthCheckRequiresLoadBalancer() throws CloudException, InternalException {
+        return true;
+    }
+
+    @Override
+    public boolean healthCheckRequiresListener() throws CloudException, InternalException {
         return true;
     }
 
@@ -135,6 +141,7 @@ public class AliyunLoadBalancerCapabilities extends AbstractCapabilities<Aliyun>
     @Nonnull
     @Override
     public Iterable<LbPersistence> listSupportedPersistenceOptions() throws CloudException, InternalException {
+        //SLB support SUBNET type for RAW_TCP, it is enabled by default and cannot disable
         return Collections.unmodifiableList(Arrays.asList(LbPersistence.NONE, LbPersistence.COOKIE));
     }
 
@@ -157,5 +164,16 @@ public class AliyunLoadBalancerCapabilities extends AbstractCapabilities<Aliyun>
     @Override
     public boolean supportsMultipleTrafficTypes() throws CloudException, InternalException {
         return false;
+    }
+
+    @Override
+    public boolean supportsSslCertificateStore() throws CloudException, InternalException {
+        return true;
+    }
+
+    @Nonnull
+    @Override
+    public NamingConstraints getLoadBalancerNamingConstraints() throws CloudException, InternalException {
+        return NamingConstraints.getAlphaNumeric(1, 80).withRegularExpression("[a-zA-Z0-9_\\-\\.\\/]{1,80}");
     }
 }
