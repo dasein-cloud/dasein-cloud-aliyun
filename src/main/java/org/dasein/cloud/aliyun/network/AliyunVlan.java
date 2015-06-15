@@ -486,7 +486,7 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
         Iterator<VLAN> vlanIter = listVlans().iterator();
         while (vlanIter.hasNext()) {
             VLAN vlan = vlanIter.next();
-            resourceStatus.add(new ResourceStatus(vlan.getProviderVlanId(), vlan.getCurrentState())); //TODO check transform
+            resourceStatus.add(new ResourceStatus(vlan.getProviderVlanId(), vlan.getCurrentState()));
         }
         return resourceStatus;
     }
@@ -528,6 +528,7 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
      * @param destinationCidr
      * @throws CloudException
      * @throws InternalException
+     *
      */
     @Override
     public void removeRoute(@Nonnull String routingTableId, @Nonnull String destinationCidr) throws CloudException, InternalException {

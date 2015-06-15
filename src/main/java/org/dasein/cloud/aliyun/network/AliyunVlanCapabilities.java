@@ -22,9 +22,11 @@ import org.dasein.cloud.*;
 import org.dasein.cloud.aliyun.Aliyun;
 import org.dasein.cloud.network.IPVersion;
 import org.dasein.cloud.network.VLANCapabilities;
+import org.dasein.cloud.util.NamingConstraints;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+
 import java.util.Collections;
 import java.util.Locale;
 
@@ -155,4 +157,10 @@ public class AliyunVlanCapabilities extends AbstractCapabilities<Aliyun> impleme
     public boolean supportsRawAddressRouting() throws CloudException, InternalException {
         return false;
     }
+
+	@Override
+	public NamingConstraints getVlanNamingConstraints() {
+		return NamingConstraints.getAlphaNumeric(2, 128).withRegularExpression(
+                "^((?!http)[a-zA-Z])[a-zA-Z0-9_\\-\\.]{1,127}").withNoSpaces();
+	}
 }

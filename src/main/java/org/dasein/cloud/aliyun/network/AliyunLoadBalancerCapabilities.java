@@ -25,6 +25,7 @@ import org.dasein.cloud.util.NamingConstraints;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Locale;
@@ -160,5 +161,24 @@ public class AliyunLoadBalancerCapabilities extends AbstractCapabilities<Aliyun>
     public boolean supportsMultipleTrafficTypes() throws CloudException, InternalException {
         return false;
     }
+
+	@Override
+	public boolean healthCheckRequiresListener() throws CloudException,
+			InternalException {
+		return true;
+	}
+
+	@Override
+	public boolean supportsSslCertificateStore() throws CloudException,
+			InternalException {
+		return true;
+	}
+
+	@Override
+	public NamingConstraints getLoadBalancerNamingConstraints()
+			throws CloudException, InternalException {
+		return NamingConstraints.getAlphaNumeric(2, 128).withRegularExpression(
+                "^((?!http)[a-zA-Z])[a-zA-Z0-9_\\-\\.]{1,127}").withNoSpaces();
+	}
 
 }

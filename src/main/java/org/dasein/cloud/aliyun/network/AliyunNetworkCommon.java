@@ -18,18 +18,6 @@
  */
 package org.dasein.cloud.aliyun.network;
 
-import org.dasein.cloud.InternalException;
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import java.text.ParseException;
-
-import java.text.SimpleDateFormat;
-import java.util.Collection;
-import java.util.Date;
-import java.util.TimeZone;
-
 /**
  * Created by Jane Wang on 5/7/2015.
  *

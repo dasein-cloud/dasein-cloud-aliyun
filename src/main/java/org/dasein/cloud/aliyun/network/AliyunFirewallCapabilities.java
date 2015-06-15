@@ -21,9 +21,11 @@ package org.dasein.cloud.aliyun.network;
 import org.dasein.cloud.*;
 import org.dasein.cloud.aliyun.Aliyun;
 import org.dasein.cloud.network.*;
+import org.dasein.cloud.util.NamingConstraints;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Locale;
@@ -131,5 +133,12 @@ public class AliyunFirewallCapabilities extends AbstractCapabilities<Aliyun> imp
     public boolean supportsFirewallDeletion() throws CloudException, InternalException {
         return true;
     }
+
+	@Override
+	public NamingConstraints getFirewallNamingConstraints()
+			throws CloudException, InternalException {
+		return NamingConstraints.getAlphaNumeric(2, 128).withRegularExpression(
+                "^((?!http)[a-zA-Z])[a-zA-Z0-9_\\-\\.]{1,127}").withNoSpaces();
+	}
 
  }
