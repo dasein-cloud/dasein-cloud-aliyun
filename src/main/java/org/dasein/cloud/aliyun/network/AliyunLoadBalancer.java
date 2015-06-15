@@ -790,8 +790,15 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
             lbHealthCheckId = new LbListenerHealthCheckIdentity(loadBalancerId, lbProtocol, publicPort).toString();
         }
 
-        return LbListener.getInstance(algorithm, persistence, cookie, lbProtocol, publicPort, privatePort,
-                certificateName, lbHealthCheckId);
+        LbListener lbListener;
+        if(getProvider().isEmpty(cookie)) {
+            lbListener = LbListener.getInstance(algorithm, persistence, lbProtocol, publicPort, privatePort);
+        } else {
+            lbListener = LbListener.getInstance(algorithm, cookie, lbProtocol, publicPort, privatePort);
+        }
+        lbListener.withSslCertificateName(certificateName);
+        lbListener.withProviderLBHealthCheckId(lbHealthCheckId);
+        return lbListener;
     }
 
     private LoadBalancerHealthCheck toHealthCheck(String loadBalancerId, JSONObject listenerJson, LbProtocol lbProtocol)
