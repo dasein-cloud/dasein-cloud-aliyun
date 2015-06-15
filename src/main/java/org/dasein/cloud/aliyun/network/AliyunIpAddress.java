@@ -30,7 +30,6 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import javax.annotation.Nonnull;
 import java.util.*;
-import java.util.concurrent.*;
 
 /**
  * Created by Jane Wang on 5/7/2015.
@@ -81,8 +80,8 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
         JSONObject response = method.get().asJson();
         try {
             JSONArray eipAddresses = response.getJSONObject("EipAddresses").getJSONArray("EipAddress");
-            for (int i = 0; i < eipAddresses.length(); i++) {
-                return toIpAddress(eipAddresses.getJSONObject(i));
+            if (eipAddresses != null && eipAddresses.length() > 0) {
+            	return toIpAddress(eipAddresses.getJSONObject(0));
             }
             return null;
         } catch (JSONException e) {

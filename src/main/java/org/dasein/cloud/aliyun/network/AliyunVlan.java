@@ -273,8 +273,8 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
             JSONObject response = method.get().asJson();
             try {
                 JSONArray routingTables = response.getJSONObject("RouteTables").getJSONArray("RouteTable");
-                for (int i = 0; i < routingTables.length(); i++) {
-                    return toRoutingTable(routingTables.getJSONObject(i), identityGenerator.getVlanId());
+                if (routingTables != null && routingTables.length() > 0) {
+                	return toRoutingTable(routingTables.getJSONObject(0), identityGenerator.getVlanId());
                 }
                 return null;
             } catch (JSONException e) {
@@ -306,8 +306,8 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
             JSONObject response = method.get().asJson();
             try {
                 JSONArray routingTables = response.getJSONObject("RouteTables").getJSONArray("RouteTable");
-                for (int i = 0; i < routingTables.length(); i++) {
-                    return toRoutingTable(routingTables.getJSONObject(i), identityGenerator.getVlanId());
+                if (routingTables != null && routingTables.length() > 0) {
+                	return toRoutingTable(routingTables.getJSONObject(0), identityGenerator.getVlanId());
                 }
                 return null;
             } catch (JSONException e) {
@@ -330,8 +330,8 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
             JSONObject response = method.get().asJson();
             try {
                 JSONArray subnets = response.getJSONObject("VSwitches").getJSONArray("VSwitch");
-                for (int i = 0; i < subnets.length(); i++) {
-                    return toSubnet(subnets.getJSONObject(i)); //TODO check transform
+                if (subnets != null && subnets.length() > 0) {
+                	return toSubnet(subnets.getJSONObject(0));
                 }
                 return null;
             } catch (JSONException e) {
@@ -352,8 +352,8 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
         JSONObject response = method.get().asJson();
         try {
             JSONArray vlans = response.getJSONObject("Vpcs").getJSONArray("Vpc");
-            for (int i = 0; i < vlans.length(); i++) {
-                return toVlan(vlans.getJSONObject(i));
+            if (vlans != null && vlans.length() > 0) {
+            	return toVlan(vlans.getJSONObject(0));
             }
             return null;
         } catch (JSONException e) {
