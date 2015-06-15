@@ -193,7 +193,7 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
         }
         Map<String, Object> params = new HashMap<String, Object>();
         params.put("RegionId", getContext().getRegionId());
-        params.put("InternetChargeType", AliyunNetworkCommon.InternetChargeType.paybytraffic.name());
+        params.put("InternetChargeType", AliyunNetworkCommon.InternetChargeType.PayByTraffic.name());
         params.put("Bandwidth", AliyunNetworkCommon.DefaultIpAddressBandwidth);
         AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "AllocateEipAddress", params, true);
         JSONObject response = method.post().asJson();
