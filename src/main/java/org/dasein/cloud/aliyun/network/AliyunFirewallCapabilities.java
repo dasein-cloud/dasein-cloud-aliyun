@@ -120,7 +120,7 @@ public class AliyunFirewallCapabilities extends AbstractCapabilities<Aliyun> imp
     public Requirement requiresVLAN() throws CloudException, InternalException {
         return Requirement.NONE;
     }
-
+    
     public boolean supportsRules(@Nonnull Direction direction, @Nonnull Permission permission, boolean inVlan) throws CloudException, InternalException {
         return (direction.equals(Direction.INGRESS) || direction.equals(Direction.EGRESS))
                 && (permission.equals(Permission.ALLOW) || permission.equals(Permission.DENY));

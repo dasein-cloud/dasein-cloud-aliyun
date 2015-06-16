@@ -177,8 +177,8 @@ public class AliyunLoadBalancerCapabilities extends AbstractCapabilities<Aliyun>
 	@Override
 	public NamingConstraints getLoadBalancerNamingConstraints()
 			throws CloudException, InternalException {
-		return NamingConstraints.getAlphaNumeric(2, 128).withRegularExpression(
-                "^((?!http)[a-zA-Z])[a-zA-Z0-9_\\-\\.]{1,127}").withNoSpaces();
+		return NamingConstraints.getAlphaNumeric(1, 80).withRegularExpression(
+                "^[a-zA-Z0-9_/\\-\\.]{1,80}").withNoSpaces();
 	}
 
 }
