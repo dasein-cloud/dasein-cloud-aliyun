@@ -30,6 +30,7 @@ import org.dasein.cloud.compute.ImageClass;
 import org.dasein.cloud.compute.MachineImageFormat;
 import org.dasein.cloud.compute.MachineImageType;
 import org.dasein.cloud.compute.VmState;
+import org.dasein.cloud.util.NamingConstraints;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -144,5 +145,12 @@ public class AliyunImageCapabilities extends AbstractCapabilities<Aliyun> implem
     @Override
     public boolean imageCaptureDestroysVM() throws CloudException, InternalException {
         return false;
+    }
+
+    @Nonnull
+    @Override
+    public NamingConstraints getImageNamingConstraints() throws CloudException, InternalException {
+        return NamingConstraints.getAlphaNumeric(2, 128).withRegularExpression(
+                "^((?!http)[a-zA-Z])[a-zA-Z0-9_\\-]{1,127}").withNoSpaces();
     }
 }

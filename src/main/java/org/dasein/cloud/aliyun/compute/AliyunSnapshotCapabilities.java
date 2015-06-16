@@ -25,6 +25,7 @@ import org.dasein.cloud.Requirement;
 import org.dasein.cloud.VisibleScope;
 import org.dasein.cloud.aliyun.Aliyun;
 import org.dasein.cloud.compute.SnapshotCapabilities;
+import org.dasein.cloud.util.NamingConstraints;
 
 import javax.annotation.Nonnull;
 import java.util.Locale;
@@ -74,5 +75,12 @@ public class AliyunSnapshotCapabilities extends AbstractCapabilities<Aliyun> imp
     @Override
     public boolean supportsSnapshotSharingWithPublic() throws InternalException, CloudException {
         return false;
+    }
+
+    @Nonnull
+    @Override
+    public NamingConstraints getSnapshotNamingConstraints() throws CloudException, InternalException {
+        return NamingConstraints.getAlphaNumeric(2, 128).withRegularExpression(
+                "^((?!http)(?!auto)[a-zA-Z])[a-zA-Z0-9_\\-]{1,127}").withNoSpaces();
     }
 }

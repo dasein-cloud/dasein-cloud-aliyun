@@ -98,7 +98,7 @@ public class AliyunVolumeCapabilities extends AbstractCapabilities<Aliyun> imple
     @Override
     public @Nonnull NamingConstraints getVolumeNamingConstraints() throws CloudException, InternalException {
         return NamingConstraints.getAlphaNumeric(2, 128).withRegularExpression(
-                "^((?!http)[a-zA-Z])[a-zA-Z0-9_\\-\\.]{1,127}").withNoSpaces();
+                "^((?!http)[a-z])[a-zA-Z0-9_\\-\\.]{1,127}").withNoSpaces();
     }
 
     @Override
@@ -111,10 +111,10 @@ public class AliyunVolumeCapabilities extends AbstractCapabilities<Aliyun> imple
         return Requirement.NONE;
     }
 
+    @Nonnull
     @Override
-    public @Nonnull Requirement getVolumeDeviceIDAutoAssignRequirement()
-            throws InternalException, CloudException {
-        return Requirement.REQUIRED;
+    public Requirement getDeviceIdOnAttachRequirement() throws InternalException, CloudException {
+        return Requirement.OPTIONAL;
     }
 
     @Override
