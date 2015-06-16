@@ -161,6 +161,8 @@ public class AliyunVlanCapabilities extends AbstractCapabilities<Aliyun> impleme
 	@Override
 	public NamingConstraints getVlanNamingConstraints() {
 		return NamingConstraints.getAlphaNumeric(2, 128).withRegularExpression(
-                "^((?!http)[a-zA-Z])[a-zA-Z0-9_\\-\\.]{1,127}").withNoSpaces();
+                "^((?!http)[a-zA-Z\u4e00-\u9fa5])[\u4e00-\u9fa5a-zA-Z0-9_\\-]{1,127}$").withNoSpaces();
 	}
+	
+	
 }
