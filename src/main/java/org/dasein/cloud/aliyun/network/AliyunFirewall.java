@@ -18,12 +18,20 @@
  */
 package org.dasein.cloud.aliyun.network;
 
+import org.apache.http.client.ResponseHandler;
+import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.conn.util.InetAddressUtils;
 import org.apache.log4j.Logger;
 import org.dasein.cloud.*;
 import org.dasein.cloud.aliyun.Aliyun;
-import org.dasein.cloud.aliyun.AliyunMethod;
+import org.dasein.cloud.aliyun.util.requester.AliyunHttpClientBuilderFactory;
+import org.dasein.cloud.aliyun.util.requester.AliyunRequestBuilder;
+import org.dasein.cloud.aliyun.util.requester.AliyunRequestExecutor;
+import org.dasein.cloud.aliyun.util.requester.AliyunResponseHandlerWithMapper;
+import org.dasein.cloud.aliyun.util.requester.AliyunValidateJsonResponseHandler;
 import org.dasein.cloud.network.*;
+import org.dasein.cloud.util.requester.DriverToCoreMapper;
+import org.dasein.cloud.util.requester.streamprocessors.StreamToJSONObjectProcessor;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -31,7 +39,9 @@ import org.json.JSONObject;
 import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -52,18 +62,29 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
     }
 
     public void delete(@Nonnull String firewallId) throws InternalException, CloudException {
-        Map<String, Object> params = new HashMap<String, Object>();
-        params.put("RegionId", getProvider().getContext().getRegionId());
-        params.put("SecurityGroupId", firewallId);
-        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DeleteSecurityGroup", params);
-        JSONObject response = method.post().asJson();
-        getProvider().validateResponse(response);
+        
+    	Map<String, Object> params = new HashMap<String, Object>();
+    	params.put("RegionId", getProvider().getContext().getRegionId());
+    	params.put("SecurityGroupId", firewallId);
+        
+        HttpUriRequest request = AliyunRequestBuilder.post()
+        		.provider(getProvider())
+        		.category(AliyunRequestBuilder.Category.ECS)
+        		.parameter("Action", "DeleteSecurityGroup")
+        		.entity(params)
+        		.build();
+        
+        new AliyunRequestExecutor<Void>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                request,
+                new AliyunValidateJsonResponseHandler(getProvider())).execute();
+        
     }
 
     @Nonnull
     public FirewallCapabilities getCapabilities() throws CloudException, InternalException {
         if (capabilities == null) {
-            return new AliyunFirewallCapabilities(getProvider());
+        	capabilities = new AliyunFirewallCapabilities(getProvider());
         }
         return capabilities;
     }
@@ -74,33 +95,62 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
 
     @Nonnull
     public Iterable<Firewall> list() throws InternalException, CloudException {
-        Map<String, Object> params = new HashMap<String, Object>();
-        List<Firewall> firewalls = new ArrayList<Firewall>();
-        params.put("RegionId", getContext().getRegionId());
-        params.put("PageSize", AliyunNetworkCommon.DefaultPageSize);
-        int maxPageNumber = 1;
-        int currentPageNumber = 1;
-        do {
-            params.put("PageNumber", currentPageNumber);
-            AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DescribeSecurityGroups", params);
-            JSONObject response = method.get().asJson();
-            try {
-                JSONArray securityGroups = response.getJSONObject("SecurityGroups").getJSONArray("SecurityGroup");
-                for (int i = 0; i < securityGroups.length(); i++) {
-                    JSONObject securityGroup = securityGroups.getJSONObject(i);
-                    if (!getProvider().isEmpty(securityGroup.getString("SecurityGroupId"))){
-                        firewalls.add(getFirewall(securityGroup.getString("SecurityGroupId")));
+    	
+        final List<Firewall> allFirewalls = new ArrayList<Firewall>();
+        final AtomicInteger maxPageNumber = new AtomicInteger(1);
+        final AtomicInteger currentPageNumber = new AtomicInteger(1);
+        
+        ResponseHandler<List<Firewall>> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, List<Firewall>>(
+        		new StreamToJSONObjectProcessor(),
+        		new DriverToCoreMapper<JSONObject, List<Firewall>>() {
+                    @Override
+                    public List<Firewall> mapFrom(JSONObject json) {
+                        try {
+                        	List<Firewall> firewalls = new ArrayList<Firewall>();
+                        	JSONArray securityGroups = json.getJSONObject("SecurityGroups").getJSONArray("SecurityGroup");
+                        	for (int i = 0; i < securityGroups.length(); i++) {
+                                JSONObject securityGroup = securityGroups.getJSONObject(i);
+                                if (!getProvider().isEmpty(securityGroup.getString("SecurityGroupId"))){
+                                    firewalls.add(getFirewall(securityGroup.getString("SecurityGroupId")));
+                                }
+                            }
+                            maxPageNumber.addAndGet(json.getInt("TotalCount") / AliyunNetworkCommon.DefaultPageSize +
+                                    json.getInt("TotalCount") % AliyunNetworkCommon.DefaultPageSize > 0 ? 1 : 0);
+                            currentPageNumber.incrementAndGet();
+                            return firewalls;
+                        } catch (CloudException cloudException) {
+                            stdLogger.error("Failed to validate response", cloudException);
+                            throw new RuntimeException(cloudException.getMessage());
+                        } catch (InternalException internalException) {
+                            stdLogger.error("Failed to validate response", internalException);
+                            throw new RuntimeException(internalException.getMessage());
+                        } catch (JSONException e) {
+                        	stdLogger.error("Parsing firewall failed", e);
+                        	throw new RuntimeException(e.getMessage());
+						}
                     }
-                }
-                maxPageNumber = response.getInt("TotalCount") / AliyunNetworkCommon.DefaultPageSize +
-                        response.getInt("TotalCount") % AliyunNetworkCommon.DefaultPageSize > 0 ? 1 : 0;
-                currentPageNumber++;
-            } catch (JSONException e) {
-                stdLogger.error("An exception occurs during list all firewalls!", e);
-                throw new InternalException(e);
-            }
-        } while (currentPageNumber < maxPageNumber);
-        return firewalls;
+                },
+                JSONObject.class);
+        
+        do {
+        	
+            HttpUriRequest request = AliyunRequestBuilder.get()
+            		.provider(getProvider())
+            		.category(AliyunRequestBuilder.Category.ECS)
+            		.parameter("Action", "DescribeSecurityGroups")
+            		.parameter("RegionId", getContext().getRegionId())
+            		.parameter("PageSize", AliyunNetworkCommon.DefaultPageSize)
+            		.parameter("PageNumber", currentPageNumber)
+            		.build();
+            
+            allFirewalls.addAll(new AliyunRequestExecutor<List<Firewall>>(getProvider(),
+                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                    request,
+                    responseHandler).execute());
+            
+        } while (currentPageNumber.intValue() < maxPageNumber.intValue());
+        
+        return allFirewalls;
     }
 
     @Nonnull
@@ -177,9 +227,19 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
                 params.put("Policy", AliyunNetworkCommon.FirewallPermission.drop.name());
             }
         }
-        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, methodName, params);
-        JSONObject response = method.post().asJson();
-        getProvider().validateResponse(response);
+        
+        HttpUriRequest request = AliyunRequestBuilder.post()
+        		.provider(getProvider())
+        		.category(AliyunRequestBuilder.Category.ECS)
+        		.parameter("Action", methodName)
+        		.entity(params)
+        		.build();
+        
+        new AliyunRequestExecutor<Void>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                request,
+                new AliyunValidateJsonResponseHandler(getProvider())).execute();
+        
         return FirewallRule.getInstance(null, firewallId, sourceEndpoint, direction, protocol, permission, destinationEndpoint,
                 beginPort, endPort).getProviderRuleId();
     }
@@ -198,56 +258,110 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
         if (!getProvider().isEmpty(options.getProviderVlanId())) {
             params.put("VpcId", options.getProviderVlanId());
         }
-        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "AllocateEipAddress", params, true);
-        try {
-            JSONObject response = method.post().asJson();
-            return response.getString("SecurityGroupId");
-        } catch (JSONException e) {
-            stdLogger.error("An exception occurs during create security group!", e);
-            throw new InternalException(e);
-        }
+        
+        HttpUriRequest request = AliyunRequestBuilder.post()
+        		.provider(getProvider())
+        		.category(AliyunRequestBuilder.Category.ECS)
+        		.parameter("Action", "AllocateEipAddress")
+        		.entity(params)
+        		.clientToken(true)
+        		.build();
+        
+        return (String) new AliyunRequestExecutor<Map<String, Object>>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                request,
+                AliyunNetworkCommon.getDefaultResponseHandler(getProvider(), "SecurityGroupId")).execute().get("SecurityGroupId");
+        
     }
 
     @Nullable
     @Override
     public Firewall getFirewall(@Nonnull String firewallId) throws InternalException, CloudException {
-        Map<String, Object> params = new HashMap<String, Object>();
-        params.put("RegionId", getContext().getRegionId());
-        params.put("SecurityGroupId", firewallId);
-        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DescribeSecurityGroupAttribute", params);
-        JSONObject response = method.get().asJson();
-        return toFirewall(response);
+        
+        HttpUriRequest request = AliyunRequestBuilder.get()
+        		.provider(getProvider())
+        		.category(AliyunRequestBuilder.Category.ECS)
+        		.parameter("Action", "DescribeSecurityGroupAttribute")
+        		.parameter("RegionId", getContext().getRegionId())
+        		.parameter("SecurityGroupId", firewallId)
+        		.build();
+        
+        ResponseHandler<Firewall> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, Firewall>(
+	       		new StreamToJSONObjectProcessor(),
+	       		new DriverToCoreMapper<JSONObject, Firewall>() {
+	                   @Override
+	                   public Firewall mapFrom(JSONObject json) {
+	                	   try {
+	                           return toFirewall(json);
+	                       } catch (CloudException cloudException) {
+	                           stdLogger.error("Failed to parsing firewall", cloudException);
+	                           throw new RuntimeException(cloudException.getMessage());
+	                       } catch (InternalException internalException) {
+	                           stdLogger.error("Failed to parsing firewall", internalException);
+	                           throw new RuntimeException(internalException.getMessage());
+	                       }
+	                   }
+	               },
+	               JSONObject.class);
+        
+        return new AliyunRequestExecutor<Firewall>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                request,
+                responseHandler).execute();
     }
 
     @Nonnull
     @Override
     public Iterable<ResourceStatus> listFirewallStatus() throws InternalException, CloudException {
-        Map<String, Object> params = new HashMap<String, Object>();
-        List<ResourceStatus> resourceStatus = new ArrayList<ResourceStatus>();
-        params.put("RegionId", getContext().getRegionId());
-        params.put("PageSize", AliyunNetworkCommon.DefaultPageSize);
-        int totalPageCount = 1;
-        int currentPageNumber = 1;
+    	
+        List<ResourceStatus> allResourceStatus = new ArrayList<ResourceStatus>();
+        final AtomicInteger totalPageCount = new AtomicInteger(1);
+        final AtomicInteger currentPageNumber = new AtomicInteger(1);
+        
+        ResponseHandler<List<ResourceStatus>> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, List<ResourceStatus>>(
+        		new StreamToJSONObjectProcessor(),
+        		new DriverToCoreMapper<JSONObject, List<ResourceStatus>>() {
+                    @Override
+                    public List<ResourceStatus> mapFrom(JSONObject json) {
+                        try {
+                        	List<ResourceStatus> resourceStatus = new ArrayList<ResourceStatus>();
+                        	JSONArray securityGroups = json.getJSONObject("SecurityGroups").getJSONArray("SecurityGroup");
+                        	for (int i = 0; i < securityGroups.length(); i++) {
+                                JSONObject securityGroup = securityGroups.getJSONObject(i);
+                                String securityGroupId = securityGroup.getString("SecurityGroupId");
+                                resourceStatus.add(new ResourceStatus(securityGroupId, true));
+                            }
+                            totalPageCount.addAndGet(json.getInt("TotalCount") / AliyunNetworkCommon.DefaultPageSize
+                                    + json.getInt("TotalCount") % AliyunNetworkCommon.DefaultPageSize > 0 ? 1 : 0);
+                            currentPageNumber.incrementAndGet();
+                            return resourceStatus;
+                        } catch (JSONException e) {
+							stdLogger.error("Parsing ResourceStatus failed", e);
+							throw new RuntimeException(e.getMessage());
+						}
+                    }
+                },
+                JSONObject.class);
+        
         do {
-            params.put("PageNumber", currentPageNumber);
-            AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DescribeSecurityGroups", params);
-            JSONObject response = method.get().asJson();
-            try {
-                JSONArray securityGroups = response.getJSONObject("SecurityGroups").getJSONArray("SecurityGroup");
-                for (int i = 0; i < securityGroups.length(); i++) {
-                    JSONObject securityGroup = securityGroups.getJSONObject(i);
-                    String securityGroupId = securityGroup.getString("SecurityGroupId");
-                    resourceStatus.add(new ResourceStatus(securityGroupId, true));
-                }
-                totalPageCount = response.getInt("TotalCount") / AliyunNetworkCommon.DefaultPageSize
-                        + response.getInt("TotalCount") % AliyunNetworkCommon.DefaultPageSize > 0 ? 1 : 0;
-                currentPageNumber++;
-            } catch (JSONException e) {
-                stdLogger.error("An exception occurs during list firewall status!", e);
-                throw new InternalException(e);
-            }
-        } while (currentPageNumber < totalPageCount);
-        return resourceStatus;
+        	
+        	HttpUriRequest request = AliyunRequestBuilder.get()
+            		.provider(getProvider())
+            		.category(AliyunRequestBuilder.Category.ECS)
+            		.parameter("Action", "DescribeSecurityGroups")
+            		.parameter("RegionId", getContext().getRegionId())
+            		.parameter("PageSize", AliyunNetworkCommon.DefaultPageSize)
+            		.parameter("PageNumber", currentPageNumber)
+            		.build();
+        	
+        	allResourceStatus.addAll(new AliyunRequestExecutor<List<ResourceStatus>>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                request,
+                responseHandler).execute());
+        	
+        } while (currentPageNumber.intValue() < totalPageCount.intValue());
+        
+        return allResourceStatus;
     }
 
     @Override
@@ -333,9 +447,19 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
                 params.put("Policy", AliyunNetworkCommon.FirewallPermission.drop.name());
             }
         }
-        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, methodName, params);
-        JSONObject response = method.post().asJson();
-        getProvider().validateResponse(response);
+        
+        HttpUriRequest request = AliyunRequestBuilder.post()
+        		.provider(getProvider())
+        		.category(AliyunRequestBuilder.Category.ECS)
+        		.parameter("Action", methodName)
+        		.entity(params)
+        		.build();
+        
+        new AliyunRequestExecutor<Void>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                request,
+                new AliyunValidateJsonResponseHandler(getProvider())).execute();
+        
     }
 
     private Firewall toFirewall (JSONObject response) throws CloudException, InternalException {
@@ -357,7 +481,7 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
             firewall.setVisibleScope(VisibleScope.ACCOUNT_REGION);
             List<FirewallRule> firewallRules = new ArrayList<FirewallRule>();
             for (int i = 0; i < response.getJSONObject("Permissions").getJSONArray("Permission").length(); i++) {
-                firewallRules.add(toFirewalLRule(
+                firewallRules.add(toFirewallRule(
                         response.getJSONObject("Permissions").getJSONArray("Permission").getJSONObject(i),
                         firewall.getProviderFirewallId()));
             }
@@ -368,7 +492,7 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
         return firewall;
     }
 
-    private FirewallRule toFirewalLRule (JSONObject response, String firewallId) throws CloudException, InternalException {
+    private FirewallRule toFirewallRule (JSONObject response, String firewallId) throws CloudException, InternalException {
         try {
             //protocol
             Protocol protocol = null;

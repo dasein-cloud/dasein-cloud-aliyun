@@ -21,7 +21,6 @@ package org.dasein.cloud.aliyun.network;
 import org.apache.log4j.Logger;
 import org.dasein.cloud.*;
 import org.dasein.cloud.aliyun.Aliyun;
-import org.dasein.cloud.aliyun.AliyunMethod;
 import org.dasein.cloud.network.*;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -79,6 +78,9 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
         }
         params.put("InternetChargeType", AliyunNetworkCommon.InternetChargeType.PayByTraffic.name().toLowerCase());
         params.put("Bandwidth", 1000);
+        
+        
+        
         AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.SLB, "CreateLoadBalancer", params, true);
         JSONObject response = method.post().asJson();
 

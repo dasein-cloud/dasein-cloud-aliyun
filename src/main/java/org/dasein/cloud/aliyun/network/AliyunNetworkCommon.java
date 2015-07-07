@@ -18,6 +18,20 @@
  */
 package org.dasein.cloud.aliyun.network;
 
+import java.util.HashMap;
+import java.util.Map;
+
+import org.apache.http.client.ResponseHandler;
+import org.apache.log4j.Logger;
+import org.dasein.cloud.CloudException;
+import org.dasein.cloud.InternalException;
+import org.dasein.cloud.aliyun.Aliyun;
+import org.dasein.cloud.aliyun.util.requester.AliyunResponseHandlerWithMapper;
+import org.dasein.cloud.util.requester.DriverToCoreMapper;
+import org.dasein.cloud.util.requester.streamprocessors.StreamToJSONObjectProcessor;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 /**
  * Created by Jane Wang on 5/7/2015.
  *
@@ -27,6 +41,8 @@ package org.dasein.cloud.aliyun.network;
  */
 public class AliyunNetworkCommon {
 
+	private static final Logger stdLogger = Aliyun.getStdLogger(AliyunNetworkCommon.class);
+	
    public static final int DefaultPageSize = 10; //from 10 to 50, default is 10
 
    //ip address
@@ -54,5 +70,26 @@ public class AliyunNetworkCommon {
    public static final int DefaultServerWeight = 50;
    public static final int DefaultPersistenceTimeout = 5 * 60;
    public static final int DefaultLoadBalancerBandwidth = -1;
+   
+   public static ResponseHandler<Map<String, Object>> getDefaultResponseHandler(final Aliyun provider, final String ... keys) {
+	   return new AliyunResponseHandlerWithMapper<JSONObject, Map<String, Object>>(
+	       		new StreamToJSONObjectProcessor(),
+	       		new DriverToCoreMapper<JSONObject, Map<String, Object>>() {
+	                   @Override
+	                   public Map<String, Object> mapFrom(JSONObject json) {
+	                       try {
+	                    	   Map<String, Object> results = new HashMap<String, Object>();
+	                    	   for (String key : keys) {
+	                    		   results.put(key, json.getString(key));
+	                    	   }
+	                    	   return results;
+	                       } catch (JSONException e) {
+	                    	   stdLogger.error("Get " + keys + " from response json failed!");
+	                    	   throw new RuntimeException(e.getMessage());
+	                       }
+	                   }
+	               },
+	               JSONObject.class);
+   }
 
 }

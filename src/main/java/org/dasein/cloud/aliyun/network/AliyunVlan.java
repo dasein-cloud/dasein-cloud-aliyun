@@ -18,10 +18,14 @@
  */
 package org.dasein.cloud.aliyun.network;
 
+import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.log4j.Logger;
 import org.dasein.cloud.*;
 import org.dasein.cloud.aliyun.Aliyun;
-import org.dasein.cloud.aliyun.AliyunMethod;
+import org.dasein.cloud.aliyun.util.requester.AliyunHttpClientBuilderFactory;
+import org.dasein.cloud.aliyun.util.requester.AliyunRequestBuilder;
+import org.dasein.cloud.aliyun.util.requester.AliyunRequestExecutor;
+import org.dasein.cloud.aliyun.util.requester.AliyunValidateJsonResponseHandler;
 import org.dasein.cloud.compute.ComputeServices;
 import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.compute.VirtualMachineSupport;
@@ -32,8 +36,10 @@ import org.dasein.util.PopulatorThread;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+
 import java.util.*;
 
 /**
@@ -154,16 +160,28 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
             stdLogger.warn("Add route to Virtual Machine, you must specify the VM instance ID!");
             throw new InternalException("Add route to Virtual Machine, you must specify the VM instance ID!");
         }
-        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "CreateRouteEntry", params, true);
-        JSONObject response = method.post().asJson();
-        getProvider().validateResponse(response);
+        
+        HttpUriRequest request = AliyunRequestBuilder.post()
+        		.provider(getProvider())
+        		.category(AliyunRequestBuilder.Category.ECS)
+        		.parameter("Action", "CreateRouteEntry")
+        		.entity(params)
+        		.clientToken(true)
+        		.build();
+        
+        new AliyunRequestExecutor<Void>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                request,
+                new AliyunValidateJsonResponseHandler(getProvider())).execute();
+        
         return Route.getRouteToVirtualMachine(IPVersion.IPV4, destinationCidr, getContext().getAccountNumber(), vmId);
     }
 
     @Nonnull
     @Override
     public Subnet createSubnet(@Nonnull SubnetCreateOptions options) throws CloudException, InternalException {
-        Map<String, Object> params = new HashMap<String, Object>();
+        
+    	Map<String, Object> params = new HashMap<String, Object>();
         params.put("ZoneId", options.getProviderDataCenterId());
         params.put("CidrBlock", options.getCidr());
         IdentityGenerator vlanId = new IdentityGenerator(options.getProviderVlanId());
@@ -174,14 +192,22 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
         if (!getProvider().isEmpty(options.getDescription())) {
             params.put("Description", options.getDescription());
         }
-        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "CreateVSwitch", params, true);
-        JSONObject response = method.post().asJson();
-        try {
-            return getSubnet(new IdentityGenerator(vlanId.getVlanId(), response.getString("VSwitchId"), null, null).toString());
-        } catch (JSONException e) {
-            stdLogger.error("An exception occurs during create subnet!", e);
-            throw new InternalException(e);
-        }
+        
+        HttpUriRequest request = AliyunRequestBuilder.post()
+        		.provider(getProvider())
+        		.category(AliyunRequestBuilder.Category.ECS)
+        		.parameter("Action", "CreateVSwitch")
+        		.entity(params)
+        		.clientToken(true)
+        		.build();
+        
+        String vSwitchId = (String) new AliyunRequestExecutor<Map<String, Object>>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                request,
+                AliyunNetworkCommon.getDefaultResponseHandler(getProvider(), "VSwitchId")).execute().get("VSwitchId");
+        
+        return getSubnet(new IdentityGenerator(vlanId.getVlanId(), vSwitchId, null, null).toString());
+        
     }
 
     /**
@@ -200,7 +226,8 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
     @Override
     public VLAN createVlan(@Nonnull String cidr, @Nonnull String name, @Nonnull String description, @Nonnull String domainName,
                            @Nonnull String[] dnsServers, @Nonnull String[] ntpServers) throws CloudException, InternalException {
-        Map<String, Object> params = new HashMap<String, Object>();
+        
+    	Map<String, Object> params = new HashMap<String, Object>();
         params.put("RegionId", getContext().getRegionId());
         if (!getProvider().isEmpty(cidr)) {
             params.put("CidrBlock", cidr);
@@ -211,14 +238,21 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
         if (!getProvider().isEmpty(description)) {
             params.put("Description", description);
         }
-        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "CreateVpc", params, true);
-        JSONObject response = method.post().asJson();
-        try {
-            return getVlan(new IdentityGenerator(response.getString("VpcId"), null, response.getString("VRouterId"), response.getString("RouteTableId")).toString());
-        } catch (JSONException e) {
-            stdLogger.error("An exception occurs during createVlan!", e);
-            throw new InternalException(e);
-        }
+        
+        HttpUriRequest request = AliyunRequestBuilder.post()
+        		.provider(getProvider())
+        		.category(AliyunRequestBuilder.Category.ECS)
+        		.parameter("Action", "CreateVpc")
+        		.entity(params)
+        		.clientToken(true)
+        		.build();
+        
+        Map<String, Object> result = new AliyunRequestExecutor<Map<String, Object>>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                request,
+                AliyunNetworkCommon.getDefaultResponseHandler(getProvider(), "VpcId", "VRouterId", "RouteTableId")).execute();
+        
+        return getVlan(new IdentityGenerator((String)result.get("VpcId"), null, (String)result.get("VRouterId"), (String)result.get("RouteTableId")).toString());
     }
 
     @Nonnull
