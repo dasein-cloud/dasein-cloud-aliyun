@@ -19,12 +19,18 @@
 
 package org.dasein.cloud.aliyun.compute;
 
+import org.apache.http.client.ResponseHandler;
+import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.log4j.Logger;
 import org.dasein.cloud.AsynchronousTask;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.aliyun.Aliyun;
-import org.dasein.cloud.aliyun.AliyunMethod;
+import org.dasein.cloud.aliyun.util.requester.AliyunHttpClientBuilderFactory;
+import org.dasein.cloud.aliyun.util.requester.AliyunRequestBuilder;
+import org.dasein.cloud.aliyun.util.requester.AliyunRequestExecutor;
+import org.dasein.cloud.aliyun.util.requester.AliyunResponseHandlerWithMapper;
+import org.dasein.cloud.aliyun.util.requester.AliyunValidateJsonResponseHandler;
 import org.dasein.cloud.compute.AbstractImageSupport;
 import org.dasein.cloud.compute.Architecture;
 import org.dasein.cloud.compute.ComputeServices;
@@ -45,6 +51,8 @@ import org.dasein.cloud.compute.VmState;
 import org.dasein.cloud.compute.Volume;
 import org.dasein.cloud.compute.VolumeFilterOptions;
 import org.dasein.cloud.compute.VolumeState;
+import org.dasein.cloud.util.requester.DriverToCoreMapper;
+import org.dasein.cloud.util.requester.streamprocessors.StreamToJSONObjectProcessor;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -57,6 +65,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Created by Jeffrey Yan on 5/8/2015.
@@ -80,29 +89,47 @@ public class AliyunImage extends AbstractImageSupport<Aliyun> implements Machine
     @Nullable
     @Override
     public MachineImage getImage(@Nonnull String providerImageId) throws CloudException, InternalException {
-        String regionId = getContext().getRegionId();
+        final String regionId = getContext().getRegionId();
         if (regionId == null) {
             throw new InternalException("No region was set for this request");
         }
 
-        Map<String, Object> parameters = new HashMap<String, Object>();
-        parameters.put("RegionId", regionId);
-        parameters.put("ImageId", providerImageId);
-        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DescribeImages", parameters);
-        JSONObject json = method.get().asJson();
+        HttpUriRequest request = AliyunRequestBuilder.get()
+                .provider(getProvider())
+                .category(AliyunRequestBuilder.Category.ECS)
+                .parameter("Action", "DescribeImages")
+                .parameter("RegionId", regionId)
+                .parameter("ImageId", providerImageId)
+                .build();
 
-        try {
-            JSONArray imagesJson = json.getJSONObject("Images").getJSONArray("Image");
-            if (imagesJson.length() >= 1) {
-                JSONObject imageJson = imagesJson.getJSONObject(0);
-                return toMachineImage(imageJson, regionId);
-            } else {
-                return null;
-            }
-        } catch (JSONException jsonException) {
-            stdLogger.error("Failed to parse JSON", jsonException);
-            throw new InternalException(jsonException);
-        }
+        ResponseHandler<MachineImage> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, MachineImage>(
+                new StreamToJSONObjectProcessor(),
+                new DriverToCoreMapper<JSONObject, MachineImage>() {
+                    @Override
+                    public MachineImage mapFrom(JSONObject json) {
+                        try {
+                            JSONArray imagesJson = json.getJSONObject("Images").getJSONArray("Image");
+                            if (imagesJson.length() >= 1) {
+                                JSONObject imageJson = imagesJson.getJSONObject(0);
+                                return toMachineImage(imageJson, regionId);
+                            } else {
+                                return null;
+                            }
+                        } catch (JSONException jsonException) {
+                            stdLogger.error("Failed to parse JSON", jsonException);
+                            throw new RuntimeException(jsonException);
+                        } catch (InternalException internalException) {
+                            stdLogger.error("Failed to parse JSON", internalException);
+                            throw new RuntimeException(internalException.getMessage());
+                        }
+                    }
+                },
+                JSONObject.class);
+
+        return new AliyunRequestExecutor<MachineImage>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                request,
+                responseHandler).execute();
     }
 
     @Override
@@ -163,7 +190,7 @@ public class AliyunImage extends AbstractImageSupport<Aliyun> implements Machine
     private List<MachineImage> describeImages(@Nullable Architecture architecture, @Nullable ImageClass imageClass,
             @Nullable Platform platform, @Nullable String regex, @Nonnull boolean matchesAny,
             @Nonnull String ownerAlias) throws InternalException, CloudException {
-        ImageFilterOptions imageFilterOptions = ImageFilterOptions.getInstance();
+        final ImageFilterOptions imageFilterOptions = ImageFilterOptions.getInstance();
         if (architecture != null) {
             imageFilterOptions.withArchitecture(architecture);
         }
@@ -182,40 +209,63 @@ public class AliyunImage extends AbstractImageSupport<Aliyun> implements Machine
             imageFilterOptions.matchingAll();
         }
 
-        String regionId = getContext().getRegionId();
+        final String regionId = getContext().getRegionId();
         if (regionId == null) {
             throw new InternalException("No region was set for this request");
         }
 
-        List<MachineImage> result = new ArrayList<MachineImage>();
-        int pageNumber = 1;
-        int processedCount = 0;
-        while(true) {
-            Map<String, Object> parameters = new HashMap<String, Object>();
-            parameters.put("RegionId", regionId);
-            parameters.put("PageNumber", pageNumber++);
-            parameters.put("PageSize", 50);//max
-            parameters.put("ImageOwnerAlias", ownerAlias);
-            AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DescribeImages", parameters);
-            JSONObject json = method.get().asJson();
+        final List<MachineImage> result = new ArrayList<MachineImage>();
+        final AtomicInteger totalCount = new AtomicInteger(0);
+        final AtomicInteger processedCount = new AtomicInteger(0);
 
-            try {
-                int totalCount = json.getInt("TotalCount");
-                JSONArray imagesJson = json.getJSONObject("Images").getJSONArray("Image");
-                for (int i = 0; i < imagesJson.length(); i++) {
-                    JSONObject imageJson = imagesJson.getJSONObject(i);
-                    MachineImage machineImage = toMachineImage(imageJson, regionId);
-                    if (machineImage != null && imageFilterOptions.matches(machineImage)) {
-                        result.add(machineImage);
+        ResponseHandler<Void> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, Void>(
+                new StreamToJSONObjectProcessor(),
+                new DriverToCoreMapper<JSONObject, Void>() {
+                    @Override
+                    public Void mapFrom(JSONObject json) {
+                        try {
+                            totalCount.set(json.getInt("TotalCount"));
+
+                            JSONArray imagesJson = json.getJSONObject("Images").getJSONArray("Image");
+                            for (int i = 0; i < imagesJson.length(); i++) {
+                                JSONObject imageJson = imagesJson.getJSONObject(i);
+                                MachineImage machineImage = toMachineImage(imageJson, regionId);
+                                if (machineImage != null && imageFilterOptions.matches(machineImage)) {
+                                    result.add(machineImage);
+                                }
+                                processedCount.incrementAndGet();
+                            }
+                            return null;
+                        } catch (JSONException jsonException) {
+                            stdLogger.error("Failed to parse JSON", jsonException);
+                            throw new RuntimeException(jsonException);
+                        } catch (InternalException internalException) {
+                            stdLogger.error("Failed to parse JSON", internalException);
+                            throw new RuntimeException(internalException.getMessage());
+                        }
                     }
-                    processedCount++;
-                }
-                if (processedCount >= totalCount) {
-                    break;
-                }
-            } catch (JSONException jsonException) {
-                stdLogger.error("Failed to parse JSON", jsonException);
-                throw new InternalException(jsonException);
+                },
+                JSONObject.class);
+
+        int pageNumber = 1;
+        while(true) {
+            HttpUriRequest request = AliyunRequestBuilder.get()
+                    .provider(getProvider())
+                    .category(AliyunRequestBuilder.Category.ECS)
+                    .parameter("Action", "DescribeImages")
+                    .parameter("RegionId", regionId)
+                    .parameter("PageNumber", pageNumber++)
+                    .parameter("PageSize", 50) //max
+                    .parameter("ImageOwnerAlias", ownerAlias)
+                    .build();
+
+            new AliyunRequestExecutor<Void>(getProvider(),
+                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                    request,
+                    responseHandler).execute();
+
+            if (processedCount.intValue() >= totalCount.intValue()) {
+                break;
             }
         }
         return result;
@@ -317,20 +367,39 @@ public class AliyunImage extends AbstractImageSupport<Aliyun> implements Machine
             throw new InternalException("No region was set for this request");
         }
 
-        Map<String, Object> parameters = new HashMap<String, Object>();
-        parameters.put("RegionId", regionId);
-        parameters.put("SnapshotId", snapshotId);
-        parameters.put("ImageName", options.getName());
-        parameters.put("Description", options.getDescription());
-        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "CreateImage", parameters, true);
-        JSONObject json = method.post().asJson();
-        String imageId;
-        try {
-            imageId = json.getString("ImageId");
-        } catch (JSONException jsonException) {
-            stdLogger.error("Failed to parse JSON", jsonException);
-            throw new InternalException(jsonException);
-        }
+        Map<String, Object> entity = new HashMap<String, Object>();
+        entity.put("RegionId", regionId);
+        entity.put("SnapshotId", snapshotId);
+        entity.put("ImageName", options.getName());
+        entity.put("Description", options.getDescription());
+
+        HttpUriRequest request = AliyunRequestBuilder.post()
+                .provider(getProvider())
+                .category(AliyunRequestBuilder.Category.ECS)
+                .parameter("Action", "CreateImage")
+                .entity(entity)
+                .clientToken(true)
+                .build();
+
+        ResponseHandler<String> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, String>(
+                new StreamToJSONObjectProcessor(),
+                new DriverToCoreMapper<JSONObject, String>() {
+                    @Override
+                    public String mapFrom(JSONObject json) {
+                        try {
+                            return json.getString("ImageId");
+                        } catch (JSONException jsonException) {
+                            stdLogger.error("Failed to parse JSON", jsonException);
+                            throw new RuntimeException(jsonException.getMessage());
+                        }
+                    }
+                },
+                JSONObject.class);
+
+        String imageId = new AliyunRequestExecutor<String>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                request,
+                responseHandler).execute();
         //TODO: need to wait for create image complete?
 
         //delete snapshot
@@ -351,12 +420,21 @@ public class AliyunImage extends AbstractImageSupport<Aliyun> implements Machine
             throw new InternalException("No region was set for this request");
         }
 
-        Map<String, Object> parameters = new HashMap<String, Object>();
-        parameters.put("RegionId", regionId);
-        parameters.put("ImageId", providerImageId);
-        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "CopyImage", parameters);
-        JSONObject json = method.post().asJson();
-        getProvider().validateResponse(json);
+        Map<String, Object> entity = new HashMap<String, Object>();
+        entity.put("RegionId", regionId);
+        entity.put("ImageId", providerImageId);
+
+        HttpUriRequest request = AliyunRequestBuilder.post()
+                .provider(getProvider())
+                .category(AliyunRequestBuilder.Category.ECS)
+                .parameter("Action", "DeleteImage")
+                .entity(entity)
+                .build();
+
+        new AliyunRequestExecutor<Void>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                request,
+                new AliyunValidateJsonResponseHandler(getProvider())).execute();
     }
 
     @Override
@@ -366,20 +444,40 @@ public class AliyunImage extends AbstractImageSupport<Aliyun> implements Machine
             throw new InternalException("No region was set for this request");
         }
 
-        Map<String, Object> parameters = new HashMap<String, Object>();
-        parameters.put("RegionId", regionId);
-        parameters.put("ImageId", options.getProviderImageId());
-        parameters.put("DestinationRegionId", options.getTargetRegionId());
-        parameters.put("DestinationImageName", options.getName());
-        parameters.put("DestinationDescription", options.getDescription());
-        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "CopyImage", parameters, true);
-        JSONObject json = method.post().asJson();
-        try {
-            return json.getString("ImageId");
-        } catch (JSONException jsonException) {
-            stdLogger.error("Failed to parse JSON", jsonException);
-            throw new InternalException(jsonException);
-        }
+        Map<String, Object> entity = new HashMap<String, Object>();
+        entity.put("RegionId", regionId);
+        entity.put("ImageId", options.getProviderImageId());
+        entity.put("DestinationRegionId", options.getTargetRegionId());
+        entity.put("DestinationImageName", options.getName());
+        entity.put("DestinationDescription", options.getDescription());
+
+        HttpUriRequest request = AliyunRequestBuilder.post()
+                .provider(getProvider())
+                .category(AliyunRequestBuilder.Category.ECS)
+                .parameter("Action", "CopyImage")
+                .entity(entity)
+                .clientToken(true)
+                .build();
+
+        ResponseHandler<String> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, String>(
+                new StreamToJSONObjectProcessor(),
+                new DriverToCoreMapper<JSONObject, String>() {
+                    @Override
+                    public String mapFrom(JSONObject json) {
+                        try {
+                            return json.getString("ImageId");
+                        } catch (JSONException jsonException) {
+                            stdLogger.error("Failed to parse JSON", jsonException);
+                            throw new RuntimeException(jsonException.getMessage());
+                        }
+                    }
+                },
+                JSONObject.class);
+
+        return  new AliyunRequestExecutor<String>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                request,
+                responseHandler).execute();
     }
 
     @Override
@@ -389,30 +487,50 @@ public class AliyunImage extends AbstractImageSupport<Aliyun> implements Machine
             throw new InternalException("No region was set for this request");
         }
 
-        List<String> result = new ArrayList<String>();
+        final List<String> result = new ArrayList<String>();
+        final AtomicInteger totalCount = new AtomicInteger(0);
+
+        ResponseHandler<Void> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, Void>(
+                new StreamToJSONObjectProcessor(),
+                new DriverToCoreMapper<JSONObject, Void>() {
+                    @Override
+                    public Void mapFrom(JSONObject json) {
+                        try {
+                            totalCount.set(json.getInt("TotalCount"));
+
+                            JSONArray accountsJson = json.getJSONObject("Accounts").getJSONArray("Account");
+                            for (int i = 0; i < accountsJson.length(); i++) {
+                                JSONObject accountJson = accountsJson.getJSONObject(i);
+                                result.add(accountJson.getString("AliyunId"));
+                            }
+                            return null;
+                        } catch (JSONException jsonException) {
+                            stdLogger.error("Failed to parse JSON", jsonException);
+                            throw new RuntimeException(jsonException);
+                        }
+                    }
+                },
+                JSONObject.class);
+
         int pageNumber = 1;
         while(true) {
-            Map<String, Object> parameters = new HashMap<String, Object>();
-            parameters.put("RegionId", regionId);
-            parameters.put("ImageId", providerImageId);
-            parameters.put("PageNumber", pageNumber++);
-            parameters.put("PageSize", 50);//max
-            AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DescribeImageSharePermission", parameters);
-            JSONObject json = method.get().asJson();
+            HttpUriRequest request = AliyunRequestBuilder.get()
+                    .provider(getProvider())
+                    .category(AliyunRequestBuilder.Category.ECS)
+                    .parameter("Action", "DescribeImageSharePermission")
+                    .parameter("RegionId", regionId)
+                    .parameter("ImageId", providerImageId)
+                    .parameter("PageNumber", pageNumber++)
+                    .parameter("PageSize", 50)//max
+                    .build();
 
-            try {
-                JSONArray accountsJson = json.getJSONObject("Accounts").getJSONArray("Account");
-                for (int i = 0; i < accountsJson.length(); i++) {
-                    JSONObject accountJson = accountsJson.getJSONObject(i);
-                    result.add(accountJson.getString("AliyunId"));
-                }
-                int totalCount = json.getInt("TotalCount");
-                if (totalCount <= result.size()) {
-                    break;
-                }
-            } catch (JSONException jsonException) {
-                stdLogger.error("Failed to parse JSON", jsonException);
-                throw new InternalException(jsonException);
+            new AliyunRequestExecutor<Void>(getProvider(),
+                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                    request,
+                    responseHandler).execute();
+
+            if (totalCount.intValue() <= result.size()) {
+                break;
             }
         }
         return result;
@@ -428,17 +546,26 @@ public class AliyunImage extends AbstractImageSupport<Aliyun> implements Machine
             throw new InternalException("Can add/remove 10 accounts one time");
         }
 
-        Map<String, Object> parameters = new HashMap<String, Object>();
-        parameters.put("RegionId", regionId);
-        parameters.put("ImageId", providerImageId);
+        Map<String, Object> entity = new HashMap<String, Object>();
+        entity.put("RegionId", regionId);
+        entity.put("ImageId", providerImageId);
         int i = 1;
         for (String accountNumber : accountNumbers) {
-            parameters.put(operation + "." + i, accountNumber);
+            entity.put(operation + "." + i, accountNumber);
             i = i + 1;
         }
-        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "ModifyImageSharePermission", parameters);
-        JSONObject json = method.post().asJson();
-        getProvider().validateResponse(json);
+
+        HttpUriRequest request = AliyunRequestBuilder.post()
+                .provider(getProvider())
+                .category(AliyunRequestBuilder.Category.ECS)
+                .parameter("Action", "ModifyImageSharePermission")
+                .entity(entity)
+                .build();
+
+        new AliyunRequestExecutor<Void>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                request,
+                new AliyunValidateJsonResponseHandler(getProvider())).execute();
     }
 
     @Override

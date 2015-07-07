@@ -66,7 +66,7 @@ public class AliyunRequestBuilder {
     private String stringEntity;
     private ContentType stringContentType;
 
-    private boolean clientToken;
+    private boolean clientToken; //TODO, handle resend case by use client token
 
     private AliyunRequestBuilder(RequestBuilder requestBuilder) {
         this.requestBuilder = requestBuilder;

@@ -29,6 +29,7 @@ import org.dasein.cloud.aliyun.util.requester.AliyunHttpClientBuilderFactory;
 import org.dasein.cloud.aliyun.util.requester.AliyunRequestBuilder;
 import org.dasein.cloud.aliyun.util.requester.AliyunRequestExecutor;
 import org.dasein.cloud.aliyun.util.requester.AliyunResponseHandlerWithMapper;
+import org.dasein.cloud.aliyun.util.requester.AliyunValidateJsonResponseHandler;
 import org.dasein.cloud.compute.AbstractSnapshotSupport;
 import org.dasein.cloud.compute.Snapshot;
 import org.dasein.cloud.compute.SnapshotCapabilities;
@@ -155,7 +156,6 @@ public class AliyunSnapshot extends AbstractSnapshotSupport<Aliyun> implements S
             throw new InternalException("No region was set for this request");
         }
 
-        int pageNumber = 1;
         final List<Snapshot> result = new ArrayList<Snapshot>();
         final AtomicInteger totalCount = new AtomicInteger(0);
         final AtomicInteger processedCount = new AtomicInteger(0);
@@ -190,6 +190,7 @@ public class AliyunSnapshot extends AbstractSnapshotSupport<Aliyun> implements S
                 },
                 JSONObject.class);
 
+        int pageNumber = 1;
         while(true) {
                 HttpUriRequest request = AliyunRequestBuilder.get()
                         .provider(getProvider())
@@ -261,28 +262,10 @@ public class AliyunSnapshot extends AbstractSnapshotSupport<Aliyun> implements S
                 .entity(entity)
                 .build();
 
-        ResponseHandler<Void> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, Void>(
-                new StreamToJSONObjectProcessor(),
-                new DriverToCoreMapper<JSONObject, Void>() {
-                    @Override
-                    public Void mapFrom(JSONObject json) {
-                        try {
-                            getProvider().validateResponse(json);
-                        } catch (CloudException cloudException) {
-                            stdLogger.error("Failed to validate response", cloudException);
-                            throw new RuntimeException(cloudException.getMessage());
-                        } catch (InternalException internalException) {
-                            stdLogger.error("Failed to validate response", internalException);
-                            throw new RuntimeException(internalException.getMessage());
-                        }
-                        return null;
-                    }
-                },
-                JSONObject.class);
         new AliyunRequestExecutor<Void>(getProvider(),
                 AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
                 request,
-                responseHandler).execute();
+                new AliyunValidateJsonResponseHandler(getProvider())).execute();
     }
 
 }
