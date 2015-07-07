@@ -26,17 +26,15 @@ import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.ResponseHandler;
-import org.apache.http.util.EntityUtils;
 import org.apache.log4j.Logger;
-import org.dasein.cloud.CloudException;
-import org.dasein.cloud.InternalException;
 import org.dasein.cloud.aliyun.Aliyun;
-import org.dasein.cloud.aliyun.util.requester.AliyunMethodInternal.Response;
+import org.dasein.cloud.util.requester.streamprocessors.StreamProcessor;
+import org.dasein.cloud.util.requester.streamprocessors.StreamToDocumentProcessor;
+import org.dasein.cloud.util.requester.streamprocessors.StreamToJSONObjectProcessor;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.w3c.dom.Document;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 
 /**
@@ -45,15 +43,21 @@ import java.io.IOException;
  * @author Jeffrey Yan
  * @since 2015.05.1
  */
-public class AliyunResponseHandler implements ResponseHandler<Response> {
+public class AliyunResponseHandler<T> implements ResponseHandler<T> {
 
-    static private final Logger stdLogger = Aliyun
-            .getStdLogger(AliyunResponseHandler.class);
-    static private final Logger wireLogger = Aliyun
-            .getWireLogger(AliyunResponseHandler.class);
+    static private final Logger stdLogger = Aliyun.getStdLogger(AliyunResponseHandler.class);
+    static private final Logger wireLogger = Aliyun.getWireLogger(AliyunResponseHandler.class);
+
+    protected Class<T> classType;
+    protected StreamProcessor<T> processor;
+
+    public AliyunResponseHandler(StreamProcessor<T> processor, Class<T> classType){
+        this.processor = processor;
+        this.classType = classType;
+    }
 
     @Override
-    public Response handleResponse(HttpResponse httpResponse) throws ClientProtocolException, IOException {
+    public T handleResponse(HttpResponse httpResponse) throws ClientProtocolException, IOException {
         int httpCode = httpResponse.getStatusLine().getStatusCode();
 
         stdLogger.debug("HTTP STATUS: " + httpCode);
@@ -66,26 +70,36 @@ public class AliyunResponseHandler implements ResponseHandler<Response> {
         if (entity == null) {
             throw new IOException();
         }
-        Response response = new Response(entity.getContentType().getValue(),
-                new ByteArrayInputStream(EntityUtils.toByteArray(entity)));
+
         if (httpCode < HttpStatus.SC_OK || httpCode >= HttpStatus.SC_MULTIPLE_CHOICES) {
             stdLogger.error("Unexpected OK for GET request, got " + httpCode);
-            throw extractException(httpCode, entity.getContentType().getValue(), response);
+            throw extractException(httpCode, entity);
         } else {
-            return response;
+            return processor.read(httpResponse.getEntity().getContent(), classType);
         }
     }
 
-    protected ClientProtocolException extractException(int httpCode, String contentType, Response response) {
+    protected boolean isJson(String contentType) {
+        return contentType.contains("application/json") || contentType.contains("text/json");
+    }
+
+    protected boolean isXml(String contentType) {
+        return contentType.contains("application/xml") || contentType.contains("text/xml");
+    }
+
+
+    protected ClientProtocolException extractException(int httpCode, HttpEntity entity) {
+        String contentType = entity.getContentType().getValue();
+
         String code;
         String message;
         String requestId;
         String hostId;
 
-        if(response.isJson()) {
+        if(isJson(contentType)) {
             try {
-                JSONObject json = response.asJson();
-                if( wireLogger.isDebugEnabled() ) {
+                JSONObject json = new StreamToJSONObjectProcessor().read(entity.getContent(), JSONObject.class);
+                if (wireLogger.isDebugEnabled()) {
                     wireLogger.debug(json);
                     wireLogger.debug("");
                 }
@@ -93,38 +107,30 @@ public class AliyunResponseHandler implements ResponseHandler<Response> {
                 message = json.getString("Message");
                 requestId = json.getString("RequestId");
                 hostId = json.getString("HostId");
+            } catch (IOException ioException) {
+                stdLogger.error("Failed to read JSON", ioException);
+                return new ClientProtocolException(ioException);
             } catch (JSONException jsonException) {
                 stdLogger.error("Failed to parse JSON", jsonException);
                 return new ClientProtocolException(jsonException);
-            } catch (CloudException cloudException) {
-                stdLogger.error("Failed to read JSON", cloudException);
-                return new ClientProtocolException(cloudException);
-            } catch (InternalException internalException) {
-                stdLogger.error("Failed to read JSON", internalException);
-                return new ClientProtocolException(internalException);
             }
-        } else if(response.isXml()) {
+        } else if(isXml(contentType)) {
             try {
-                Document document = response.asXml();
+                Document document = new StreamToDocumentProcessor().read(entity.getContent(), Document.class);
                 code = document.getElementsByTagName("Code").item(0).getTextContent();
                 message = document.getElementsByTagName("Message").item(0).getTextContent();
                 requestId = document.getElementsByTagName("RequestId").item(0).getTextContent();
                 hostId = document.getElementsByTagName("HostId").item(0).getTextContent();
-            } catch (CloudException cloudException) {
-                stdLogger.error("Failed to read XML", cloudException);
-                return new ClientProtocolException(cloudException);
-            } catch (InternalException internalException) {
-                stdLogger.error("Failed to read XML", internalException);
-                return new ClientProtocolException(internalException);
+            } catch (IOException ioException) {
+                stdLogger.error("Failed to read XML", ioException);
+                return new ClientProtocolException(ioException);
             }
         } else {
             return new ClientProtocolException("Response is not JSON nor XML, but is " + contentType);
         }
 
-        stdLogger.error(
-                " [" + "code:" + code + "; message:" + message + "; requestId:" + requestId + "; hostId:"
-                        + hostId + "] ");
+        stdLogger.error(" [" + "code:" + code + "; message:" + message + "; requestId:" + requestId + "; hostId:"
+                + hostId + "] ");
         return new AliyunResponseException(httpCode, code, message, requestId, hostId);
-
     }
 }

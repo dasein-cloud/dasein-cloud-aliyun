@@ -25,9 +25,11 @@ import org.dasein.cloud.ContextRequirements;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.aliyun.compute.AliyunCompute;
+import org.dasein.cloud.aliyun.storage.AliyunStorage;
 import org.dasein.cloud.compute.ComputeServices;
 import org.dasein.cloud.dc.DataCenterServices;
 import org.dasein.cloud.dc.Region;
+import org.dasein.cloud.storage.StorageServices;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -149,6 +151,10 @@ public class Aliyun extends AbstractCloud {
         return new AliyunCompute(this);
     }
 
+    @Override
+    public @Nonnull StorageServices getStorageServices() {
+        return new AliyunStorage(this);
+    }
 
     public String formatIso8601Date(Date date) {
         SimpleDateFormat df = new SimpleDateFormat(ISO8601_DATE_FORMAT);

@@ -19,29 +19,28 @@
  *
  */
 
-package org.dasein.cloud.aliyun.util.requester;
+package org.dasein.cloud.aliyun.storage;
 
 import org.dasein.cloud.aliyun.Aliyun;
+import org.dasein.cloud.storage.AbstractStorageServices;
+import org.dasein.cloud.storage.BlobStoreSupport;
+import org.dasein.cloud.storage.StorageServices;
 
-import java.util.Map;
+import javax.annotation.Nullable;
 
 /**
- * Created by Jeffrey Yan on 7/2/2015.
+ * Created by Jeffrey Yan on 7/7/2015.
  *
  * @author Jeffrey Yan
  * @since 2015.05.1
  */
-public class AliyunRdsRequestBuilderFactory extends AliyunEcsRequestBuilderFactory{
-
-    public AliyunRdsRequestBuilderFactory(Aliyun aliyun, AliyunMethodInternal.Category category, String httpMethod,
-            String action, Map<String, Object> parameters) {
-        super(aliyun, category, httpMethod, action, parameters);
+public class AliyunStorage extends AbstractStorageServices<Aliyun> implements StorageServices{
+    public AliyunStorage(Aliyun provider) {
+        super(provider);
     }
 
     @Override
-    protected Map<String, String> getFrameworkParameters() {
-        Map<String, String> frameworkParameters = super.getFrameworkParameters();
-        frameworkParameters.put("Version", "2014-08-15");
-        return frameworkParameters;
+    public @Nullable BlobStoreSupport getOnlineStorageSupport() {
+        return new AliyunBlobStore(getProvider());
     }
 }

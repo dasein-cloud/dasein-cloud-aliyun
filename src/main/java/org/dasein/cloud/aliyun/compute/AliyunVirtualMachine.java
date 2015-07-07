@@ -36,8 +36,6 @@ import org.dasein.cloud.compute.VirtualMachineProduct;
 import org.dasein.cloud.compute.VirtualMachineProductFilterOptions;
 import org.dasein.cloud.compute.VirtualMachineSupport;
 import org.dasein.cloud.compute.VmState;
-import org.dasein.cloud.compute.VmStatistics;
-import org.dasein.cloud.compute.Volume;
 import org.dasein.cloud.compute.VolumeAttachment;
 import org.dasein.cloud.compute.VolumeCreateOptions;
 import org.dasein.cloud.network.IPVersion;
@@ -51,7 +49,6 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.ArrayList;

@@ -19,18 +19,24 @@
 
 package org.dasein.cloud.aliyun.compute;
 
+import org.apache.http.client.ResponseHandler;
+import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.log4j.Logger;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.aliyun.Aliyun;
-import org.dasein.cloud.aliyun.AliyunMethod;
+import org.dasein.cloud.aliyun.util.requester.AliyunHttpClientBuilderFactory;
+import org.dasein.cloud.aliyun.util.requester.AliyunRequestBuilder;
+import org.dasein.cloud.aliyun.util.requester.AliyunRequestExecutor;
+import org.dasein.cloud.aliyun.util.requester.AliyunResponseHandlerWithMapper;
 import org.dasein.cloud.compute.AbstractSnapshotSupport;
 import org.dasein.cloud.compute.Snapshot;
 import org.dasein.cloud.compute.SnapshotCapabilities;
 import org.dasein.cloud.compute.SnapshotCreateOptions;
 import org.dasein.cloud.compute.SnapshotState;
 import org.dasein.cloud.compute.SnapshotSupport;
-import org.dasein.cloud.compute.Volume;
+import org.dasein.cloud.util.requester.DriverToCoreMapper;
+import org.dasein.cloud.util.requester.streamprocessors.StreamToJSONObjectProcessor;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -41,6 +47,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Created by Jeffrey Yan on 5/15/2015.
@@ -95,94 +102,187 @@ public class AliyunSnapshot extends AbstractSnapshotSupport<Aliyun> implements S
 
     @Override
     public @Nullable Snapshot getSnapshot(@Nonnull String snapshotId) throws InternalException, CloudException {
-        String regionId = getContext().getRegionId();
+        final String regionId = getContext().getRegionId();
         if (regionId == null) {
             throw new InternalException("No region was set for this request");
         }
 
-        Map<String, Object> parameters = new HashMap<String, Object>();
-        parameters.put("RegionId", regionId);
-        parameters.put("SnapshotIds", "[\"" + snapshotId + "\"]");
-        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DescribeSnapshots", parameters);
-        JSONObject json = method.get().asJson();
+        HttpUriRequest request = AliyunRequestBuilder.get()
+                .provider(getProvider())
+                .category(AliyunRequestBuilder.Category.ECS)
+                .parameter("Action", "DescribeSnapshots")
+                .parameter("RegionId", regionId)
+                .parameter("SnapshotIds", "[\"" + snapshotId + "\"]")
+                .build();
 
-        try {
-            JSONArray snapshotsJson = json.getJSONObject("Snapshots").getJSONArray("Snapshot");
-            if (snapshotsJson.length() >= 1) {
-                JSONObject snapshotJson = snapshotsJson.getJSONObject(0);
-                return toSnapshot(snapshotJson, regionId);
-            } else {
-                return null;
-            }
-        } catch (JSONException jsonException) {
-            stdLogger.error("Failed to parse JSON", jsonException);
-            throw new InternalException(jsonException);
-        }
+        ResponseHandler<Snapshot> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, Snapshot>(
+                new StreamToJSONObjectProcessor(),
+                new DriverToCoreMapper<JSONObject, Snapshot>() {
+                    @Override
+                    public Snapshot mapFrom(JSONObject json) {
+                        try {
+                            JSONArray snapshotsJson = json.getJSONObject("Snapshots").getJSONArray("Snapshot");
+                            if (snapshotsJson.length() >= 1) {
+                                JSONObject snapshotJson = snapshotsJson.getJSONObject(0);
+                                return toSnapshot(snapshotJson, regionId);
+                            } else {
+                                return null;
+                            }
+                        } catch (JSONException jsonException) {
+                            stdLogger.error("Failed to parse JSON", jsonException);
+                            throw new RuntimeException(jsonException.getMessage());
+                        } catch (CloudException cloudException) {
+                            stdLogger.error("Failed to parse JSON", cloudException);
+                            throw new RuntimeException(cloudException);
+                        } catch (InternalException internalException) {
+                            stdLogger.error("Failed to parse JSON", internalException);
+                            throw new RuntimeException(internalException.getMessage());
+                        }
+                    }
+                },
+                JSONObject.class);
+
+        return new AliyunRequestExecutor<Snapshot>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                request,
+                responseHandler).execute();
     }
 
     @Override
     public @Nonnull Iterable<Snapshot> listSnapshots() throws InternalException, CloudException {
-        String regionId = getContext().getRegionId();
+        final String regionId = getContext().getRegionId();
         if (regionId == null) {
             throw new InternalException("No region was set for this request");
         }
 
-        List<Snapshot> result = new ArrayList<Snapshot>();
         int pageNumber = 1;
-        int processedCount = 0;
-        while(true) {
-            Map<String, Object> parameters = new HashMap<String, Object>();
-            parameters.put("RegionId", regionId);
-            parameters.put("PageNumber", pageNumber++);
-            parameters.put("PageSize", 50);//max
-            AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DescribeSnapshots", parameters);
-            JSONObject json = method.get().asJson();
+        final List<Snapshot> result = new ArrayList<Snapshot>();
+        final AtomicInteger totalCount = new AtomicInteger(0);
+        final AtomicInteger processedCount = new AtomicInteger(0);
 
-            try {
-                int totalCount = json.getInt("TotalCount");
-                JSONArray snapshotsJson = json.getJSONObject("Snapshots").getJSONArray("Snapshot");
-                for (int i = 0; i < snapshotsJson.length(); i++) {
-                    JSONObject snapshotJson = snapshotsJson.getJSONObject(i);
-                    Snapshot snapshot = toSnapshot(snapshotJson, regionId);
-                    result.add(snapshot);
-                    processedCount++;
-                }
-                if (processedCount >= totalCount) {
+        ResponseHandler<Void> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, Void>(
+                new StreamToJSONObjectProcessor(),
+                new DriverToCoreMapper<JSONObject, Void>() {
+                    @Override
+                    public Void mapFrom(JSONObject json) {
+                        try {
+                            totalCount.set(json.getInt("TotalCount"));
+
+                            JSONArray snapshotsJson = json.getJSONObject("Snapshots").getJSONArray("Snapshot");
+                            for (int i = 0; i < snapshotsJson.length(); i++) {
+                                JSONObject snapshotJson = snapshotsJson.getJSONObject(i);
+                                Snapshot snapshot = toSnapshot(snapshotJson, regionId);
+                                result.add(snapshot);
+                                processedCount.incrementAndGet();
+                            }
+                            return null;
+                        } catch (JSONException jsonException) {
+                            stdLogger.error("Failed to parse JSON", jsonException);
+                            throw new RuntimeException(jsonException);
+                        } catch (CloudException cloudException) {
+                            stdLogger.error("Failed to parse JSON", cloudException);
+                            throw new RuntimeException(cloudException);
+                        } catch (InternalException internalException) {
+                            stdLogger.error("Failed to parse JSON", internalException);
+                            throw new RuntimeException(internalException.getMessage());
+                        }
+                    }
+                },
+                JSONObject.class);
+
+        while(true) {
+                HttpUriRequest request = AliyunRequestBuilder.get()
+                        .provider(getProvider())
+                        .category(AliyunRequestBuilder.Category.ECS)
+                        .parameter("Action", "DescribeSnapshots")
+                        .parameter("RegionId", regionId)
+                        .parameter("PageNumber", pageNumber++)
+                        .parameter("PageSize", 50)//max
+                        .build();
+
+                new AliyunRequestExecutor<Void>(getProvider(),
+                        AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                        request,
+                        responseHandler).execute();
+
+                if (processedCount.intValue() >= totalCount.intValue()) {
                     break;
                 }
-            } catch (JSONException jsonException) {
-                stdLogger.error("Failed to parse JSONt", jsonException);
-                throw new InternalException(jsonException);
-            }
         }
         return result;
     }
 
     @Override
     public @Nullable String createSnapshot(@Nonnull SnapshotCreateOptions options) throws CloudException, InternalException {
-        Map<String, Object> parameters = new HashMap<String, Object>();
-        parameters.put("DiskId", options.getVolumeId());
-        parameters.put("SnapshotName", options.getName());
-        parameters.put("Description", options.getDescription());
-        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "CreateSnapshot", parameters, true);
-        JSONObject json = method.post().asJson();
-        try {
-            String snapshotId = json.getString("SnapshotId");
-            return snapshotId;
-        } catch (JSONException jsonException) {
-            stdLogger.error("Failed to parse JSON", jsonException);
-            throw new InternalException(jsonException);
-        }
+        Map<String, Object> entity = new HashMap<String, Object>();
+        entity.put("DiskId", options.getVolumeId());
+        entity.put("SnapshotName", options.getName());
+        entity.put("Description", options.getDescription());
+
+        HttpUriRequest request = AliyunRequestBuilder.post()
+                .provider(getProvider())
+                .category(AliyunRequestBuilder.Category.ECS)
+                .parameter("Action", "CreateSnapshot")
+                .entity(entity)
+                .clientToken(true)
+                .build();
+        ResponseHandler<String> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, String>(
+                new StreamToJSONObjectProcessor(),
+                new DriverToCoreMapper<JSONObject, String>() {
+                    @Override
+                    public String mapFrom(JSONObject json) {
+                        try {
+                            String snapshotId = json.getString("SnapshotId");
+                            return snapshotId;
+                        } catch (JSONException jsonException) {
+                            stdLogger.error("Failed to parse JSON", jsonException);
+                            throw new RuntimeException(jsonException.getMessage());
+                        }
+                    }
+                },
+                JSONObject.class);
+
+        return new AliyunRequestExecutor<String>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                request,
+                responseHandler).execute();
     }
 
 
     @Override
     public void remove(@Nonnull String snapshotId) throws InternalException, CloudException {
-        Map<String, Object> parameters = new HashMap<String, Object>();
-        parameters.put("SnapshotId", snapshotId);
-        AliyunMethod method = new AliyunMethod(getProvider(), AliyunMethod.Category.ECS, "DeleteSnapshot", parameters);
-        JSONObject json = method.post().asJson();
-        getProvider().validateResponse(json);
+        Map<String, Object> entity = new HashMap<String, Object>();
+        entity.put("SnapshotId", snapshotId);
+
+        HttpUriRequest request = AliyunRequestBuilder.post()
+                .provider(getProvider())
+                .category(AliyunRequestBuilder.Category.ECS)
+                .parameter("Action", "DeleteSnapshot")
+                .entity(entity)
+                .build();
+
+        ResponseHandler<Void> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, Void>(
+                new StreamToJSONObjectProcessor(),
+                new DriverToCoreMapper<JSONObject, Void>() {
+                    @Override
+                    public Void mapFrom(JSONObject json) {
+                        try {
+                            getProvider().validateResponse(json);
+                        } catch (CloudException cloudException) {
+                            stdLogger.error("Failed to validate response", cloudException);
+                            throw new RuntimeException(cloudException.getMessage());
+                        } catch (InternalException internalException) {
+                            stdLogger.error("Failed to validate response", internalException);
+                            throw new RuntimeException(internalException.getMessage());
+                        }
+                        return null;
+                    }
+                },
+                JSONObject.class);
+        new AliyunRequestExecutor<Void>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                request,
+                responseHandler).execute();
     }
 
 }

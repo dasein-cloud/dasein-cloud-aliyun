@@ -31,10 +31,9 @@ import java.util.Map;
  * @author Jeffrey Yan
  * @since 2015.05.1
  */
-public class AliyunSlbRequestBuilderFactory extends AliyunEcsRequestBuilderFactory {
-    public AliyunSlbRequestBuilderFactory(Aliyun aliyun, AliyunMethodInternal.Category category, String httpMethod,
-            String action, Map<String, Object> parameters) {
-        super(aliyun, category, httpMethod, action, parameters);
+public class AliyunSlbRequestBuilderStrategy extends AliyunEcsRequestBuilderStrategy {
+    public AliyunSlbRequestBuilderStrategy(Aliyun aliyun) {
+        super(aliyun);
     }
 
     @Override

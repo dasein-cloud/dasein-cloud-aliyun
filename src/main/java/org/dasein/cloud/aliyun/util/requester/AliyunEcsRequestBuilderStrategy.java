@@ -27,7 +27,6 @@ import org.dasein.cloud.InternalException;
 import org.dasein.cloud.aliyun.Aliyun;
 import org.dasein.cloud.aliyun.util.requester.AliyunMethodInternal.Category;
 
-import javax.swing.text.html.parser.Entity;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
@@ -40,17 +39,16 @@ import java.util.UUID;
  * @author Jeffrey Yan
  * @since 2015.05.1
  */
-public class AliyunEcsRequestBuilderFactory extends AliyunRequestBuilderFactory {
-    public AliyunEcsRequestBuilderFactory(Aliyun aliyun, Category category, String httpMethod, String action,
-            Map<String, Object> parameters) {
-        super(aliyun, category, httpMethod, action, parameters);
+public class AliyunEcsRequestBuilderStrategy extends AliyunRequestBuilderStrategy {
+
+    public AliyunEcsRequestBuilderStrategy(Aliyun aliyun) {
+        super(aliyun);
     }
 
     protected Map<String, String> getFrameworkParameters() {
         byte[][] accessKey = (byte[][]) aliyun.getContext().getConfigurationValue(Aliyun.DSN_ACCESS_KEY);
 
         Map<String, String> frameworkParameters = new HashMap<String, String>();
-        frameworkParameters.put("Action", this.action);
         frameworkParameters.put("Version", "2014-05-26");
         frameworkParameters.put("AccessKeyId", new String(accessKey[0]));
         frameworkParameters.put("TimeStamp", aliyun.formatIso8601Date(new Date()));
@@ -62,18 +60,20 @@ public class AliyunEcsRequestBuilderFactory extends AliyunRequestBuilderFactory 
     }
 
     @Override
-    protected void applyFrameworkParameters(RequestBuilder requestBuilder) {
+    public void applyFrameworkParameters(AliyunRequestBuilder aliyunRequestBuilder) {
         for(Map.Entry<String, String> parameter : getFrameworkParameters().entrySet()) {
-            requestBuilder.addParameter(parameter.getKey(), parameter.getValue());
+            aliyunRequestBuilder.parameter(parameter.getKey(), parameter.getValue());
         }
     }
 
-    protected void sign(RequestBuilder requestBuilder) throws InternalException {
+    public void sign(AliyunRequestBuilder aliyunRequestBuilder) throws InternalException {
         Map<String, String> requestParameters = new HashMap<String, String>();
-        for (NameValuePair nameValuePair : requestBuilder.getParameters()) {
+        for (NameValuePair nameValuePair : aliyunRequestBuilder.requestBuilder.getParameters()) {
             requestParameters.put(nameValuePair.getName(), nameValuePair.getValue());
         }
-        requestParameters.putAll(this.parameters);
+        if(aliyunRequestBuilder.formEntity != null) {
+            requestParameters.putAll(aliyunRequestBuilder.formEntity);
+        }
 
         String[] sortedKeys = requestParameters.keySet().toArray(new String[]{});
         Arrays.sort(sortedKeys);
@@ -85,7 +85,7 @@ public class AliyunEcsRequestBuilderFactory extends AliyunRequestBuilderFactory 
         String canonicalString = canonicalStringBuilder.toString().substring(1);
 
         StringBuilder stringToSign = new StringBuilder();
-        stringToSign.append(httpMethod).append("&").append(urlEncode("/")).append("&");
+        stringToSign.append(aliyunRequestBuilder.requestBuilder.getMethod()).append("&").append(urlEncode("/")).append("&");
         stringToSign.append(urlEncode(canonicalString));
 
         byte[][] accessKey = ( byte[][] ) aliyun.getContext().getConfigurationValue(Aliyun.DSN_ACCESS_KEY);
@@ -94,6 +94,6 @@ public class AliyunEcsRequestBuilderFactory extends AliyunRequestBuilderFactory 
         secretKey[accessKeySecret.length] = '&';
         String signature = computeSignature(secretKey, stringToSign.toString());
 
-        requestBuilder.addParameter("Signature", signature);
+        aliyunRequestBuilder.requestBuilder.addParameter("Signature", signature);
     }
 }

@@ -27,7 +27,6 @@ import org.apache.http.impl.client.HttpClientBuilder;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.CloudProvider;
 import org.dasein.cloud.aliyun.AliyunException;
-import org.dasein.cloud.aliyun.util.requester.AliyunMethodInternal.Response;
 import org.dasein.cloud.util.requester.DaseinRequestExecutor;
 
 /**
@@ -36,10 +35,10 @@ import org.dasein.cloud.util.requester.DaseinRequestExecutor;
  * @author Jeffrey Yan
  * @since 2015.05.1
  */
-public class AliyunRequestExecutor extends DaseinRequestExecutor<Response> {
+public class AliyunRequestExecutor<T> extends DaseinRequestExecutor<T> {
 
     public AliyunRequestExecutor(CloudProvider provider, HttpClientBuilder httpClientBuilder,
-            HttpUriRequest httpUriRequest, ResponseHandler<Response> responseHandler) {
+            HttpUriRequest httpUriRequest, ResponseHandler<T> responseHandler) {
         super(provider, httpClientBuilder, httpUriRequest, responseHandler);
     }
 
