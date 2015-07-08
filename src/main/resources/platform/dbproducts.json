@@ -1,0 +1,849 @@
+[
+  {
+    "cloud": "Aliyun",
+    "provider": "Aliyun",
+    "created": 1418043471950,
+    "engines": [
+      {
+        "name": "MySQL",
+        "regions": [
+          {
+            "name": ["cn-hangzhou", "cn-beijing", "cn-shenzhen"],
+            "products": [
+              {
+                "name": "rds.mys2.small",
+                "memory": 240,
+                "maxConnection": 60,
+                "maxIops": 150,
+                "minStorage": 5,
+                "hourlyPrice": 0.09,
+                "license": "general",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mys2.mid",
+                "memory": 600,
+                "maxConnection": 150,
+                "maxIops": 300,
+                "minStorage": 5,
+                "hourlyPrice": 0.21,
+                "license": "general",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mys2.standard",
+                "memory": 1200,
+                "maxConnection": 300,
+                "maxIops": 600,
+                "minStorage": 5,
+                "hourlyPrice": 0.43,
+                "license": "general",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mys2.large",
+                "memory": 2400,
+                "maxConnection": 600,
+                "maxIops": 1200,
+                "minStorage": 5,
+                "hourlyPrice": 0.85,
+                "license": "general",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mys2.xlarge",
+                "memory": 6000,
+                "maxConnection": 1500,
+                "maxIops": 3000,
+                "minStorage": 5,
+                "hourlyPrice": 2.13,
+                "license": "general",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mys2.2xlarge",
+                "memory": 12000,
+                "maxConnection": 2000,
+                "maxIops": 6000,
+                "minStorage": 5,
+                "hourlyPrice": 4.25,
+                "license": "general",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mys2.4xlarge",
+                "memory": 24000,
+                "maxConnection": 2000,
+                "maxIops": 12000,
+                "minStorage": 5,
+                "hourlyPrice": 8.5,
+                "license": "general",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mys2.8xlarge",
+                "memory": 48000,
+                "maxConnection": 2000,
+                "maxIops": 14000,
+                "minStorage": 5,
+                "hourlyPrice": 17,
+                "license": "general",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mys2.16xlarge",
+                "memory": 98304,
+                "maxConnection": 2000,
+                "maxIops": 19200,
+                "minStorage": 5,
+                "hourlyPrice": 0.0,
+                "license": "general",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mys2.24xlarge",
+                "memory": 147456,
+                "maxConnection": 2000,
+                "maxIops": 192000,
+                "minStorage": 5,
+                "hourlyPrice": 0.0,
+                "license": "general",
+                "currency": "RMB"
+              }
+            ]
+          },
+          {
+            "name": ["cn-qingdao"],
+            "products": [
+              {
+                "name": "rds.mys2.small",
+                "memory": 240,
+                "maxConnection": 60,
+                "maxIops": 150,
+                "minStorage": 5,
+                "hourlyPrice": 0.08,
+                "license": "general",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mys2.mid",
+                "memory": 600,
+                "maxConnection": 150,
+                "maxIops": 300,
+                "minStorage": 5,
+                "hourlyPrice": 0.2,
+                "license": "general",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mys2.standard",
+                "memory": 1200,
+                "maxConnection": 300,
+                "maxIops": 600,
+                "minStorage": 5,
+                "hourlyPrice": 0.4,
+                "license": "general",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mys2.large",
+                "memory": 2400,
+                "maxConnection": 600,
+                "maxIops": 1200,
+                "minStorage": 5,
+                "hourlyPrice": 0.81,
+                "license": "general",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mys2.xlarge",
+                "memory": 6000,
+                "maxConnection": 1500,
+                "maxIops": 3000,
+                "minStorage": 5,
+                "hourlyPrice": 2.02,
+                "license": "general",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mys2.2xlarge",
+                "memory": 12000,
+                "maxConnection": 2000,
+                "maxIops": 6000,
+                "minStorage": 5,
+                "hourlyPrice": 4.04,
+                "license": "general",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mys2.4xlarge",
+                "memory": 24000,
+                "maxConnection": 2000,
+                "maxIops": 12000,
+                "minStorage": 5,
+                "hourlyPrice": 8.07,
+                "license": "general",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mys2.8xlarge",
+                "memory": 48000,
+                "maxConnection": 2000,
+                "maxIops": 14000,
+                "minStorage": 5,
+                "hourlyPrice": 16.15,
+                "license": "general",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mys2.16xlarge",
+                "memory": 98304,
+                "maxConnection": 2000,
+                "maxIops": 19200,
+                "minStorage": 5,
+                "hourlyPrice": 0.0,
+                "license": "general",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mys2.24xlarge",
+                "memory": 147456,
+                "maxConnection": 2000,
+                "maxIops": 192000,
+                "minStorage": 5,
+                "hourlyPrice": 0.0,
+                "license": "general",
+                "currency": "RMB"
+              }
+            ]
+          },
+          {
+            "name": ["cn-hongkong"],
+            "products": [
+              {
+                "name": "rds.mys2.small",
+                "memory": 240,
+                "maxConnection": 60,
+                "maxIops": 150,
+                "minStorage": 5,
+                "hourlyPrice": 0.12,
+                "license": "general",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mys2.mid",
+                "memory": 600,
+                "maxConnection": 150,
+                "maxIops": 300,
+                "minStorage": 5,
+                "hourlyPrice": 0.3,
+                "license": "general",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mys2.standard",
+                "memory": 1200,
+                "maxConnection": 300,
+                "maxIops": 600,
+                "minStorage": 5,
+                "hourlyPrice": 0.59,
+                "license": "general",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mys2.large",
+                "memory": 2400,
+                "maxConnection": 600,
+                "maxIops": 1200,
+                "minStorage": 5,
+                "hourlyPrice": 1.19,
+                "license": "general",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mys2.xlarge",
+                "memory": 6000,
+                "maxConnection": 1500,
+                "maxIops": 3000,
+                "minStorage": 5,
+                "hourlyPrice": 2.97,
+                "license": "general",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mys2.2xlarge",
+                "memory": 12000,
+                "maxConnection": 2000,
+                "maxIops": 6000,
+                "minStorage": 5,
+                "hourlyPrice": 5.95,
+                "license": "general",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mys2.4xlarge",
+                "memory": 24000,
+                "maxConnection": 2000,
+                "maxIops": 12000,
+                "minStorage": 5,
+                "hourlyPrice": 11.9,
+                "license": "general",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mys2.8xlarge",
+                "memory": 48000,
+                "maxConnection": 2000,
+                "maxIops": 14000,
+                "minStorage": 5,
+                "hourlyPrice": 23.8,
+                "license": "general",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mys2.16xlarge",
+                "memory": 98304,
+                "maxConnection": 2000,
+                "maxIops": 19200,
+                "minStorage": 5,
+                "hourlyPrice": 0.0,
+                "license": "general",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mys2.24xlarge",
+                "memory": 147456,
+                "maxConnection": 2000,
+                "maxIops": 192000,
+                "minStorage": 5,
+                "hourlyPrice": 0.0,
+                "license": "general",
+                "currency": "RMB"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "postgres",
+        "regions": [
+          {
+            "name": ["cn-hangzhou", "cn-beijing", "cn-shenzhen"],
+            "products": [
+              {
+                "name": "rds.pg.t1.small",
+                "memory": 1024,
+                "maxConnection": 100,
+                "maxIops": 400,
+                "minStorage": 5,
+                "hourlyPrice": 0.63,
+                "license": "postgres",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.pg.s1.small",
+                "memory": 2048,
+                "maxConnection": 200,
+                "maxIops": 400,
+                "minStorage": 5,
+                "hourlyPrice": 1.25,
+                "license": "postgres",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.pg.s2.large",
+                "memory": 4096,
+                "maxConnection": 400,
+                "maxIops": 1000,
+                "minStorage": 5,
+                "hourlyPrice": 2.51,
+                "license": "postgres",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.pg.s3.large",
+                "memory": 8192,
+                "maxConnection": 800,
+                "maxIops": 2000,
+                "minStorage": 5,
+                "hourlyPrice": 3.76,
+                "license": "postgres",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.pg.c1.large",
+                "memory": 16384,
+                "maxConnection": 1500,
+                "maxIops": 4000,
+                "minStorage": 5,
+                "hourlyPrice": 5.01,
+                "license": "postgres",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.pg.c1.xlarge",
+                "memory": 32768,
+                "maxConnection": 2000,
+                "maxIops": 4000,
+                "minStorage": 5,
+                "hourlyPrice": 7.52,
+                "license": "postgres",
+                "currency": "RMB"
+              }
+            ]
+          },
+          {
+            "name": ["cn-qingdao"],
+            "products": [
+              {
+                "name": "rds.pg.t1.small",
+                "memory": 1024,
+                "maxConnection": 100,
+                "maxIops": 400,
+                "minStorage": 5,
+                "hourlyPrice": 0.6,
+                "license": "postgres",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.pg.s1.small",
+                "memory": 2048,
+                "maxConnection": 200,
+                "maxIops": 400,
+                "minStorage": 5,
+                "hourlyPrice": 1.19,
+                "license": "postgres",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.pg.s2.large",
+                "memory": 4096,
+                "maxConnection": 400,
+                "maxIops": 1000,
+                "minStorage": 5,
+                "hourlyPrice": 2.38,
+                "license": "postgres",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.pg.s3.large",
+                "memory": 8192,
+                "maxConnection": 800,
+                "maxIops": 2000,
+                "minStorage": 5,
+                "hourlyPrice": 3.57,
+                "license": "postgres",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.pg.c1.large",
+                "memory": 16384,
+                "maxConnection": 1500,
+                "maxIops": 4000,
+                "minStorage": 5,
+                "hourlyPrice": 4.76,
+                "license": "postgres",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.pg.c1.xlarge",
+                "memory": 32768,
+                "maxConnection": 2000,
+                "maxIops": 4000,
+                "minStorage": 5,
+                "hourlyPrice": 7.14,
+                "license": "postgres",
+                "currency": "RMB"
+              }
+            ]
+          },
+          {
+            "name": ["cn-hongkong"],
+            "products": [
+              {
+                "name": "rds.pg.t1.small",
+                "memory": 1024,
+                "maxConnection": 100,
+                "maxIops": 400,
+                "minStorage": 5,
+                "hourlyPrice": 0.88,
+                "license": "postgres",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.pg.s1.small",
+                "memory": 2048,
+                "maxConnection": 200,
+                "maxIops": 400,
+                "minStorage": 5,
+                "hourlyPrice": 1.75,
+                "license": "postgres",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.pg.s2.large",
+                "memory": 4096,
+                "maxConnection": 400,
+                "maxIops": 1000,
+                "minStorage": 5,
+                "hourlyPrice": 3.51,
+                "license": "postgres",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.pg.s3.large",
+                "memory": 8192,
+                "maxConnection": 800,
+                "maxIops": 2000,
+                "minStorage": 5,
+                "hourlyPrice": 5.26,
+                "license": "postgres",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.pg.c1.large",
+                "memory": 16384,
+                "maxConnection": 1500,
+                "maxIops": 4000,
+                "minStorage": 5,
+                "hourlyPrice": 7.02,
+                "license": "postgres",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.pg.c1.xlarge",
+                "memory": 32768,
+                "maxConnection": 2000,
+                "maxIops": 4000,
+                "minStorage": 5,
+                "hourlyPrice": 10.53,
+                "license": "postgres",
+                "currency": "RMB"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "sqlserver-ex",
+        "regions": [
+          {
+            "name": ["cn-hangzhou", "cn-beijing", "cn-shenzhen"],
+            "products": [
+              {
+                "name": "rds.mss1.small",
+                "memory": 1000,
+                "maxConnection": 100,
+                "maxIops": 500,
+                "minStorage": 10,
+                "hourlyPrice": 0.63,
+                "license": "included",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mss1.mid",
+                "memory": 2000,
+                "maxConnection": 200,
+                "maxIops": 1000,
+                "minStorage": 10,
+                "hourlyPrice": 1.25,
+                "license": "included",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mss1.standard",
+                "memory": 4000,
+                "maxConnection": 400,
+                "maxIops": 2000,
+                "minStorage": 10,
+                "hourlyPrice": 2.51,
+                "license": "included",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mss1.large",
+                "memory": 6000,
+                "maxConnection": 600,
+                "maxIops": 3000,
+                "minStorage": 10,
+                "hourlyPrice": 3.76,
+                "license": "included",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mss1.xlarge",
+                "memory": 8000,
+                "maxConnection": 800,
+                "maxIops": 4000,
+                "minStorage": 10,
+                "hourlyPrice": 5.01,
+                "license": "included",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mss1.2xlarge",
+                "memory": 12000,
+                "maxConnection": 1200,
+                "maxIops": 6000,
+                "minStorage": 10,
+                "hourlyPrice": 7.52,
+                "license": "included",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mss1.4xlarge",
+                "memory": 24000,
+                "maxConnection": 2000,
+                "maxIops": 12000,
+                "minStorage": 10,
+                "hourlyPrice": 15.04,
+                "license": "included",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mss1.8xlarge",
+                "memory": 48000,
+                "maxConnection": 2000,
+                "maxIops": 14000,
+                "minStorage": 10,
+                "hourlyPrice": 30.08,
+                "license": "included",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mss1.16xlarge",
+                "memory": 98304,
+                "maxConnection": 2000,
+                "maxIops": 192000,
+                "minStorage": 10,
+                "hourlyPrice": 0.0,
+                "license": "included",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mss1.24xlarge",
+                "memory": 147456,
+                "maxConnection": 2000,
+                "maxIops": 192000,
+                "minStorage": 10,
+                "hourlyPrice": 0.0,
+                "license": "included",
+                "currency": "RMB"
+              }
+            ]
+          },
+          {
+            "name": ["cn-qingdao"],
+            "products": [
+              {
+                "name": "rds.mss1.small",
+                "memory": 1000,
+                "maxConnection": 100,
+                "maxIops": 500,
+                "minStorage": 10,
+                "hourlyPrice": 0.6,
+                "license": "included",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mss1.mid",
+                "memory": 2000,
+                "maxConnection": 200,
+                "maxIops": 1000,
+                "minStorage": 10,
+                "hourlyPrice": 1.19,
+                "license": "included",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mss1.standard",
+                "memory": 4000,
+                "maxConnection": 400,
+                "maxIops": 2000,
+                "minStorage": 10,
+                "hourlyPrice": 2.38,
+                "license": "included",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mss1.large",
+                "memory": 6000,
+                "maxConnection": 600,
+                "maxIops": 3000,
+                "minStorage": 10,
+                "hourlyPrice": 3.57,
+                "license": "included",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mss1.xlarge",
+                "memory": 8000,
+                "maxConnection": 800,
+                "maxIops": 4000,
+                "minStorage": 10,
+                "hourlyPrice": 4.76,
+                "license": "included",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mss1.2xlarge",
+                "memory": 12000,
+                "maxConnection": 1200,
+                "maxIops": 6000,
+                "minStorage": 10,
+                "hourlyPrice": 7.14,
+                "license": "included",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mss1.4xlarge",
+                "memory": 24000,
+                "maxConnection": 2000,
+                "maxIops": 12000,
+                "minStorage": 10,
+                "hourlyPrice": 14.29,
+                "license": "included",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mss1.8xlarge",
+                "memory": 48000,
+                "maxConnection": 2000,
+                "maxIops": 14000,
+                "minStorage": 10,
+                "hourlyPrice": 28.58,
+                "license": "included",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mss1.16xlarge",
+                "memory": 98304,
+                "maxConnection": 2000,
+                "maxIops": 192000,
+                "minStorage": 10,
+                "hourlyPrice": 0.0,
+                "license": "included",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mss1.24xlarge",
+                "memory": 147456,
+                "maxConnection": 2000,
+                "maxIops": 192000,
+                "minStorage": 10,
+                "hourlyPrice": 0.0,
+                "license": "included",
+                "currency": "RMB"
+              }
+            ]
+          },
+          {
+            "name": ["cn-hongkong"],
+            "products": [
+              {
+                "name": "rds.mss1.small",
+                "memory": 1000,
+                "maxConnection": 100,
+                "maxIops": 500,
+                "minStorage": 10,
+                "hourlyPrice": 0.88,
+                "license": "included",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mss1.mid",
+                "memory": 2000,
+                "maxConnection": 200,
+                "maxIops": 1000,
+                "minStorage": 10,
+                "hourlyPrice": 1.75,
+                "license": "included",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mss1.standard",
+                "memory": 4000,
+                "maxConnection": 400,
+                "maxIops": 2000,
+                "minStorage": 10,
+                "hourlyPrice": 3.51,
+                "license": "included",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mss1.large",
+                "memory": 6000,
+                "maxConnection": 600,
+                "maxIops": 3000,
+                "minStorage": 10,
+                "hourlyPrice": 5.26,
+                "license": "included",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mss1.xlarge",
+                "memory": 8000,
+                "maxConnection": 800,
+                "maxIops": 4000,
+                "minStorage": 10,
+                "hourlyPrice": 7.02,
+                "license": "included",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mss1.2xlarge",
+                "memory": 12000,
+                "maxConnection": 1200,
+                "maxIops": 6000,
+                "minStorage": 10,
+                "hourlyPrice": 10.53,
+                "license": "included",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mss1.4xlarge",
+                "memory": 24000,
+                "maxConnection": 2000,
+                "maxIops": 12000,
+                "minStorage": 10,
+                "hourlyPrice": 21.06,
+                "license": "included",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mss1.8xlarge",
+                "memory": 48000,
+                "maxConnection": 2000,
+                "maxIops": 14000,
+                "minStorage": 10,
+                "hourlyPrice": 42.12,
+                "license": "included",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mss1.16xlarge",
+                "memory": 98304,
+                "maxConnection": 2000,
+                "maxIops": 192000,
+                "minStorage": 10,
+                "hourlyPrice": 0.0,
+                "license": "included",
+                "currency": "RMB"
+              },
+              {
+                "name": "rds.mss1.24xlarge",
+                "memory": 147456,
+                "maxConnection": 2000,
+                "maxIops": 192000,
+                "minStorage": 10,
+                "hourlyPrice": 0.0,
+                "license": "included",
+                "currency": "RMB"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -22,10 +22,8 @@
 package org.dasein.cloud.aliyun.util.requester;
 
 import org.apache.http.NameValuePair;
-import org.apache.http.client.methods.RequestBuilder;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.aliyun.Aliyun;
-import org.dasein.cloud.aliyun.util.requester.AliyunMethodInternal.Category;
 
 import java.util.Arrays;
 import java.util.Date;
