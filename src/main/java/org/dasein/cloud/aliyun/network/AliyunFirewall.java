@@ -262,7 +262,7 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
         HttpUriRequest request = AliyunRequestBuilder.post()
         		.provider(getProvider())
         		.category(AliyunRequestBuilder.Category.ECS)
-        		.parameter("Action", "AllocateEipAddress")
+        		.parameter("Action", "CreateSecurityGroup")
         		.entity(params)
         		.clientToken(true)
         		.build();
@@ -422,7 +422,7 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
                 params.put("NicType", AliyunNetworkCommon.FirewallNicType.intranet.name());
             }
         } else if (direction != null && direction.equals(Direction.EGRESS)) {
-            methodName = "AuthorizeSecurityGroupEgress";
+            methodName = "RevokeSecurityGroupEgress";
             if (target.getRuleTargetType().equals(RuleTargetType.CIDR)) {
                 params.put("DestCidrIp", target.getCidr());
                 String ipAddress = target.getCidr().split("/")[0];
