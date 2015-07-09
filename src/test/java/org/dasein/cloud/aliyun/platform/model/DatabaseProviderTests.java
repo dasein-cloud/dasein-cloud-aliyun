@@ -20,12 +20,14 @@ package org.dasein.cloud.aliyun.platform.model;
 
 import static org.junit.Assert.*;
 
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Iterator;
 import java.util.List;
 
 import org.dasein.cloud.InternalException;
-import org.junit.Ignore;
 import org.junit.Test;
 
 /**
@@ -36,7 +38,6 @@ import org.junit.Test;
 public class DatabaseProviderTests {
 
 	@Test
-	@Ignore
 	public void testFromFile() {
 		try {
 			
@@ -80,6 +81,24 @@ public class DatabaseProviderTests {
 		System.out.println(accessBuilder.toString());
 		accessBuilder.deleteCharAt(accessBuilder.length() - 1);
 		System.out.println(accessBuilder.toString());
+	}
+	
+	@Test
+	public void testDatetime() throws ParseException {
+		Calendar cal = Calendar.getInstance();
+		cal.set(Calendar.HOUR_OF_DAY, 6);
+		SimpleDateFormat format = new SimpleDateFormat("HH:00'Z'");
+		System.out.println(format.format(cal.getTime()));
+		cal.set(Calendar.HOUR_OF_DAY, 23);
+		System.out.println(format.format(cal.getTime()));
+		
+		format = new SimpleDateFormat("EEEE");
+		cal.set(Calendar.DAY_OF_WEEK, 2);
+		System.out.println(format.format(cal.getTime()));
+		
+		SimpleDateFormat formatter = new SimpleDateFormat("HH:mm'Z'");
+		String timeStr = "06:32Z";
+		System.out.println(formatter.parse(timeStr).getHours() + ", " + formatter.parse(timeStr).getMinutes());
 	}
 	
 }
