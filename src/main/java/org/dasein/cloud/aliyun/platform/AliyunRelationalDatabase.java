@@ -37,9 +37,11 @@ import org.dasein.cloud.aliyun.util.requester.AliyunResponseHandlerWithMapper;
 import org.dasein.cloud.aliyun.util.requester.AliyunValidateJsonResponseHandler;
 import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.cloud.platform.AbstractRelationalDatabaseSupport;
+import org.dasein.cloud.platform.ConfigurationParameter;
 import org.dasein.cloud.platform.Database;
 import org.dasein.cloud.platform.DatabaseBackup;
 import org.dasein.cloud.platform.DatabaseBackupState;
+import org.dasein.cloud.platform.DatabaseConfiguration;
 import org.dasein.cloud.platform.DatabaseEngine;
 import org.dasein.cloud.platform.DatabaseProduct;
 import org.dasein.cloud.platform.DatabaseState;
@@ -53,7 +55,7 @@ import org.json.JSONObject;
 public class AliyunRelationalDatabase extends
 		AbstractRelationalDatabaseSupport<Aliyun> {
 	
-	class DatabaseId {
+class DatabaseId {
 		
 		private String databaseInstanceId;
 		private String databaseName;
@@ -118,6 +120,123 @@ public class AliyunRelationalDatabase extends
 	@Override
 	public String[] mapServiceAction(ServiceAction action) {
 		return new String[0]; 
+	}
+	
+	@Override
+	public DatabaseConfiguration getConfiguration(String providerConfigurationId)
+			throws CloudException, InternalException {
+		Iterator<DatabaseConfiguration> configurationIter = listConfigurations().iterator();
+		while (configurationIter.hasNext()) {
+			DatabaseConfiguration configuration = configurationIter.next();
+			if (configuration.getProviderConfigurationId().equals(providerConfigurationId)) {
+				return configuration;
+			}
+		}
+		return null;
+	}
+
+	@Override
+	public Iterable<DatabaseConfiguration> listConfigurations()
+			throws CloudException, InternalException {
+		
+		List<DatabaseConfiguration> configurations = new ArrayList<DatabaseConfiguration>();
+		Iterator<DatabaseEngine> engineIter = getDatabaseEngines().iterator();
+		while (engineIter.hasNext()) {
+			DatabaseEngine engine = engineIter.next();
+			configurations.add(new DatabaseConfiguration(
+					this,
+					engine,
+					"config:" + engine.name(),
+					"config:" + engine.name(),
+					"Database configuration for engine " + engine.name()));
+		}
+		return configurations;
+	}
+
+	@Override
+	public Collection<ConfigurationParameter> listParameters(
+			String forProviderConfigurationId) throws CloudException,
+			InternalException {
+		
+		DatabaseConfiguration configuration = getConfiguration(forProviderConfigurationId);
+		
+		String engineName = null;
+		if (configuration.getEngine().equals(DatabaseEngine.MYSQL)) {
+			engineName = "MySQL";
+		} else if (configuration.getEngine().equals(DatabaseEngine.SQLSERVER_EX)) {
+			engineName = "SQLServer";
+		} else if (configuration.getEngine().equals(DatabaseEngine.POSTGRES)) {
+			engineName = "PostgreSQL";
+		} else {
+			throw new OperationNotSupportedException("Database engine " + configuration.getEngine().name() + " is not supported!");
+		}
+		
+		HttpUriRequest request = AliyunRequestBuilder.get()
+				.provider(getProvider())
+				.category(AliyunRequestBuilder.Category.RDS)
+				.parameter("Action", "DescribeParameterTemplates")
+				.parameter("Engine", engineName)
+				.parameter("EngineVersion", getDefaultVersion(configuration.getEngine()))
+				.build();
+		
+		ResponseHandler<List<ConfigurationParameter>> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, List<ConfigurationParameter>>(
+				new StreamToJSONObjectProcessor(),
+				new DriverToCoreMapper<JSONObject, List<ConfigurationParameter>>() {
+					@Override
+					public List<ConfigurationParameter> mapFrom(JSONObject json) {
+						try {
+							List<ConfigurationParameter> parameters = new ArrayList<ConfigurationParameter>();
+							JSONArray templateRecords = json.getJSONObject("Parameters").getJSONArray("TemplateRecord");
+							for (int i = 0; i < templateRecords.length(); i++ ) {
+								JSONObject templateRecord = templateRecords.getJSONObject(i);
+								ConfigurationParameter parameter = new ConfigurationParameter();
+								if ("True".equals(templateRecord.getString("ForceRestart"))) {
+									parameter.setApplyImmediately(false);
+								} else {
+									parameter.setApplyImmediately(true);
+								}
+								parameter.setDescription(templateRecord.getString("ParameterDescription"));
+								parameter.setKey(templateRecord.getString("ParameterName"));
+								if ("True".equals(templateRecord.getString("ForceModify"))) {
+									parameter.setModifiable(true);
+								} else {
+									parameter.setModifiable(false);
+								}
+								parameter.setParameter(templateRecord.getString("ParameterValue"));
+								parameter.setValidation(templateRecord.getString("CheckingCode"));	//TODO check if it needs to be shown to the user
+								parameters.add(parameter);
+							}
+							return parameters;
+						} catch (JSONException e) {
+							stdLogger.error("parsing db instance attribute failed", e);
+							throw new RuntimeException(e);
+						}
+					}
+				}, JSONObject.class);
+		
+		return new AliyunRequestExecutor<List<ConfigurationParameter>>(getProvider(),
+				AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
+				responseHandler).execute();
+		
+	}
+
+	@Override
+	public void removeConfiguration(String providerConfigurationId)
+			throws CloudException, InternalException {
+		throw new OperationNotSupportedException("Aliyun doesn't support remove configuration!");
+	}
+
+	@Override
+	public void resetConfiguration(String providerConfigurationId,
+			String... parameters) throws CloudException, InternalException {
+		throw new OperationNotSupportedException("Aliyun doesn't support reset configuration!");
+	}
+
+	@Override
+	public void updateConfiguration(String providerConfigurationId,
+			ConfigurationParameter... parameters) throws CloudException,
+			InternalException {
+		throw new OperationNotSupportedException("Aliyun doesn't support update configuration and parameters!");
 	}
 	
 	@Override
@@ -392,7 +511,7 @@ public class AliyunRelationalDatabase extends
 	public String getDefaultVersion(DatabaseEngine forEngine)
 			throws CloudException, InternalException {
 		if (forEngine.equals(DatabaseEngine.MYSQL)) {
-			return "5.6";
+			return "5.5";
 		} else if (forEngine.equals(DatabaseEngine.SQLSERVER_EX)) {
 			return "2008r2";
 		} else if (forEngine.equals(DatabaseEngine.POSTGRES)) {
