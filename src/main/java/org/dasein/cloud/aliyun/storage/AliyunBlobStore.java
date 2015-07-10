@@ -21,19 +21,27 @@
 
 package org.dasein.cloud.aliyun.storage;
 
+import org.apache.http.client.ResponseHandler;
 import org.apache.http.client.methods.HttpUriRequest;
+import org.apache.log4j.Logger;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.aliyun.Aliyun;
+import org.dasein.cloud.aliyun.storage.model.CreateBucketConfiguration;
+import org.dasein.cloud.aliyun.util.requester.AliyunHttpClientBuilderFactory;
 import org.dasein.cloud.aliyun.util.requester.AliyunRequestBuilder;
+import org.dasein.cloud.aliyun.util.requester.AliyunRequestExecutor;
+import org.dasein.cloud.aliyun.util.requester.AliyunResponseHandler;
 import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.cloud.storage.AbstractBlobStoreSupport;
 import org.dasein.cloud.storage.Blob;
 import org.dasein.cloud.storage.BlobStoreCapabilities;
 import org.dasein.cloud.storage.BlobStoreSupport;
 import org.dasein.cloud.storage.FileTransfer;
-import org.dasein.util.uom.storage.*;
+import org.dasein.cloud.util.requester.streamprocessors.StreamToStringProcessor;
+import org.dasein.cloud.util.requester.streamprocessors.XmlStreamToObjectProcessor;
 import org.dasein.util.uom.storage.Byte;
+import org.dasein.util.uom.storage.Storage;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -43,12 +51,20 @@ import java.io.File;
  * Created by Jeffrey Yan on 7/7/2015.
  *
  * @author Jeffrey Yan
- * @since 2015.05.1
+ * @since 2015.09.1
  */
 public class AliyunBlobStore extends AbstractBlobStoreSupport<Aliyun> implements BlobStoreSupport{
 
+    static private final Logger stdLogger = Aliyun.getStdLogger(AliyunBlobStore.class);
+
     protected AliyunBlobStore(Aliyun provider) {
         super(provider);
+    }
+
+    @Nonnull
+    @Override
+    public BlobStoreCapabilities getCapabilities() throws CloudException, InternalException {
+        return new AliyunBlobStoreCapabilities(getProvider());
     }
 
     @Override
@@ -71,20 +87,34 @@ public class AliyunBlobStore extends AbstractBlobStoreSupport<Aliyun> implements
 
     @Nonnull
     @Override
-    public BlobStoreCapabilities getCapabilities() throws CloudException, InternalException {
-        return null;
-    }
-
-    @Nonnull
-    @Override
     public Blob createBucket(@Nonnull String bucket, boolean findFreeName) throws InternalException, CloudException {
+        String regionId = getContext().getRegionId();
+        if (regionId == null) {
+            throw new InternalException("No region was set for this request");
+        }
+
+        CreateBucketConfiguration createBucketConfiguration = new CreateBucketConfiguration();
+        createBucketConfiguration.setLocationConstraint("oss-" + regionId);
+
         HttpUriRequest request = AliyunRequestBuilder.put()
                 .provider(getProvider())
                 .category(AliyunRequestBuilder.Category.OSS)
-//                .entity("Action", "DescribeZones")
+                .subdomain(bucket)
+                .header("x-oss-acl", "private")
+                .entity(createBucketConfiguration, new XmlStreamToObjectProcessor<CreateBucketConfiguration>())
                 .build();
 
-        return null;
+        ResponseHandler<String> responseHandler = new AliyunResponseHandler<String>(
+                new StreamToStringProcessor(),
+                String.class);
+
+       new AliyunRequestExecutor<String>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                request,
+                responseHandler).execute();
+
+        return Blob.getInstance(regionId, "http://" + bucket + ".oss-" + regionId + ".aliyuncs.com", bucket,
+                System.currentTimeMillis());
     }
 
     @Override
