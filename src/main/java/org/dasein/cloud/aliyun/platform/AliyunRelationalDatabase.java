@@ -163,7 +163,7 @@ public class AliyunRelationalDatabase extends
 		String engineName = null;
 		if (configuration.getEngine().equals(DatabaseEngine.MYSQL)) {
 			engineName = "MySQL";
-		} else if (configuration.getEngine().equals(DatabaseEngine.SQLSERVER_EX)) {
+		} else if (configuration.getEngine().equals(DatabaseEngine.SQLSERVER_EE)) {
 			engineName = "SQLServer";
 		} else if (configuration.getEngine().equals(DatabaseEngine.POSTGRES)) {
 			engineName = "PostgreSQL";
@@ -289,7 +289,7 @@ public class AliyunRelationalDatabase extends
 			params.put("DBInstanceId", databaseId.getDatabaseInstanceId());
 			params.put("PayType", "Postpaid");
 			if (!getProvider().isEmpty(productSize)) {
-				params.put("DBInstanceClass", productSize);
+				params.put("DBInstanceClass", productSize);	//TODO check
 			}
 			if (storageInGigabytes >= 5) {
 				params.put("DBInstanceStorage", storageInGigabytes);
@@ -326,11 +326,11 @@ public class AliyunRelationalDatabase extends
 			} else {
 				params.put("PreferredBackupPeriod", getProvider().capitalize(preferredBackupWindow.getStartDayOfWeek().name()));
 			}
+			AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+					"ModifyBackupPolicy", AliyunNetworkCommon.RequestMethod.POST, false, 
+					new AliyunValidateJsonResponseHandler(getProvider()));
 		}
 	}
-	
-	
-	
 
 	/**
 	 * Create DB instance, database and admin user for the instance
@@ -357,7 +357,7 @@ public class AliyunRelationalDatabase extends
 			params.put("Engine", "MySQL");
 		} else if (product.getEngine().equals(DatabaseEngine.POSTGRES)) {
 			params.put("Engine", "PostgreSQL");
-		} else if (product.getEngine().equals(DatabaseEngine.SQLSERVER_EX)) {
+		} else if (product.getEngine().equals(DatabaseEngine.SQLSERVER_EE)) {
 			params.put("Engine", "SQLServer");
 		} else {
 			stdLogger.error("not support database engine " + product.getEngine().name());
@@ -393,7 +393,7 @@ public class AliyunRelationalDatabase extends
 			params.put("CharacterSetName", "utf8");
 		} else if (product.getEngine().equals(DatabaseEngine.POSTGRES)) {
 			params.put("CharacterSetName", "UTF8");
-		} else if (product.getEngine().equals(DatabaseEngine.SQLSERVER_EX)) {
+		} else if (product.getEngine().equals(DatabaseEngine.SQLSERVER_EE)) {
 			params.put("CharacterSetName", "Chinese_PRC_CI_AS");
 		}
 		
@@ -438,7 +438,7 @@ public class AliyunRelationalDatabase extends
 								database.setAllocatedStorageInGb(dbInstanceAttribute.getInt("DBInstanceStorage"));
 								database.setBackupWindow(getBackupTimeWindow(databaseId.getDatabaseInstanceId()));
 								database.setEngineVersion(dbInstanceAttribute.getString("EngineVersion"));
-								database.setHostName(dbInstanceAttribute.getString("ConnectionString"));	//TODO check
+								database.setHostName(dbInstanceAttribute.getString("ConnectionString"));
 								database.setHostPort(dbInstanceAttribute.getInt("Port"));
 								database.setCreationTimestamp(new SimpleDateFormat("YYYY-MM-DD'T'hh:mm:ss'Z'").parse(dbInstanceAttribute.getString("CreationTime")).getTime());
 								database.setMaintenanceWindow(formatTimeWindow(dbInstanceAttribute.getString("MaintainTime")));
@@ -461,9 +461,11 @@ public class AliyunRelationalDatabase extends
 								if ("MySQL".equals(dbInstanceAttribute.getString("Engine"))) {
 									database.setEngine(DatabaseEngine.MYSQL);
 								} else if ("SQLServer".equals(dbInstanceAttribute.getString("Engine"))) {
-									database.setEngine(DatabaseEngine.SQLSERVER_EX);
+									database.setEngine(DatabaseEngine.SQLSERVER_EE);
 								} else if ("PostgreSQL".equals(dbInstanceAttribute.getString("Engine"))) {
 									database.setEngine(DatabaseEngine.POSTGRES);
+								} else {
+									throw new InternalException("Database engine " + dbInstanceAttribute.getString("Engine") + " is not supported!");
 								}
 								
 								return database;
@@ -496,7 +498,7 @@ public class AliyunRelationalDatabase extends
 			InternalException {
 		return Arrays.asList(
 				DatabaseEngine.MYSQL,
-				DatabaseEngine.SQLSERVER_EX,
+				DatabaseEngine.SQLSERVER_EE,
 				DatabaseEngine.POSTGRES);
 	}
 
@@ -505,7 +507,7 @@ public class AliyunRelationalDatabase extends
 			throws CloudException, InternalException {
 		if (forEngine.equals(DatabaseEngine.MYSQL)) {
 			return "5.5";
-		} else if (forEngine.equals(DatabaseEngine.SQLSERVER_EX)) {
+		} else if (forEngine.equals(DatabaseEngine.SQLSERVER_EE)) {
 			return "2008r2";
 		} else if (forEngine.equals(DatabaseEngine.POSTGRES)) {
 			return "9.4";
@@ -519,7 +521,7 @@ public class AliyunRelationalDatabase extends
 			throws CloudException, InternalException {
 		if (forEngine.equals(DatabaseEngine.MYSQL)) {
 			return Arrays.asList("5.5", "5.6");
-		} else if (forEngine.equals(DatabaseEngine.SQLSERVER_EX)) {
+		} else if (forEngine.equals(DatabaseEngine.SQLSERVER_EE)) {
 			return Arrays.asList("2008r2");
 		} else if (forEngine.equals(DatabaseEngine.POSTGRES)) {
 			return Arrays.asList("9.4");
@@ -538,7 +540,7 @@ public class AliyunRelationalDatabase extends
 			engineName = "MySQL";
 		} else if (forEngine.equals(DatabaseEngine.POSTGRES)) {
 			engineName = "PostgreSQL";
-		} else if (forEngine.equals(DatabaseEngine.SQLSERVER_EX)) {
+		} else if (forEngine.equals(DatabaseEngine.SQLSERVER_EE)) {
 			engineName = "SQLServer";
 		} else {
 			stdLogger.error("not support database engine " + forEngine.name());
@@ -582,6 +584,7 @@ public class AliyunRelationalDatabase extends
 			
 			List<String> accessList = new ArrayList<String>();
 			if (!getProvider().isEmpty(securityIPList)) {
+				
 				String[] segments = securityIPList.split(",");
 				if (segments.length > 0) {
 					Collections.addAll(accessList, segments);
@@ -687,7 +690,7 @@ public class AliyunRelationalDatabase extends
 									database.setAllocatedStorageInGb(dbInstanceAttribute.getInt("DBInstanceStorage"));
 									database.setBackupWindow(getBackupTimeWindow(dbInstanceId));
 									database.setEngineVersion(dbInstanceAttribute.getString("EngineVersion"));
-									database.setHostName(dbInstanceAttribute.getString("ConnectionString"));	//TODO check
+									database.setHostName(dbInstanceAttribute.getString("ConnectionString"));
 									database.setHostPort(dbInstanceAttribute.getInt("Port"));
 									database.setCreationTimestamp(new SimpleDateFormat("YYYY-MM-DD'T'hh:mm:ss'Z'").parse(dbInstanceAttribute.getString("CreationTime")).getTime());
 									database.setMaintenanceWindow(formatTimeWindow(dbInstanceAttribute.getString("MaintainTime")));
@@ -710,7 +713,7 @@ public class AliyunRelationalDatabase extends
 									if ("MySQL".equals(dbInstanceAttribute.getString("Engine"))) {
 										database.setEngine(DatabaseEngine.MYSQL);
 									} else if ("SQLServer".equals(dbInstanceAttribute.getString("Engine"))) {
-										database.setEngine(DatabaseEngine.SQLSERVER_EX);
+										database.setEngine(DatabaseEngine.SQLSERVER_EE);
 									} else if ("PostgreSQL".equals(dbInstanceAttribute.getString("Engine"))) {
 										database.setEngine(DatabaseEngine.POSTGRES);
 									}
@@ -747,7 +750,9 @@ public class AliyunRelationalDatabase extends
 	@Override
 	public void removeDatabase(String providerDatabaseId)
 			throws CloudException, InternalException {
+		
 		DatabaseId databaseId = new DatabaseId(providerDatabaseId);
+		
 		Map<String, Object> params = new HashMap<String, Object>();
 		params.put("DBInstanceId", databaseId.getDatabaseInstanceId());
 		params.put("DBName", databaseId.getDatabaseName());
@@ -760,7 +765,9 @@ public class AliyunRelationalDatabase extends
 	@Override
 	public void restart(String providerDatabaseId, boolean blockUntilDone)
 			throws CloudException, InternalException {
+		
 		DatabaseId databaseId = new DatabaseId(providerDatabaseId);
+		
 		Map<String, Object> params = new HashMap<String, Object>();
 		params.put("DBInstanceId", databaseId.getDatabaseInstanceId());
 		
@@ -858,7 +865,7 @@ public class AliyunRelationalDatabase extends
 								backup.setStartTime(respBackup.getString("BackupStartTime"));
 								backup.setEndTime(respBackup.getString("BackupEndTime"));
 								backup.setProviderBackupId(String.valueOf(respBackup.getInt("BackupId")));
-								backup.setProviderDatabaseId(databaseId.getDatabaseName());
+								backup.setProviderDatabaseId(databaseId.getDatabaseId());
 								backup.setProviderOwnerId(getContext().getAccountNumber());
 								backup.setProviderRegionId(getContext().getRegionId());
 								backup.setStorageInGigabytes((int)(respBackup.getLong("storageInGigabytes") / 1024l * 1024l * 1024l));
@@ -889,7 +896,6 @@ public class AliyunRelationalDatabase extends
             		.parameter("PageNumber", currentPageNumber)
     				.build();
             
-            
             allBackups.addAll(new AliyunRequestExecutor<List<DatabaseBackup>>(getProvider(),
                     AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
                     request,
@@ -904,7 +910,6 @@ public class AliyunRelationalDatabase extends
 	public void createFromBackup(DatabaseBackup backup,
 			String databaseCloneToName) throws CloudException,
 			InternalException {
-		//TODO check with CreateTempDBInstance, cannot specify temp db instance name
 		throw new OperationNotSupportedException("Cannot create a db instance from backup by name!");
 	}
 
@@ -917,7 +922,6 @@ public class AliyunRelationalDatabase extends
 	@Override
 	public void restoreBackup(DatabaseBackup backup) throws CloudException,
 			InternalException {
-		//TODO check with CreateTempDBInstance, cannot replace original db instance
 		throw new OperationNotSupportedException("Cannot restore backup to the original db instance!");
 	}
 	
@@ -942,12 +946,19 @@ public class AliyunRelationalDatabase extends
 		SimpleDateFormat timeFormatter = new SimpleDateFormat("HH:mm'Z'");
 		String[] segments = ((String) backupTimeWindow.get("PreferredBackupTime")).split("-");
 		try {
-			timeWindow.setStartHour(timeFormatter.parse(segments[0].trim()).getHours());
-			timeWindow.setStartMinute(timeFormatter.parse(segments[0].trim()).getMinutes());
-			timeWindow.setEndHour(timeFormatter.parse(segments[1].trim()).getHours());
-			timeWindow.setEndMinute(timeFormatter.parse(segments[1].trim()).getMinutes());
+			Calendar cal = Calendar.getInstance();
+			cal.setTime(timeFormatter.parse(segments[0].trim()));
+			
+			timeWindow.setStartHour(cal.get(Calendar.HOUR_OF_DAY));
+			timeWindow.setStartMinute(cal.get(Calendar.MINUTE));
+			cal.setTime(timeFormatter.parse(segments[1].trim()));
+			
+			timeWindow.setEndHour(cal.get(Calendar.HOUR_OF_DAY));
+			timeWindow.setEndMinute(cal.get(Calendar.MINUTE));
+			
 			timeWindow.setStartDayOfWeek(DayOfWeek.valueOf(backupTimeWindow.get("PreferredBackupPeriod").toString().toUpperCase()));
 			timeWindow.setEndDayOfWeek(DayOfWeek.valueOf(backupTimeWindow.get("PreferredBackupPeriod").toString().toUpperCase()));
+			
 			return timeWindow;
 		} catch (ParseException e) {
 			stdLogger.error("parsing start and end hour/minutes failed for backup time", e);
@@ -1008,14 +1019,21 @@ public class AliyunRelationalDatabase extends
 	}
 	
 	private TimeWindow formatTimeWindow (String timespan) throws ParseException {
+		
 		SimpleDateFormat format = new SimpleDateFormat("HH:mm'Z'");
 		String[] segments = timespan.split("-");
 		
 		TimeWindow timeWindow = new TimeWindow();
-		timeWindow.setStartHour(format.parse(segments[0].trim()).getHours());
-		timeWindow.setStartMinute(format.parse(segments[0].trim()).getMinutes());
-		timeWindow.setEndHour(format.parse(segments[1].trim()).getHours());
-		timeWindow.setEndMinute(format.parse(segments[1].trim()).getMinutes());
+		Calendar cal = Calendar.getInstance();
+		
+		cal.setTime(format.parse(segments[0].trim()));
+		timeWindow.setStartHour(cal.get(Calendar.HOUR_OF_DAY));
+		timeWindow.setStartMinute(cal.get(Calendar.MINUTE));
+		
+		cal.setTime(format.parse(segments[1].trim()));
+		timeWindow.setEndHour(cal.get(Calendar.HOUR_OF_DAY));
+		timeWindow.setEndMinute(cal.get(Calendar.MINUTE));
+		
 		return timeWindow;
 	}
 	
@@ -1025,16 +1043,21 @@ public class AliyunRelationalDatabase extends
 	 * @return parsed timewindow
 	 */
 	private String parseTimeWindow(TimeWindow timeWindow) {
+		
 		StringBuilder timeSpan = new StringBuilder();
 		SimpleDateFormat format = new SimpleDateFormat("HH:mm'Z'");
+		
 		Calendar cal = Calendar.getInstance();
 		cal.set(Calendar.HOUR_OF_DAY, timeWindow.getStartHour());
 		cal.set(Calendar.MINUTE, timeWindow.getStartMinute());
 		timeSpan.append(format.format(cal.getTime()));
+		
 		timeSpan.append("-");
+		
 		cal.set(Calendar.HOUR_OF_DAY, timeWindow.getEndHour());
 		cal.set(Calendar.MINUTE, timeWindow.getEndMinute());
 		timeSpan.append(format.format(cal.getTime()));
+		
 		return timeSpan.toString();
 	}
 	
@@ -1107,6 +1130,7 @@ public class AliyunRelationalDatabase extends
 	 */
 	private void createDBInstanceAccount (String dbInstanceId, String dbName, String adminUser, String adminPassword) throws InternalException, CloudException {
 		
+		//create db account
 		HashMap<String, Object> params = new HashMap<String, Object>();
 		params.put("DBInstanceId", dbInstanceId);
 		params.put("AccountName", adminUser);
@@ -1117,6 +1141,7 @@ public class AliyunRelationalDatabase extends
 				"CreateAccount", AliyunNetworkCommon.RequestMethod.POST, false, 
 				new AliyunValidateJsonResponseHandler(getProvider()));
 		
+		//authorize READ&WRITE privilege for the account
 		params = new HashMap<String, Object>();
 		params.put("DBInstanceId", dbInstanceId);
 		params.put("AccountName", adminUser);

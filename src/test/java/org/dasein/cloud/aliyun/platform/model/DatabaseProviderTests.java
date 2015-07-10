@@ -26,6 +26,8 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Iterator;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.dasein.cloud.InternalException;
 import org.junit.Test;
@@ -99,6 +101,15 @@ public class DatabaseProviderTests {
 		SimpleDateFormat formatter = new SimpleDateFormat("HH:mm'Z'");
 		String timeStr = "06:32Z";
 		System.out.println(formatter.parse(timeStr).getHours() + ", " + formatter.parse(timeStr).getMinutes());
+	}
+	
+	@Test
+	public void testDBName() {
+		Pattern pattern = Pattern.compile("^[a-z]{1}[a-z0-9_]{1,64}$");
+		Matcher matcher = pattern.matcher("aaa1292_jiwej");
+		assertTrue(matcher.find());
+		matcher = pattern.matcher("1292a_jiwej");
+		assertFalse(matcher.find());
 	}
 	
 }

@@ -54,7 +54,7 @@ public class AliyunRelationalDatabaseCapabilities extends
 	@Override
 	public boolean supportsMaintenanceWindows() throws CloudException,
 			InternalException {
-		return false;
+		return true;
 	}
 
 	@Override
@@ -77,19 +77,19 @@ public class AliyunRelationalDatabaseCapabilities extends
 	@Override
 	public boolean supportsScheduledDatabaseBackups() throws CloudException,
 			InternalException {
-		return false;
+		return true;
 	}
 
 	@Override
 	public boolean supportsDemandBackups() throws CloudException,
 			InternalException {
-		return true;
+		return false;
 	}
 
 	@Override
 	public boolean supportsRestoreBackup() throws CloudException,
 			InternalException {
-		return false;
+		return false;	//TODO
 	}
 
 	@Override
@@ -108,7 +108,7 @@ public class AliyunRelationalDatabaseCapabilities extends
 	public NamingConstraints getRelationalDatabaseNamingConstraints()
 			throws CloudException, InternalException {
 		return NamingConstraints.getAlphaNumeric(1, 64).withRegularExpression(
-                "^[a-z][a-z0-9_]{1,64}$").withNoSpaces();
+                "^[a-z]{1}[a-z0-9_]{0,63}$").withNoSpaces();
 	}
 
 }
