@@ -118,10 +118,10 @@ public class AliyunNetworkCommon {
 	public static final int DefaultPersistenceTimeout = 5 * 60;
 	public static final int DefaultLoadBalancerBandwidth = -1;
 
-	public static ResponseHandler<Map<String, Object>> getDefaultResponseHandler(
+	public static ResponseHandler<Map<String, Object>> getResponseMapHandler(
 			final Aliyun provider, final String... keys) {
 		return new AliyunResponseHandlerWithMapper<JSONObject, Map<String, Object>>(
-				new StreamToJSONObjectProcessor(),
+			new StreamToJSONObjectProcessor(),
 				new DriverToCoreMapper<JSONObject, Map<String, Object>>() {
 					@Override
 					public Map<String, Object> mapFrom(JSONObject json) {
@@ -137,23 +137,44 @@ public class AliyunNetworkCommon {
 							throw new RuntimeException(e.getMessage());
 						}
 					}
-				}, JSONObject.class);
+				}, JSONObject.class);	
 	}
+	
+	public static enum RequestMethod { GET, POST, DELETE, PUT }
 
-	public static void executeDefaultRequest(Aliyun provider,
-			Map<String, Object> params, AliyunRequestBuilder.Category category,
-			String methodName) throws InternalException, CloudException {
+//	public static void executeDefaultRequest(Aliyun provider,
+//			Map<String, Object> params, AliyunRequestBuilder.Category category,
+//			String action) throws InternalException, CloudException {
+//		executeDefaultRequest(provider, params, category, action, RequestMethod.POST, 
+//				false, new AliyunValidateJsonResponseHandler(provider));
+//	}
+	
+	public static <V> V executeDefaultRequest(Aliyun provider, Map<String, Object> params, 
+			AliyunRequestBuilder.Category category, String action, RequestMethod requestMethod, 
+			boolean clientToken, ResponseHandler<V> handler) throws InternalException, CloudException {
 
-		HttpUriRequest request = AliyunRequestBuilder.post()
-				.provider(provider)
-				.category(category)
-				.parameter("Action", methodName)
-				.entity(params)
-				.build();
+		AliyunRequestBuilder builder = null;
+		if (requestMethod.equals(RequestMethod.GET)) { 
+			builder = AliyunRequestBuilder.get();
+			for (String key : params.keySet()) {
+				builder = builder.parameter(key, params.get(key));
+			}
+		} else if (requestMethod.equals(RequestMethod.POST)) {
+			builder = AliyunRequestBuilder.post();
+			builder = builder.entity(params);
+		} else {
+			throw new InternalException("Not supported request method " + requestMethod.name());
+		}
+		builder = builder.provider(provider).category(category).parameter("Action", action);
+		if (clientToken) {
+			builder = builder.clientToken(true);
+		}
 
-		new AliyunRequestExecutor<Void>(provider,
-				AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
-				new AliyunValidateJsonResponseHandler(provider)).execute();
+		return new AliyunRequestExecutor<V>(
+				provider,
+				AliyunHttpClientBuilderFactory.newHttpClientBuilder(), 
+				builder.build(),
+				handler).execute();
 
 	}
 

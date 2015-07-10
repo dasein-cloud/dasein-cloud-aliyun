@@ -259,18 +259,9 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
             params.put("VpcId", options.getProviderVlanId());
         }
         
-        HttpUriRequest request = AliyunRequestBuilder.post()
-        		.provider(getProvider())
-        		.category(AliyunRequestBuilder.Category.ECS)
-        		.parameter("Action", "CreateSecurityGroup")
-        		.entity(params)
-        		.clientToken(true)
-        		.build();
-        
-        return (String) new AliyunRequestExecutor<Map<String, Object>>(getProvider(),
-                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                request,
-                AliyunNetworkCommon.getDefaultResponseHandler(getProvider(), "SecurityGroupId")).execute().get("SecurityGroupId");
+        return (String) AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.ECS, 
+        		"CreateSecurityGroup", AliyunNetworkCommon.RequestMethod.POST, true, 
+        		AliyunNetworkCommon.getResponseMapHandler(getProvider(), "SecurityGroupId")).get("SecurityGroupId");
         
     }
 

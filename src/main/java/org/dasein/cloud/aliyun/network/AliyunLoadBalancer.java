@@ -27,6 +27,7 @@ import org.dasein.cloud.aliyun.util.requester.AliyunHttpClientBuilderFactory;
 import org.dasein.cloud.aliyun.util.requester.AliyunRequestBuilder;
 import org.dasein.cloud.aliyun.util.requester.AliyunRequestExecutor;
 import org.dasein.cloud.aliyun.util.requester.AliyunResponseHandlerWithMapper;
+import org.dasein.cloud.aliyun.util.requester.AliyunValidateJsonResponseHandler;
 import org.dasein.cloud.network.*;
 import org.dasein.cloud.util.requester.DriverToCoreMapper;
 import org.dasein.cloud.util.requester.streamprocessors.StreamToJSONObjectProcessor;
@@ -97,18 +98,11 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 				AliyunNetworkCommon.InternetChargeType.PayByTraffic.name()
 						.toLowerCase());
 		params.put("Bandwidth", 1000);
-
-		HttpUriRequest request = AliyunRequestBuilder.post()
-				.provider(getProvider())
-				.category(AliyunRequestBuilder.Category.SLB)
-				.parameter("Action", "CreateLoadBalancer").entity(params)
-				.clientToken(true).build();
-
-		String loadBalancerId = (String) new AliyunRequestExecutor<Map<String, Object>>(
-				getProvider(),
-				AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
-				AliyunNetworkCommon.getDefaultResponseHandler(getProvider(),
-						"LoadBalancerId")).execute().get("LoadBalancerId");
+		
+		String loadBalancerId = (String) AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, 
+				AliyunRequestBuilder.Category.SLB, "CreateLoadBalancer", 
+				AliyunNetworkCommon.RequestMethod.POST, true, 
+				AliyunNetworkCommon.getResponseMapHandler(getProvider(), "LoadBalancerId")).get("LoadBalancerId");
 
 		if (loadBalancerId != null) {
 
@@ -134,8 +128,9 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 		Map<String, Object> params = new HashMap<String, Object>();
 		params.put("LoadBalancerId", loadBalancerId);
 
-		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params,
-				AliyunRequestBuilder.Category.SLB, "DeleteLoadBalancer");
+		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.SLB, 
+				"DeleteLoadBalancer", AliyunNetworkCommon.RequestMethod.POST, false, 
+				new AliyunValidateJsonResponseHandler(getProvider()));
 		
 	}
 
@@ -204,8 +199,9 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 		params.put("LoadBalancerId", toLoadBalancerId);
 		params.put("ListenerPort", listener.getPublicPort());
 
-		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params,
-				AliyunRequestBuilder.Category.SLB, "StartLoadBalancerListener");
+		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.SLB, 
+				"StartLoadBalancerListener", AliyunNetworkCommon.RequestMethod.POST, false, 
+				new AliyunValidateJsonResponseHandler(getProvider()));
 	}
 
 	private void createListener(@Nonnull String toLoadBalancerId,
@@ -228,9 +224,10 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 		} else if (listener.getNetworkProtocol().equals(LbProtocol.RAW_TCP)) {
 			methodName = "CreateLoadBalancerTCPListener";
 		}
-		
-		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params,
-				AliyunRequestBuilder.Category.SLB, methodName);
+
+		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.SLB, 
+				methodName, AliyunNetworkCommon.RequestMethod.POST, false, 
+				new AliyunValidateJsonResponseHandler(getProvider()));
 	}
 
 	@Override
@@ -244,9 +241,9 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 			params.put("LoadBalancerId", toLoadBalancerId);
 			params.put("ListenerPort", listener.getPublicPort());
 
-			AliyunNetworkCommon.executeDefaultRequest(getProvider(), params,
-					AliyunRequestBuilder.Category.SLB,
-					"DeleteLoadBalancerListener");
+			AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.SLB, 
+					"DeleteLoadBalancerListener", AliyunNetworkCommon.RequestMethod.POST, false, 
+					new AliyunValidateJsonResponseHandler(getProvider()));
 		}
 	}
 
@@ -269,8 +266,9 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 			params.put("LoadBalancerId", toLoadBalancerId);
 			params.put("BackendServers", jsonArray.toString());
 
-			AliyunNetworkCommon.executeDefaultRequest(getProvider(), params,
-					AliyunRequestBuilder.Category.SLB, "AddBackendServers");
+			AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.SLB, 
+					"AddBackendServers", AliyunNetworkCommon.RequestMethod.POST, false, 
+					new AliyunValidateJsonResponseHandler(getProvider()));
 
 		} catch (JSONException e) {
 			stdLogger.error("An exception occurs during add backend servers!",
@@ -297,8 +295,9 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 		}
 		params.put("BackendServers", servers);
 		
-		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params,
-				AliyunRequestBuilder.Category.SLB, "RemoveBackendServers");
+		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.SLB, 
+				"RemoveBackendServers", AliyunNetworkCommon.RequestMethod.POST, false, 
+				new AliyunValidateJsonResponseHandler(getProvider()));
 	}
 
 	@Nonnull
@@ -493,8 +492,9 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 			params.put("ServerCertificateId",
 					certificate.getProviderCertificateId());
 			
-			AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, 
-					AliyunRequestBuilder.Category.SLB, "DeleteServerCertificate");
+			AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.SLB, 
+					"DeleteServerCertificate", AliyunNetworkCommon.RequestMethod.POST, false, 
+					new AliyunValidateJsonResponseHandler(getProvider()));
 			
 		}
 	}
@@ -518,8 +518,9 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 			params.put("ServerCertificateId",
 					certificate.getProviderCertificateId());
 			
-			AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, 
-					AliyunRequestBuilder.Category.SLB, "SetLoadBalancerHTTPSListenerAttribute");
+			AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.SLB, 
+					"SetLoadBalancerHTTPSListenerAttribute", AliyunNetworkCommon.RequestMethod.POST, false, 
+					new AliyunValidateJsonResponseHandler(getProvider()));
 			
 		} catch (JSONException e) {
 			stdLogger.error("An exception occurs during setSSLCertificate", e);
@@ -569,8 +570,9 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 					"Aliyun supports HTTP, HTTPS and TCP as the health check protocol only!");
 		}
 		
-		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, 
-				AliyunRequestBuilder.Category.SLB, methodName);
+		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.SLB, 
+				methodName, AliyunNetworkCommon.RequestMethod.POST, false, 
+				new AliyunValidateJsonResponseHandler(getProvider()));
 		
 
 		String healthCheckId = new LbListenerHealthCheckIdentity(
@@ -654,8 +656,9 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 				params.put("HealthCheck",
 						AliyunNetworkCommon.AliyunLbSwitcher.off.name());
 				
-				AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, 
-						AliyunRequestBuilder.Category.SLB, methodName);
+				AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.SLB, 
+						methodName, AliyunNetworkCommon.RequestMethod.POST, false, 
+						new AliyunValidateJsonResponseHandler(getProvider()));
 				
 			}
 		} catch (JSONException e) {

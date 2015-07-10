@@ -307,20 +307,14 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
             throw new InternalException("Aliyun supports IPV4 ip address only!");
         }
         
-        HttpUriRequest request = AliyunRequestBuilder.post()
-        		.provider(getProvider())
-        		.category(AliyunRequestBuilder.Category.ECS)
-        		.parameter("Action", "AllocateEipAddress")
-        		.parameter("RegionId", getContext().getRegionId())
-        		.parameter("InternetChargeType", AliyunNetworkCommon.InternetChargeType.PayByTraffic.name())
-        		.parameter("Bandwidth", AliyunNetworkCommon.DefaultIpAddressBandwidth)
-        		.clientToken(true)
-        		.build();
-        
-        return (String) new AliyunRequestExecutor<Map<String, Object>>(getProvider(),
-                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                request,
-                AliyunNetworkCommon.getDefaultResponseHandler(getProvider(), "AllocationId")).execute().get("AllocationId");
+    	Map<String, Object> params = new HashMap<String, Object>();
+    	params.put("RegionId", getContext().getRegionId());
+    	params.put("InternetChargeType", AliyunNetworkCommon.InternetChargeType.PayByTraffic.name());
+    	params.put("Bandwidth", AliyunNetworkCommon.DefaultIpAddressBandwidth);
+    	
+    	return (String) AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, 
+    			AliyunRequestBuilder.Category.ECS, "AllocateEipAddress", AliyunNetworkCommon.RequestMethod.POST, true, 
+    			AliyunNetworkCommon.getResponseMapHandler(getProvider(), "AllocationId")).get("AllocationId");
         
     }
 

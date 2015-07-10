@@ -55,7 +55,7 @@ import org.json.JSONObject;
 public class AliyunRelationalDatabase extends
 		AbstractRelationalDatabaseSupport<Aliyun> {
 	
-class DatabaseId {
+	class DatabaseId {
 		
 		private String databaseInstanceId;
 		private String databaseName;
@@ -256,7 +256,9 @@ class DatabaseId {
 		accessBuilder.append(sourceCidr);
 		params.put("SecurityIps", accessBuilder.toString());
 		
-		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, "ModifySecurityIps");
+		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+				"ModifySecurityIps", AliyunNetworkCommon.RequestMethod.POST, false, 
+				new AliyunValidateJsonResponseHandler(getProvider()));
 		
 	}
 
@@ -292,7 +294,10 @@ class DatabaseId {
 			if (storageInGigabytes >= 5) {
 				params.put("DBInstanceStorage", storageInGigabytes);
 			}
-			AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, "ModifyDBInstanceSpec");
+			
+			AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+					"ModifyDBInstanceSpec", AliyunNetworkCommon.RequestMethod.POST, false, 
+					new AliyunValidateJsonResponseHandler(getProvider()));
 		}
 		
 		//alter newAdminUser and newAdminPassword
@@ -305,7 +310,10 @@ class DatabaseId {
 			params = new HashMap<String, Object>();
 			params.put("DBInstanceId", databaseId.getDatabaseInstanceId());
 			params.put("MaintainTime", parseTimeWindow(preferredMaintenanceWindow));
-			AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, "ModifyDBInstanceMaintainTime");
+			
+			AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+					"ModifyDBInstanceMaintainTime", AliyunNetworkCommon.RequestMethod.POST, false, 
+					new AliyunValidateJsonResponseHandler(getProvider()));
 		}
 		
 		//alter preferredBackupWindow
@@ -373,17 +381,9 @@ class DatabaseId {
 		}
 		
 		//create DB instance
-		HttpUriRequest request = AliyunRequestBuilder.post()
-				.provider(getProvider())
-				.category(AliyunRequestBuilder.Category.RDS)
-				.parameter("Action", "CreateDBInstance")
-				.entity(params)
-				.clientToken(true)
-				.build();
-		
-		String instanceId = (String) new AliyunRequestExecutor<Map<String, Object>>(getProvider(),
-				AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
-				AliyunNetworkCommon.getDefaultResponseHandler(getProvider(), "DBInstanceId")).execute().get("DBInstanceId");
+		String instanceId = (String) AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, 
+				AliyunRequestBuilder.Category.RDS, "CreateDBInstance", AliyunNetworkCommon.RequestMethod.POST, true, 
+				AliyunNetworkCommon.getResponseMapHandler(getProvider(), "DBInstanceId")).get("DBInstanceId");
 		
 		//create database
 		params = new HashMap<String, Object>();
@@ -397,16 +397,9 @@ class DatabaseId {
 			params.put("CharacterSetName", "Chinese_PRC_CI_AS");
 		}
 		
-		request = AliyunRequestBuilder.post()
-				.provider(getProvider())
-				.category(AliyunRequestBuilder.Category.RDS)
-				.parameter("Action", "CreateDatabase")
-				.entity(params)
-				.build();
-		
-		new AliyunRequestExecutor<Void>(getProvider(),
-				AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
-				new AliyunValidateJsonResponseHandler(getProvider())).execute();
+		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+				"CreateDatabase", AliyunNetworkCommon.RequestMethod.POST, false, 
+				new AliyunValidateJsonResponseHandler(getProvider()));
 		
 		//create database account
 		createDBInstanceAccount(instanceId, databaseName, withAdminUser, withAdminPassword);
@@ -758,7 +751,10 @@ class DatabaseId {
 		Map<String, Object> params = new HashMap<String, Object>();
 		params.put("DBInstanceId", databaseId.getDatabaseInstanceId());
 		params.put("DBName", databaseId.getDatabaseName());
-		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, "DeleteDatabase");
+		
+		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+				"DeleteDatabase", AliyunNetworkCommon.RequestMethod.POST, false, 
+				new AliyunValidateJsonResponseHandler(getProvider()));
 	}
 
 	@Override
@@ -767,7 +763,10 @@ class DatabaseId {
 		DatabaseId databaseId = new DatabaseId(providerDatabaseId);
 		Map<String, Object> params = new HashMap<String, Object>();
 		params.put("DBInstanceId", databaseId.getDatabaseInstanceId());
-		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, "RestartDBInstance");
+		
+		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+				"RestartDBInstance", AliyunNetworkCommon.RequestMethod.POST, false, 
+				new AliyunValidateJsonResponseHandler(getProvider()));
 	}
 
 	@Override
@@ -790,8 +789,9 @@ class DatabaseId {
 		accessBuilder.deleteCharAt(accessBuilder.length() - 1);
 		params.put("SecurityIps", accessBuilder.toString());
 		
-		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, "ModifySecurityIps");
-		
+		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+				"ModifySecurityIps", AliyunNetworkCommon.RequestMethod.POST, false, 
+				new AliyunValidateJsonResponseHandler(getProvider()));
 	}
 
 	@Override
@@ -930,17 +930,13 @@ class DatabaseId {
 	 */
 	private TimeWindow getBackupTimeWindow(String databaseInstanceId) throws InternalException, CloudException {
 		
-		HttpUriRequest request = AliyunRequestBuilder.get()
-				.provider(getProvider())
-				.category(AliyunRequestBuilder.Category.RDS)
-				.parameter("Action", "DescribeBackupPolicy")
-				.parameter("DBInstanceId", databaseInstanceId)
-				.build();
+		Map<String, Object> params = new HashMap<String, Object>();
+		params.put("DBInstanceId", databaseInstanceId);
 		
-		Map<String, Object> backupTimeWindow = new AliyunRequestExecutor<Map<String, Object>>(getProvider(),
-				AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
-				AliyunNetworkCommon.getDefaultResponseHandler(getProvider(), "PreferredBackupTime", "PreferredBackupPeriod")).execute();
-		
+		Map<String, Object> backupTimeWindow = AliyunNetworkCommon.executeDefaultRequest(getProvider(), 
+				params, AliyunRequestBuilder.Category.RDS, "DescribeBackupPolicy", 
+				AliyunNetworkCommon.RequestMethod.POST, false, 
+				AliyunNetworkCommon.getResponseMapHandler(getProvider(), "PreferredBackupTime", "PreferredBackupPeriod"));
 		
 		TimeWindow timeWindow = new TimeWindow();
 		SimpleDateFormat timeFormatter = new SimpleDateFormat("HH:mm'Z'");
@@ -1117,7 +1113,9 @@ class DatabaseId {
 		params.put("AccountPassword", adminPassword);
 		params.put("AccountDescription", "User " + adminUser + " for DB Instance " + dbInstanceId);
 		
-		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, "CreateAccount");
+		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+				"CreateAccount", AliyunNetworkCommon.RequestMethod.POST, false, 
+				new AliyunValidateJsonResponseHandler(getProvider()));
 		
 		params = new HashMap<String, Object>();
 		params.put("DBInstanceId", dbInstanceId);
@@ -1125,7 +1123,9 @@ class DatabaseId {
 		params.put("DBName", dbName);
 		params.put("AccountpPrivilege", "ReadWrite");
 		
-		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, "GrantAccountPrivilege");
+		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+				"GrantAccountPrivilege", AliyunNetworkCommon.RequestMethod.POST, false, 
+				new AliyunValidateJsonResponseHandler(getProvider()));
 	}
 	
 	/**
@@ -1141,8 +1141,9 @@ class DatabaseId {
 		params.put("DBInstanceId", dbInstanceId);
 		params.put("AccountName", adminUser);
 		
-		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, "DeleteAccount");
-		
+		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+				"DeleteAccount", AliyunNetworkCommon.RequestMethod.POST, false, 
+				new AliyunValidateJsonResponseHandler(getProvider()));
 	}
 	
 	

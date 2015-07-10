@@ -198,18 +198,10 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
             params.put("Description", options.getDescription());
         }
         
-        HttpUriRequest request = AliyunRequestBuilder.post()
-        		.provider(getProvider())
-        		.category(AliyunRequestBuilder.Category.ECS)
-        		.parameter("Action", "CreateVSwitch")
-        		.entity(params)
-        		.clientToken(true)
-        		.build();
-        
-        String vSwitchId = (String) new AliyunRequestExecutor<Map<String, Object>>(getProvider(),
-                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                request,
-                AliyunNetworkCommon.getDefaultResponseHandler(getProvider(), "VSwitchId")).execute().get("VSwitchId");
+        String vSwitchId = (String) AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, 
+        		AliyunRequestBuilder.Category.ECS, "CreateVSwitch", 
+        		AliyunNetworkCommon.RequestMethod.POST, true, 
+        		AliyunNetworkCommon.getResponseMapHandler(getProvider(), "VSwitchId")).get("VSwitchId");
         
         return getSubnet(new IdentityGenerator(vlanId.getVlanId(), vSwitchId, null, null).toString());
         
@@ -244,20 +236,12 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
             params.put("Description", description);
         }
         
-        HttpUriRequest request = AliyunRequestBuilder.post()
-        		.provider(getProvider())
-        		.category(AliyunRequestBuilder.Category.ECS)
-        		.parameter("Action", "CreateVpc")
-        		.entity(params)
-        		.clientToken(true)
-        		.build();
-        
-        Map<String, Object> result = new AliyunRequestExecutor<Map<String, Object>>(getProvider(),
-                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                request,
-                AliyunNetworkCommon.getDefaultResponseHandler(getProvider(), "VpcId", "VRouterId", "RouteTableId")).execute();
-        
-        return getVlan(new IdentityGenerator((String)result.get("VpcId"), null, (String)result.get("VRouterId"), (String)result.get("RouteTableId")).toString());
+        Map<String, Object> result = AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, 
+        		AliyunRequestBuilder.Category.ECS, "CreateVpc", AliyunNetworkCommon.RequestMethod.POST, true, 
+        		AliyunNetworkCommon.getResponseMapHandler(getProvider(), "VpcId", "VRouterId", "RouteTableId"));
+       
+        return getVlan(new IdentityGenerator((String)result.get("VpcId"), null, (String)result.get("VRouterId"), 
+        		(String)result.get("RouteTableId")).toString());
     }
 
     @Nonnull
