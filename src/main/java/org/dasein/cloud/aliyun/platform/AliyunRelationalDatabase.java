@@ -203,7 +203,7 @@ public class AliyunRelationalDatabase extends
 									parameter.setModifiable(false);
 								}
 								parameter.setParameter(templateRecord.getString("ParameterValue"));
-								parameter.setValidation(templateRecord.getString("CheckingCode"));	//TODO check if it needs to be shown to the user
+								parameter.setValidation(templateRecord.getString("CheckingCode"));
 								parameters.add(parameter);
 							}
 							return parameters;
@@ -289,7 +289,7 @@ public class AliyunRelationalDatabase extends
 			params.put("DBInstanceId", databaseId.getDatabaseInstanceId());
 			params.put("PayType", "Postpaid");
 			if (!getProvider().isEmpty(productSize)) {
-				params.put("DBInstanceClass", productSize);	//TODO check
+				params.put("DBInstanceClass", productSize);
 			}
 			if (storageInGigabytes >= 5) {
 				params.put("DBInstanceStorage", storageInGigabytes);
@@ -442,8 +442,8 @@ public class AliyunRelationalDatabase extends
 								database.setHostPort(dbInstanceAttribute.getInt("Port"));
 								database.setCreationTimestamp(new SimpleDateFormat("YYYY-MM-DD'T'hh:mm:ss'Z'").parse(dbInstanceAttribute.getString("CreationTime")).getTime());
 								database.setMaintenanceWindow(formatTimeWindow(dbInstanceAttribute.getString("MaintainTime")));
-								database.setName(dbInstanceAttribute.getString("DBInstanceClass"));
-								database.setProductSize(dbInstanceAttribute.getString("DBInstanceClass")); //TODO check
+								database.setName(respDatabase.getString("DBName"));
+								database.setProductSize(dbInstanceAttribute.getString("DBInstanceClass"));
 								database.setProviderDatabaseId(new DatabaseId(databaseId.getDatabaseInstanceId(), respDatabase.getString("DBName")).getDatabaseId());
 								database.setProviderOwnerId(getContext().getAccountNumber());
 								database.setProviderRegionId(getContext().getRegionId());
@@ -553,8 +553,9 @@ public class AliyunRelationalDatabase extends
 				for (org.dasein.cloud.aliyun.platform.model.DatabaseProduct product : region.getProducts()) {
 					DatabaseProduct retProduct = new DatabaseProduct(engineName);
 					retProduct.setCurrency(product.getCurrency());
-					retProduct.setName(product.getName());
-					retProduct.setProductSize(product.getName()); //TODO check
+					retProduct.setName(String.format("class:%s, memory %dMB, max iops %d, max connection %d", 
+							product.getName(), product.getMemory(), product.getMaxIops(), product.getMaxConnection()));
+					retProduct.setProductSize(product.getName());
 					retProduct.setStandardHourlyRate(product.getHourlyPrice());
 					retProduct.setStorageInGigabytes(product.getStorageInGigabytes());
 					if( "included".equalsIgnoreCase(product.getLicense())) {
@@ -694,8 +695,8 @@ public class AliyunRelationalDatabase extends
 									database.setHostPort(dbInstanceAttribute.getInt("Port"));
 									database.setCreationTimestamp(new SimpleDateFormat("YYYY-MM-DD'T'hh:mm:ss'Z'").parse(dbInstanceAttribute.getString("CreationTime")).getTime());
 									database.setMaintenanceWindow(formatTimeWindow(dbInstanceAttribute.getString("MaintainTime")));
-									database.setName(dbInstanceAttribute.getString("DBInstanceClass"));
-									database.setProductSize(dbInstanceAttribute.getString("DBInstanceClass")); //TODO check
+									database.setName(respDatabase.getString("DBName"));
+									database.setProductSize(dbInstanceAttribute.getString("DBInstanceClass"));
 									database.setProviderDatabaseId(new DatabaseId(dbInstanceId, respDatabase.getString("DBName")).getDatabaseId());
 									database.setProviderOwnerId(getContext().getAccountNumber());
 									database.setProviderRegionId(getContext().getRegionId());
