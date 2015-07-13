@@ -41,6 +41,7 @@ import org.dasein.cloud.util.requester.streamprocessors.JsonStreamToObjectProces
 import org.dasein.cloud.util.requester.streamprocessors.StreamProcessor;
 import org.dasein.cloud.util.requester.streamprocessors.StreamToDocumentProcessor;
 import org.dasein.cloud.util.requester.streamprocessors.StreamToJSONObjectProcessor;
+import org.dasein.cloud.util.requester.streamprocessors.StreamToStringProcessor;
 import org.dasein.cloud.util.requester.streamprocessors.XmlStreamToObjectProcessor;
 
 import java.io.UnsupportedEncodingException;
@@ -83,6 +84,10 @@ public class AliyunRequestBuilder {
         this.requestBuilder = requestBuilder;
         this.headergroup = new HeaderGroup();
         this.path = "/";
+    }
+
+    public static AliyunRequestBuilder head() {
+        return new AliyunRequestBuilder(RequestBuilder.head());
     }
 
     public static AliyunRequestBuilder get() {
@@ -128,7 +133,9 @@ public class AliyunRequestBuilder {
     }
 
     private String asString(Object value) {
-        if (value instanceof Date) {
+        if (value == null) {
+            return null;
+        } else if (value instanceof Date) {
             return aliyun.formatIso8601Date((Date) value);
         } else {
             return value.toString();
@@ -158,6 +165,8 @@ public class AliyunRequestBuilder {
         } else if(streamProcessor instanceof JsonStreamToObjectProcessor
                 || streamProcessor instanceof StreamToJSONObjectProcessor) {
             contentType = ContentType.APPLICATION_JSON;
+        } else if(streamProcessor instanceof StreamToStringProcessor) {
+            contentType = ContentType.create("text/plain", Consts.UTF_8);
         }
 
         formEntity = null;
@@ -172,16 +181,6 @@ public class AliyunRequestBuilder {
     public HttpUriRequest build() throws InternalException {
         requestBuilder.setVersion(new ProtocolVersion("HTTP", 1, 1));
 
-        URIBuilder uriBuilder = new URIBuilder();
-        String host = category.getHost(this.aliyun);
-        host = aliyun.isEmpty(subdomain) ? host : subdomain + "." + host;
-        uriBuilder.setScheme("https").setHost(host).setPath(path);
-        try {
-            requestBuilder.setUri(uriBuilder.build().toString());
-        } catch (URISyntaxException uriSyntaxException) {
-            logger.error("RequestBuilderFactory.build() failed due to URI invalid: " + uriSyntaxException.getMessage());
-            throw new InternalException(uriSyntaxException);
-        }
         if (formEntity != null) {
             List<NameValuePair> params = new ArrayList<NameValuePair>();
             for( Map.Entry<String, String> entry : formEntity.entrySet() ) {
@@ -202,6 +201,7 @@ public class AliyunRequestBuilder {
         }
 
         AliyunRequestBuilderStrategy requestBuilderStrategy = category.getRequestBuilderStrategy(aliyun);
+        requestBuilderStrategy.applyUri(this);
         requestBuilderStrategy.applyFrameworkParameters(this);
         requestBuilderStrategy.sign(this);
 
@@ -227,15 +227,7 @@ public class AliyunRequestBuilder {
 
         public String getHost(Aliyun aliyun) {
             String endpoint = ".aliyuncs.com";
-            if (this == OSS || this == MQS) {
-                String regionId = aliyun.getContext().getRegionId();
-                if (regionId == null) {
-                    throw new RuntimeException("No region was set for this request");
-                }
-                return host + "-" + regionId + endpoint;
-            } else {
-                return host + endpoint;
-            }
+            return host + endpoint;
 
             //ignore config one, use hardcode URL
             /*

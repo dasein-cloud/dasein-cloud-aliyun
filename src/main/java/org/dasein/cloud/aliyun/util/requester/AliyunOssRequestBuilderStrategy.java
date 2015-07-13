@@ -26,6 +26,7 @@ import org.apache.http.Header;
 import org.apache.http.HttpEntity;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.methods.RequestBuilder;
+import org.apache.http.client.utils.URIBuilder;
 import org.apache.log4j.Logger;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.aliyun.Aliyun;
@@ -33,6 +34,7 @@ import org.dasein.cloud.aliyun.Aliyun;
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URISyntaxException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
@@ -92,6 +94,28 @@ public class AliyunOssRequestBuilderStrategy extends AliyunRequestBuilderStrateg
         super(aliyun);
     }
 
+    public void applyUri(AliyunRequestBuilder aliyunRequestBuilder) throws InternalException {
+        URIBuilder uriBuilder = new URIBuilder();
+        String host = aliyunRequestBuilder.category.getHost(this.aliyun);
+        if(!aliyun.isEmpty(aliyunRequestBuilder.subdomain)) {
+            String regionId = aliyun.getContext().getRegionId();
+            if (regionId == null) {
+                throw new InternalException("No region was set for this request");
+            }
+
+            int firstDot = host.indexOf('.');
+            host = aliyunRequestBuilder.subdomain + "." + host.substring(0, firstDot) + "-" + regionId +
+                    host.substring(firstDot);
+        }
+        uriBuilder.setScheme("https").setHost(host).setPath(aliyunRequestBuilder.path);
+        try {
+            aliyunRequestBuilder.requestBuilder.setUri(uriBuilder.build().toString());
+        } catch (URISyntaxException uriSyntaxException) {
+            logger.error("RequestBuilderFactory.build() failed due to URI invalid: " + uriSyntaxException.getMessage());
+            throw new InternalException(uriSyntaxException);
+        }
+    }
+
     private byte[] computeMD5Hash(InputStream is) throws NoSuchAlgorithmException, IOException {
         BufferedInputStream bis = new BufferedInputStream(is);
 
@@ -137,13 +161,19 @@ public class AliyunOssRequestBuilderStrategy extends AliyunRequestBuilderStrateg
         RequestBuilder requestBuilder = aliyunRequestBuilder.requestBuilder;
         StringBuilder stringToSign = new StringBuilder();
         stringToSign.append(requestBuilder.getMethod()).append(NEW_LINE);
-        stringToSign.append(requestBuilder.getFirstHeader(CONTENT_MD5).getValue()).append(NEW_LINE);
-        stringToSign.append(aliyunRequestBuilder.contentType.toString()).append(NEW_LINE);
+        if (requestBuilder.getFirstHeader(CONTENT_MD5) != null) {
+            stringToSign.append(requestBuilder.getFirstHeader(CONTENT_MD5).getValue());
+        }
+        stringToSign.append(NEW_LINE);
+        if(aliyunRequestBuilder.contentType != null) {
+            stringToSign.append(aliyunRequestBuilder.contentType.toString());
+        }
+        stringToSign.append(NEW_LINE);
         stringToSign.append(requestBuilder.getFirstHeader(DATE).getValue()).append(NEW_LINE);
-        stringToSign.append(buildCanonicalizedHeaders(aliyunRequestBuilder)).append(NEW_LINE);
+        stringToSign.append(buildCanonicalizedHeaders(aliyunRequestBuilder));
         stringToSign.append(buildCanonicalizedResource(aliyunRequestBuilder));
 
-        byte[][] accessKey = ( byte[][] ) aliyun.getContext().getConfigurationValue(Aliyun.DSN_ACCESS_KEY);
+        byte[][] accessKey = (byte[][]) aliyun.getContext().getConfigurationValue(Aliyun.DSN_ACCESS_KEY);
 
         byte[] accessKeySecret = accessKey[1];
         String signature = computeSignature(accessKeySecret, stringToSign.toString());
@@ -175,9 +205,6 @@ public class AliyunOssRequestBuilderStrategy extends AliyunRequestBuilderStrateg
             }
             canonicalStringBuilder.append(NEW_LINE);
         }
-        if(sortedKeys.length!=0) {
-            canonicalStringBuilder.deleteCharAt(canonicalStringBuilder.length()-1); //asume NEW_LINE has one char
-        }
         return canonicalStringBuilder.toString();
     }
 
@@ -191,7 +218,10 @@ public class AliyunOssRequestBuilderStrategy extends AliyunRequestBuilderStrateg
         Arrays.sort(sortedKeys);
 
         StringBuilder canonicalStringBuilder = new StringBuilder();
-        canonicalStringBuilder.append('/').append(aliyunRequestBuilder.subdomain).append(aliyunRequestBuilder.path);
+        canonicalStringBuilder.append('/');
+        if (!aliyun.isEmpty(aliyunRequestBuilder.subdomain)) {
+            canonicalStringBuilder.append(aliyunRequestBuilder.subdomain).append(aliyunRequestBuilder.path);
+        }
 
         char separator = '?';
         for(String key : sortedKeys) {

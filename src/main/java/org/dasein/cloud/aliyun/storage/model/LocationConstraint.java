@@ -19,32 +19,30 @@
  *
  */
 
-package org.dasein.cloud.aliyun.util.requester;
+package org.dasein.cloud.aliyun.storage.model;
 
-import org.dasein.cloud.util.requester.CloudResponseException;
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.bind.annotation.XmlValue;
 
 /**
- * Created by Jeffrey Yan on 7/1/2015.
+ * Created by Jeffrey Yan on 7/13/2015.
  *
  * @author Jeffrey Yan
- * @since 2015.05.1
+ * @since 2015.09.1
  */
-public class AliyunResponseException extends CloudResponseException {
-    private String requestId;
-    private String hostId;
+@XmlRootElement(name="LocationConstraint")
+@XmlAccessorType(XmlAccessType.FIELD)
+public class LocationConstraint {
+    @XmlValue
+    private String locationConstraint;
 
-    public AliyunResponseException(int httpCode, String providerCode, String message,
-            String requestId, String hostId) {
-        super(null, httpCode, providerCode, message);
-        this.requestId = requestId;
-        this.hostId = hostId;
+    public String getLocationConstraint() {
+        return locationConstraint;
     }
 
-    public String getRequestId() {
-        return requestId;
-    }
-
-    public String getHostId() {
-        return hostId;
+    public void setLocationConstraint(String locationConstraint) {
+        this.locationConstraint = locationConstraint;
     }
 }

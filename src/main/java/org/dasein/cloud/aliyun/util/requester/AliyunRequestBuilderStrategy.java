@@ -43,8 +43,8 @@ public abstract class AliyunRequestBuilderStrategy {
     static private final Logger logger = Aliyun
             .getStdLogger(AliyunRequestBuilderStrategy.class);
 
-    static protected final String ENCODING = "UTF-8";
-    static protected final String SIGNATURE_ALGORITHM = "HmacSHA1";
+    static public final String ENCODING = "UTF-8";
+    static public final String SIGNATURE_ALGORITHM = "HmacSHA1";
 
     protected Aliyun aliyun;
 
@@ -52,6 +52,7 @@ public abstract class AliyunRequestBuilderStrategy {
         this.aliyun = aliyun;
     }
 
+    public abstract void applyUri(AliyunRequestBuilder aliyunRequestBuilder) throws InternalException;
     public abstract void applyFrameworkParameters(AliyunRequestBuilder aliyunRequestBuilder);
     public abstract void sign(AliyunRequestBuilder aliyunRequestBuilder) throws InternalException;
 

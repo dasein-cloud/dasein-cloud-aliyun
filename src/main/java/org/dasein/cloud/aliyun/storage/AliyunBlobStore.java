@@ -21,16 +21,28 @@
 
 package org.dasein.cloud.aliyun.storage;
 
+import org.apache.commons.codec.binary.Base64;
+import org.apache.http.HttpResponse;
+import org.apache.http.HttpStatus;
+import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.ResponseHandler;
 import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.log4j.Logger;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
+import org.dasein.cloud.OperationNotSupportedException;
 import org.dasein.cloud.aliyun.Aliyun;
+import org.dasein.cloud.aliyun.AliyunException;
+import org.dasein.cloud.aliyun.storage.model.AccessControlPolicy;
 import org.dasein.cloud.aliyun.storage.model.CreateBucketConfiguration;
+import org.dasein.cloud.aliyun.storage.model.ListAllMyBucketsResult;
+import org.dasein.cloud.aliyun.storage.model.ListBucketResult;
+import org.dasein.cloud.aliyun.storage.model.LocationConstraint;
 import org.dasein.cloud.aliyun.util.requester.AliyunHttpClientBuilderFactory;
 import org.dasein.cloud.aliyun.util.requester.AliyunRequestBuilder;
+import org.dasein.cloud.aliyun.util.requester.AliyunRequestBuilderStrategy;
 import org.dasein.cloud.aliyun.util.requester.AliyunRequestExecutor;
+import org.dasein.cloud.aliyun.util.requester.AliyunResponseException;
 import org.dasein.cloud.aliyun.util.requester.AliyunResponseHandler;
 import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.cloud.storage.AbstractBlobStoreSupport;
@@ -45,7 +57,17 @@ import org.dasein.util.uom.storage.Storage;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import javax.xml.bind.DatatypeConverter;
 import java.io.File;
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Created by Jeffrey Yan on 7/7/2015.
@@ -68,6 +90,11 @@ public class AliyunBlobStore extends AbstractBlobStoreSupport<Aliyun> implements
     }
 
     @Override
+    public boolean isSubscribed() throws CloudException, InternalException {
+        return true;
+    }
+
+    @Override
     protected void get(@Nullable String bucket, @Nonnull String object, @Nonnull File toFile,
             @Nullable FileTransfer transfer) throws InternalException, CloudException {
 
@@ -83,6 +110,18 @@ public class AliyunBlobStore extends AbstractBlobStoreSupport<Aliyun> implements
     protected void put(@Nullable String bucketName, @Nonnull String objectName, @Nonnull String content)
             throws InternalException, CloudException {
 
+    }
+
+    private String generateHost(String regionId, String bucket) {
+        return bucket + ".oss-" + regionId + ".aliyuncs.com";
+    }
+
+    private String generateUrl(String regionId, String bucket, String object) {
+        if(object == null) {
+            return "http://" + bucket + ".oss-" + regionId + ".aliyuncs.com";
+        } else {
+            return "http://" + bucket + ".oss-" + regionId + ".aliyuncs.com/" + object;
+        }
     }
 
     @Nonnull
@@ -113,23 +152,106 @@ public class AliyunBlobStore extends AbstractBlobStoreSupport<Aliyun> implements
                 request,
                 responseHandler).execute();
 
-        return Blob.getInstance(regionId, "http://" + bucket + ".oss-" + regionId + ".aliyuncs.com", bucket,
+        return Blob.getInstance(regionId, generateUrl(regionId, bucket, null), bucket,
                 System.currentTimeMillis());
     }
 
     @Override
     public boolean exists(@Nonnull String bucket) throws InternalException, CloudException {
-        return false;
+        HttpUriRequest request = AliyunRequestBuilder.get()
+                .provider(getProvider())
+                .category(AliyunRequestBuilder.Category.OSS)
+                .subdomain(bucket)
+                .parameter("location", null)
+                .build();
+
+        ResponseHandler<LocationConstraint> responseHandler = new AliyunResponseHandler<LocationConstraint>(
+                new XmlStreamToObjectProcessor(),
+                LocationConstraint.class);
+
+        try {
+           new AliyunRequestExecutor<LocationConstraint>(getProvider(),
+                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request, responseHandler).execute();
+           return true;
+        } catch (AliyunException aliyunException) {
+            if (aliyunException.getHttpCode() == HttpStatus.SC_FORBIDDEN) {
+                return true;
+            } else {
+                return false;
+            }
+        }
     }
 
     @Override
     public Blob getBucket(@Nonnull String bucketName) throws InternalException, CloudException {
+        HttpUriRequest request = AliyunRequestBuilder.get()
+                .provider(getProvider())
+                .category(AliyunRequestBuilder.Category.OSS)
+                .build();
+
+        ResponseHandler<ListAllMyBucketsResult> responseHandler = new AliyunResponseHandler<ListAllMyBucketsResult>(
+                new XmlStreamToObjectProcessor(),
+                ListAllMyBucketsResult.class);
+
+        ListAllMyBucketsResult result = new AliyunRequestExecutor<ListAllMyBucketsResult>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                request,
+                responseHandler).execute();
+
+        for (ListAllMyBucketsResult.Bucket bucket : result.getBuckets()) {
+            if (bucket.getName().equals(bucketName)) {
+                String location = bucket.getLocation();
+                String regionId = location.substring(location.indexOf('-') + 1);
+                return Blob.getInstance(regionId, generateUrl(regionId, bucketName, null), bucketName,
+                        bucket.getCreationDate().getTime());
+            }
+        }
         return null;
     }
 
     @Override
     public Blob getObject(@Nullable String bucketName, @Nonnull String objectName)
             throws InternalException, CloudException {
+        String regionId = getContext().getRegionId();
+        if (regionId == null) {
+            throw new InternalException("No region was set for this request");
+        }
+
+        ResponseHandler<ListBucketResult> responseHandler = new AliyunResponseHandler<ListBucketResult>(
+                new XmlStreamToObjectProcessor(),
+                ListBucketResult.class);
+
+        String marker = null;
+        while(true) {
+            HttpUriRequest request = AliyunRequestBuilder.get()
+                    .provider(getProvider())
+                    .category(AliyunRequestBuilder.Category.OSS)
+                    .subdomain(bucketName)
+                    .parameter("marker", marker)
+                    .parameter("prefix", objectName)
+                    .build();
+
+            ListBucketResult result = new AliyunRequestExecutor<ListBucketResult>(getProvider(),
+                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                    request,
+                    responseHandler).execute();
+
+            for (ListBucketResult.Contents contents : result.getContentses()) {
+                if(contents.getKey().equals(objectName)) {
+                    Storage<org.dasein.util.uom.storage.Byte> size = new Storage<org.dasein.util.uom.storage.Byte>(
+                            contents.getSize(), Storage.BYTE);
+                    return Blob.getInstance(regionId, generateUrl(regionId, bucketName, objectName), bucketName, objectName,
+                            contents.getLastModified().getTime(), size);
+                }
+            }
+
+            if (result.isTruncated()) {
+                marker = result.getContentses().get(result.getContentses().size() - 1).getKey();
+            } else {
+                break;
+            }
+        }
+
         return null;
     }
 
@@ -137,40 +259,167 @@ public class AliyunBlobStore extends AbstractBlobStoreSupport<Aliyun> implements
     @Override
     public String getSignedObjectUrl(@Nonnull String bucket, @Nonnull String object,
             @Nonnull String expiresEpochInSeconds) throws InternalException, CloudException {
-        return null;
+        String regionId = getContext().getRegionId();
+        if (regionId == null) {
+            throw new InternalException("No region was set for this request");
+        }
+
+        byte[][] accessKey = (byte[][]) getProvider().getContext().getConfigurationValue(Aliyun.DSN_ACCESS_KEY);
+        byte[] accessKeyId = accessKey[0];
+        byte[] accessKeySecret = accessKey[1];
+
+        try {
+            SecretKeySpec signingKey = new SecretKeySpec(accessKeySecret, AliyunRequestBuilderStrategy.SIGNATURE_ALGORITHM);
+            Mac mac = Mac.getInstance(AliyunRequestBuilderStrategy.SIGNATURE_ALGORITHM);
+            mac.init(signingKey);
+            String data = "GET\n\n\n" + expiresEpochInSeconds + "\n/" + bucket + "/" + object;
+            byte[] rawHmac = mac.doFinal(data.getBytes());
+            String signature = URLEncoder.encode(new String(Base64.encodeBase64(rawHmac)), "UTF-8");
+
+            String signedUrl = generateUrl(regionId, bucket, object) + "?OSSAccessKeyId=" +
+                    new String(accessKeyId) + "&Signature=" + signature + "&Expires=" + expiresEpochInSeconds;
+            return signedUrl;
+        } catch (NoSuchAlgorithmException noSuchAlgorithmException) {
+            stdLogger.error("Failed to create Mac", noSuchAlgorithmException);
+            throw new InternalException("Failed to create Mac", noSuchAlgorithmException);
+        } catch (InvalidKeyException invalidKeyException) {
+            stdLogger.error("Failed to init Mac", invalidKeyException);
+            throw new InternalException("Failed to init Mac", invalidKeyException);
+        } catch (UnsupportedEncodingException unsupportedEncodingException) {
+            stdLogger.error("Failed to encode to UTF-8", unsupportedEncodingException);
+            throw new InternalException("Failed to encode to UTF-8", unsupportedEncodingException);
+        }
     }
 
     @Nullable
     @Override
-    public Storage<Byte> getObjectSize(@Nullable String bucketName, @Nullable String objectName)
+    public Storage<Byte> getObjectSize(@Nullable final String bucketName, @Nullable String objectName)
             throws InternalException, CloudException {
-        return null;
+        final String regionId = getContext().getRegionId();
+        if (regionId == null) {
+            throw new InternalException("No region was set for this request");
+        }
+
+        HttpUriRequest request = AliyunRequestBuilder.head()
+                .provider(getProvider())
+                .category(AliyunRequestBuilder.Category.OSS)
+                .subdomain(bucketName)
+                .path("/" + objectName)
+                .build();
+        ResponseHandler<Storage<Byte>> responseHandler = new ResponseHandler<Storage<Byte>>(){
+            @Override
+            public Storage<Byte> handleResponse(HttpResponse response) throws IOException {
+                int httpCode = response.getStatusLine().getStatusCode();
+                if(httpCode == HttpStatus.SC_OK ) {
+                    Long size = Long.parseLong(response.getFirstHeader("Content-Length").getValue());
+                    return new Storage<org.dasein.util.uom.storage.Byte>(size, Storage.BYTE);
+                } else {
+                    stdLogger.error("Unexpected OK for HEAD request, got " + httpCode);
+                    throw new AliyunResponseException(httpCode, null, null,
+                            response.getFirstHeader("x-oss-request-id").getValue(), generateHost(regionId, bucketName));
+                }
+            }
+        };
+        return new AliyunRequestExecutor<Storage<Byte>>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request, responseHandler).execute();
     }
 
     @Override
     public boolean isPublic(@Nullable String bucket, @Nullable String object) throws CloudException, InternalException {
-        return false;
-    }
+        HttpUriRequest request = AliyunRequestBuilder.get()
+                .provider(getProvider())
+                .category(AliyunRequestBuilder.Category.OSS)
+                .subdomain(bucket)
+                .parameter("acl", null)
+                .build();
 
-    @Override
-    public boolean isSubscribed() throws CloudException, InternalException {
-        return false;
+        ResponseHandler<AccessControlPolicy> responseHandler = new AliyunResponseHandler<AccessControlPolicy>(
+                new XmlStreamToObjectProcessor(),
+                AccessControlPolicy.class);
+
+        AccessControlPolicy result = new AliyunRequestExecutor<AccessControlPolicy>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request, responseHandler).execute();
+
+        String grant = result.getAccessControlList().getGrant();
+        if ("public-read-write".equals(grant) || "public-read".equals(grant)) {
+            return true;
+        } else {
+            return false;
+        }
     }
 
     @Nonnull
     @Override
     public Iterable<Blob> list(@Nullable String bucket) throws CloudException, InternalException {
-        return null;
+        String regionId = getContext().getRegionId();
+        if (regionId == null) {
+            throw new InternalException("No region was set for this request");
+        }
+
+        ResponseHandler<ListBucketResult> responseHandler = new AliyunResponseHandler<ListBucketResult>(
+                new XmlStreamToObjectProcessor(),
+                ListBucketResult.class);
+
+        List<Blob> blobs = new ArrayList<Blob>();
+
+        int maxKeys = 100; //default
+        String marker = null;
+        while(true) {
+            HttpUriRequest request = AliyunRequestBuilder.get()
+                    .provider(getProvider())
+                    .category(AliyunRequestBuilder.Category.OSS)
+                    .subdomain(bucket)
+                    .parameter("marker", marker)
+                    .parameter("max-keys", maxKeys)
+                    .build();
+
+            ListBucketResult result = new AliyunRequestExecutor<ListBucketResult>(getProvider(),
+                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                    request,
+                    responseHandler).execute();
+
+            for (ListBucketResult.Contents contents : result.getContentses()) {
+                String objectName = contents.getKey();
+                Storage<org.dasein.util.uom.storage.Byte> size = new Storage<org.dasein.util.uom.storage.Byte>(
+                        contents.getSize(), Storage.BYTE);
+                blobs.add(Blob.getInstance(regionId, generateUrl(regionId, bucket, objectName), bucket, objectName,
+                        contents.getLastModified().getTime(), size));
+            }
+
+            if (result.isTruncated()) {
+                marker = result.getContentses().get(result.getContentses().size() - 1).getKey();
+            } else {
+                break;
+            }
+        }
+
+        return blobs;
     }
 
     @Override
     public void makePublic(@Nonnull String bucket) throws InternalException, CloudException {
+        HttpUriRequest request = AliyunRequestBuilder.put()
+                .provider(getProvider())
+                .category(AliyunRequestBuilder.Category.OSS)
+                .subdomain(bucket)
+                .parameter("acl", null)
+                .header("x-oss-acl", "public-read")
+                .entity("", new StreamToStringProcessor()) //to force RequestBuilder put parameters in URL
+                .build();
 
+        ResponseHandler<String> responseHandler = new AliyunResponseHandler<String>(
+                new StreamToStringProcessor(),
+                String.class);
+
+        new AliyunRequestExecutor<String>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                request,
+                responseHandler).execute();
     }
 
     @Override
     public void makePublic(@Nullable String bucket, @Nonnull String object) throws InternalException, CloudException {
-
+        throw new OperationNotSupportedException("Cannot make make a single object public");
     }
 
     @Override
