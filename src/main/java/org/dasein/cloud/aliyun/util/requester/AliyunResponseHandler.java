@@ -68,6 +68,10 @@ public class AliyunResponseHandler<T> implements ResponseHandler<T> {
         }
         */
 
+        if(httpCode == HttpStatus.SC_NO_CONTENT) {
+            return null;
+        }
+
         HttpEntity entity = httpResponse.getEntity();
         if (entity == null) {
             throw new IOException();

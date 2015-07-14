@@ -22,6 +22,7 @@
 package org.dasein.cloud.aliyun.util.requester;
 
 import org.apache.http.Consts;
+import org.apache.http.HttpEntity;
 import org.apache.http.NameValuePair;
 import org.apache.http.ProtocolVersion;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
@@ -30,6 +31,7 @@ import org.apache.http.client.methods.RequestBuilder;
 import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.client.utils.URLEncodedUtils;
 import org.apache.http.entity.ContentType;
+import org.apache.http.entity.FileEntity;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.message.BasicHeader;
 import org.apache.http.message.BasicNameValuePair;
@@ -44,6 +46,7 @@ import org.dasein.cloud.util.requester.streamprocessors.StreamToJSONObjectProces
 import org.dasein.cloud.util.requester.streamprocessors.StreamToStringProcessor;
 import org.dasein.cloud.util.requester.streamprocessors.XmlStreamToObjectProcessor;
 
+import java.io.File;
 import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Constructor;
 import java.net.URISyntaxException;
@@ -75,6 +78,7 @@ public class AliyunRequestBuilder {
     protected HeaderGroup headergroup;
     protected Map<String, String> formEntity;
     protected String stringEntity;
+    protected HttpEntity otherEntity;
     protected ContentType contentType;
 
     private boolean clientToken; //TODO, handle resend case by use client token
@@ -173,6 +177,12 @@ public class AliyunRequestBuilder {
         return this;
     }
 
+    public AliyunRequestBuilder entity(File file) {
+        otherEntity = new FileEntity(file, ContentType.APPLICATION_OCTET_STREAM);
+        contentType = ContentType.APPLICATION_OCTET_STREAM;
+        return this;
+    }
+
     public AliyunRequestBuilder clientToken(boolean clientToken) {
         this.clientToken = clientToken;
         return this;
@@ -198,6 +208,10 @@ public class AliyunRequestBuilder {
 
         if (stringEntity != null) {
             requestBuilder.setEntity(new StringEntity(stringEntity, contentType));
+        }
+
+        if(otherEntity != null) {
+            requestBuilder.setEntity(otherEntity);
         }
 
         AliyunRequestBuilderStrategy requestBuilderStrategy = category.getRequestBuilderStrategy(aliyun);

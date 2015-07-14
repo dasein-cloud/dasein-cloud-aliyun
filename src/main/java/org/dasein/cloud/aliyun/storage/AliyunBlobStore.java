@@ -24,7 +24,6 @@ package org.dasein.cloud.aliyun.storage;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
-import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.ResponseHandler;
 import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.log4j.Logger;
@@ -34,7 +33,12 @@ import org.dasein.cloud.OperationNotSupportedException;
 import org.dasein.cloud.aliyun.Aliyun;
 import org.dasein.cloud.aliyun.AliyunException;
 import org.dasein.cloud.aliyun.storage.model.AccessControlPolicy;
+import org.dasein.cloud.aliyun.storage.model.CompleteMultipartUpload;
+import org.dasein.cloud.aliyun.storage.model.CompleteMultipartUploadResult;
+import org.dasein.cloud.aliyun.storage.model.CopyObjectResult;
+import org.dasein.cloud.aliyun.storage.model.CopyPartResult;
 import org.dasein.cloud.aliyun.storage.model.CreateBucketConfiguration;
+import org.dasein.cloud.aliyun.storage.model.InitiateMultipartUploadResult;
 import org.dasein.cloud.aliyun.storage.model.ListAllMyBucketsResult;
 import org.dasein.cloud.aliyun.storage.model.ListBucketResult;
 import org.dasein.cloud.aliyun.storage.model.LocationConstraint;
@@ -44,24 +48,29 @@ import org.dasein.cloud.aliyun.util.requester.AliyunRequestBuilderStrategy;
 import org.dasein.cloud.aliyun.util.requester.AliyunRequestExecutor;
 import org.dasein.cloud.aliyun.util.requester.AliyunResponseException;
 import org.dasein.cloud.aliyun.util.requester.AliyunResponseHandler;
+import org.dasein.cloud.aliyun.util.requester.AliyunValidateEmptyResponseHandler;
 import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.cloud.storage.AbstractBlobStoreSupport;
 import org.dasein.cloud.storage.Blob;
 import org.dasein.cloud.storage.BlobStoreCapabilities;
 import org.dasein.cloud.storage.BlobStoreSupport;
 import org.dasein.cloud.storage.FileTransfer;
+import org.dasein.cloud.util.APITrace;
 import org.dasein.cloud.util.requester.streamprocessors.StreamToStringProcessor;
 import org.dasein.cloud.util.requester.streamprocessors.XmlStreamToObjectProcessor;
 import org.dasein.util.uom.storage.Byte;
+import org.dasein.util.uom.storage.Megabyte;
 import org.dasein.util.uom.storage.Storage;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
-import javax.xml.bind.DatatypeConverter;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.security.InvalidKeyException;
@@ -79,6 +88,9 @@ public class AliyunBlobStore extends AbstractBlobStoreSupport<Aliyun> implements
 
     static private final Logger stdLogger = Aliyun.getStdLogger(AliyunBlobStore.class);
 
+    static private final double MULTIPART_UPLOAD_COPY_THRESHOLD_IN_GB = 1.0;
+    static private final double MULTIPART_UPLOAD_COPY_PART_SIZE_IN_MB = 500.0;
+
     protected AliyunBlobStore(Aliyun provider) {
         super(provider);
     }
@@ -95,21 +107,82 @@ public class AliyunBlobStore extends AbstractBlobStoreSupport<Aliyun> implements
     }
 
     @Override
-    protected void get(@Nullable String bucket, @Nonnull String object, @Nonnull File toFile,
-            @Nullable FileTransfer transfer) throws InternalException, CloudException {
+    protected void get(@Nullable final String bucket, @Nonnull String object, @Nonnull File toFile,
+            @Nullable final FileTransfer transfer) throws InternalException, CloudException {
+        final String regionId = getContext().getRegionId();
+        if (regionId == null) {
+            throw new InternalException("No region was set for this request");
+        }
 
+        final FileOutputStream fileOutputStream;
+        try {
+            fileOutputStream = new FileOutputStream(toFile);
+        } catch (FileNotFoundException fileNotFoundException) {
+            stdLogger.error(fileNotFoundException);
+            throw new InternalException(fileNotFoundException);
+        }
+
+        HttpUriRequest request = AliyunRequestBuilder.get()
+                .provider(getProvider())
+                .category(AliyunRequestBuilder.Category.OSS)
+                .subdomain(bucket)
+                .path("/" + object)
+                .build();
+
+        ResponseHandler<Void> responseHandler = new ResponseHandler<Void>(){
+            @Override
+            public Void handleResponse(HttpResponse response) throws IOException {
+                int httpCode = response.getStatusLine().getStatusCode();
+                if(httpCode == HttpStatus.SC_OK ) {
+                    InputStream inputStream = response.getEntity().getContent();
+                    copy(inputStream, fileOutputStream, transfer);
+                    return null;
+                } else {
+                    stdLogger.error("Unexpected OK for HEAD request, got " + httpCode);
+                    throw new AliyunResponseException(httpCode, null, null,
+                            response.getFirstHeader("x-oss-request-id").getValue(), generateHost(regionId, bucket));
+                }
+            }
+        };
+
+        new AliyunRequestExecutor<Void>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                request,
+                responseHandler).execute();
     }
 
     @Override
     protected void put(@Nullable String bucket, @Nonnull String objectName, @Nonnull File file)
             throws InternalException, CloudException {
+        HttpUriRequest request = AliyunRequestBuilder.put()
+                .provider(getProvider())
+                .category(AliyunRequestBuilder.Category.OSS)
+                .subdomain(bucket)
+                .path("/" + objectName)
+                .entity(file)
+                .build();
 
+        new AliyunRequestExecutor<String>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                request,
+                new AliyunValidateEmptyResponseHandler()).execute();
     }
 
     @Override
     protected void put(@Nullable String bucketName, @Nonnull String objectName, @Nonnull String content)
             throws InternalException, CloudException {
+        HttpUriRequest request = AliyunRequestBuilder.put()
+                .provider(getProvider())
+                .category(AliyunRequestBuilder.Category.OSS)
+                .subdomain(bucketName)
+                .path("/" + objectName)
+                .entity(content, new StreamToStringProcessor())
+                .build();
 
+        new AliyunRequestExecutor<String>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                request,
+                new AliyunValidateEmptyResponseHandler()).execute();
     }
 
     private String generateHost(String regionId, String bucket) {
@@ -295,6 +368,8 @@ public class AliyunBlobStore extends AbstractBlobStoreSupport<Aliyun> implements
     @Override
     public Storage<Byte> getObjectSize(@Nullable final String bucketName, @Nullable String objectName)
             throws InternalException, CloudException {
+        return getObject(bucketName, objectName).getSize();
+        /*
         final String regionId = getContext().getRegionId();
         if (regionId == null) {
             throw new InternalException("No region was set for this request");
@@ -322,6 +397,7 @@ public class AliyunBlobStore extends AbstractBlobStoreSupport<Aliyun> implements
         };
         return new AliyunRequestExecutor<Storage<Byte>>(getProvider(),
                 AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request, responseHandler).execute();
+        */
     }
 
     @Override
@@ -407,14 +483,10 @@ public class AliyunBlobStore extends AbstractBlobStoreSupport<Aliyun> implements
                 .entity("", new StreamToStringProcessor()) //to force RequestBuilder put parameters in URL
                 .build();
 
-        ResponseHandler<String> responseHandler = new AliyunResponseHandler<String>(
-                new StreamToStringProcessor(),
-                String.class);
-
         new AliyunRequestExecutor<String>(getProvider(),
                 AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
                 request,
-                responseHandler).execute();
+                new AliyunValidateEmptyResponseHandler()).execute();
     }
 
     @Override
@@ -425,37 +497,223 @@ public class AliyunBlobStore extends AbstractBlobStoreSupport<Aliyun> implements
     @Override
     public void move(@Nullable String fromBucket, @Nullable String objectName, @Nullable String toBucket)
             throws InternalException, CloudException {
-
+        APITrace.begin(getProvider(), "Blob.move");
+        try {
+            if( fromBucket == null ) {
+                throw new InternalException("No source bucket was specified");
+            }
+            if( toBucket == null ) {
+                throw new InternalException("No target bucket was specified");
+            }
+            if( objectName == null ) {
+                throw new InternalException("No source object was specified");
+            }
+            copy(fromBucket, objectName, toBucket, objectName);
+            removeObject(fromBucket, objectName);
+        } finally {
+            APITrace.end();
+        }
     }
 
     @Override
     public void removeBucket(@Nonnull String bucket) throws CloudException, InternalException {
+        HttpUriRequest request = AliyunRequestBuilder.delete()
+                .provider(getProvider())
+                .category(AliyunRequestBuilder.Category.OSS)
+                .subdomain(bucket)
+                .build();
 
+        new AliyunRequestExecutor<String>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                request,
+                new AliyunValidateEmptyResponseHandler()).execute();
     }
 
     @Override
     public void removeObject(@Nullable String bucket, @Nonnull String object) throws CloudException, InternalException {
+        HttpUriRequest request = AliyunRequestBuilder.delete()
+                .provider(getProvider())
+                .category(AliyunRequestBuilder.Category.OSS)
+                .subdomain(bucket)
+                .path("/" + object)
+                .build();
 
+        new AliyunRequestExecutor<String>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                request,
+                new AliyunValidateEmptyResponseHandler()).execute();
     }
 
     @Nonnull
     @Override
     public String renameBucket(@Nonnull String oldName, @Nonnull String newName, boolean findFreeName)
             throws CloudException, InternalException {
-        return null;
+        APITrace.begin(getProvider(), "Blob.renameBucket");
+        try {
+            Blob bucket = createBucket(newName, findFreeName);
+
+            for (Blob file : list(oldName)) {
+                int retries = 10;
+
+                while (true) {
+                    retries--;
+                    try {
+                        move(oldName, file.getObjectName(), bucket.getBucketName());
+                        break;
+                    } catch (CloudException e) {
+                        if (retries < 1) {
+                            throw e;
+                        }
+                    }
+                    try {
+                        Thread.sleep(retries * 10000L);
+                    } catch (InterruptedException ignore) {
+                    }
+                }
+            }
+            boolean ok = true;
+            for (Blob file : list(oldName)) {
+                if (file != null) {
+                    ok = false;
+                }
+            }
+            if (ok) {
+                removeBucket(oldName);
+            }
+            return newName;
+        } finally {
+            APITrace.end();
+        }
+    }
+
+    private InitiateMultipartUploadResult initiateMultipartUpload(String bucket, String target)
+            throws InternalException, CloudException {
+        HttpUriRequest request = AliyunRequestBuilder.post()
+                .provider(getProvider())
+                .category(AliyunRequestBuilder.Category.OSS)
+                .subdomain(bucket)
+                .path("/" + target)
+                .parameter("uploads", null)
+                .entity("", new StreamToStringProcessor()) //to force RequestBuilder put parameters in URL
+                .build();
+
+        ResponseHandler<InitiateMultipartUploadResult> responseHandler = new AliyunResponseHandler<InitiateMultipartUploadResult>(
+                new XmlStreamToObjectProcessor(),
+                InitiateMultipartUploadResult.class);
+
+        return new AliyunRequestExecutor<InitiateMultipartUploadResult>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request, responseHandler).execute();
+    }
+
+    private CompleteMultipartUpload.Part copyMultipartUpload(InitiateMultipartUploadResult initiateMultipartUploadResult,
+            String source, long firstByte, long lastByte, int partNumber) throws InternalException, CloudException {
+        String bucket = initiateMultipartUploadResult.getBucket();
+        String target = initiateMultipartUploadResult.getKey();
+        String uploadId = initiateMultipartUploadResult.getUploadId();
+
+        HttpUriRequest request = AliyunRequestBuilder.put()
+                .provider(getProvider())
+                .category(AliyunRequestBuilder.Category.OSS)
+                .subdomain(bucket)
+                .path("/" + target)
+                .parameter("partNumber", partNumber)
+                .parameter("uploadId", uploadId)
+                .header("x-oss-copy-source", "/" + bucket + "/" + source)
+                .header("x-oss-copy-source-range", "bytes=" + firstByte + "-" + lastByte)
+                .entity("", new StreamToStringProcessor()) //to force RequestBuilder put parameters in URL
+                .build();
+
+        ResponseHandler<CopyPartResult> responseHandler = new AliyunResponseHandler<CopyPartResult>(
+                new XmlStreamToObjectProcessor(),
+                CopyPartResult.class);
+
+        CopyPartResult copyObjectResult = new AliyunRequestExecutor<CopyPartResult>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request, responseHandler).execute();
+
+        CompleteMultipartUpload.Part part = new CompleteMultipartUpload.Part();
+        part.setETag(copyObjectResult.getETag());
+        part.setPartNumber(partNumber);
+        return part;
+    }
+
+    private CompleteMultipartUploadResult completeMultipartUpload(String bucket, String target, String uploadId,
+            CompleteMultipartUpload completeMultipartUpload) throws InternalException, CloudException {
+        HttpUriRequest request = AliyunRequestBuilder.post()
+                .provider(getProvider())
+                .category(AliyunRequestBuilder.Category.OSS)
+                .subdomain(bucket)
+                .path("/" + target)
+                .parameter("uploadId", uploadId)
+                .entity(completeMultipartUpload, new XmlStreamToObjectProcessor<CompleteMultipartUpload>())
+                .build();
+
+        ResponseHandler<CompleteMultipartUploadResult> responseHandler = new AliyunResponseHandler<CompleteMultipartUploadResult>(
+                new XmlStreamToObjectProcessor(),
+                CompleteMultipartUploadResult.class);
+
+        return new AliyunRequestExecutor<CompleteMultipartUploadResult>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request, responseHandler).execute();
     }
 
     @Override
     public void renameObject(@Nullable String bucket, @Nonnull String oldName, @Nonnull String newName)
             throws CloudException, InternalException {
+        Storage<Byte> size = getObjectSize(bucket, oldName);
+        if (size.convertTo(Storage.GIGABYTE).doubleValue() < MULTIPART_UPLOAD_COPY_THRESHOLD_IN_GB) {
+            HttpUriRequest request = AliyunRequestBuilder.put()
+                    .provider(getProvider())
+                    .category(AliyunRequestBuilder.Category.OSS)
+                    .subdomain(bucket)
+                    .path("/" + newName)
+                    .header("x-oss-copy-source", "/" + bucket + "/" + oldName)
+                    .entity("", new StreamToStringProcessor()) //to force RequestBuilder put parameters in URL
+                    .build();
 
+            ResponseHandler<CopyObjectResult> responseHandler = new AliyunResponseHandler<CopyObjectResult>(
+                    new XmlStreamToObjectProcessor(),
+                    CopyObjectResult.class);
+
+            new AliyunRequestExecutor<CopyObjectResult>(getProvider(),
+                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                    request,
+                    responseHandler).execute();
+        } else {
+            long partSize = new Storage<Megabyte>(MULTIPART_UPLOAD_COPY_PART_SIZE_IN_MB, Storage.MEGABYTE)
+                    .convertTo(Storage.BYTE).longValue();
+            List<CompleteMultipartUpload.Part> parts = new ArrayList<CompleteMultipartUpload.Part>();
+
+            InitiateMultipartUploadResult initiateMultipartUploadResult = initiateMultipartUpload(bucket, newName);
+            int partNumber = 1;
+            long firstByte = 0;
+            long lastByte = partSize;
+            while(true) {
+                parts.add(copyMultipartUpload(initiateMultipartUploadResult, oldName, firstByte, lastByte, partNumber));
+                firstByte = lastByte + 1;
+                if(firstByte >= size.longValue()) {
+                    break;
+                }
+
+                lastByte = firstByte + partSize;
+                if (lastByte >= size.longValue()) {
+                    lastByte = size.longValue() - 1;
+                }
+
+                partNumber = partNumber + 1;
+            }
+
+            CompleteMultipartUpload completeMultipartUpload = new CompleteMultipartUpload();
+            completeMultipartUpload.setParts(parts);
+            completeMultipartUpload(bucket, newName, initiateMultipartUploadResult.getUploadId(), completeMultipartUpload);
+        }
+        removeObject(bucket, oldName);
     }
 
     @Nonnull
     @Override
     public Blob upload(@Nonnull File sourceFile, @Nullable String bucket, @Nonnull String objectName)
             throws CloudException, InternalException {
-        return null;
+        put(bucket, objectName, sourceFile);
+        return getObject(bucket, objectName);
     }
 
     @Nonnull
