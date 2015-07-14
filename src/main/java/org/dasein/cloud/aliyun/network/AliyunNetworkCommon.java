@@ -139,13 +139,6 @@ public class AliyunNetworkCommon {
 	}
 	
 	public static enum RequestMethod { GET, POST, DELETE, PUT }
-
-//	public static void executeDefaultRequest(Aliyun provider,
-//			Map<String, Object> params, AliyunRequestBuilder.Category category,
-//			String action) throws InternalException, CloudException {
-//		executeDefaultRequest(provider, params, category, action, RequestMethod.POST, 
-//				false, new AliyunValidateJsonResponseHandler(provider));
-//	}
 	
 	public static <V> V executeDefaultRequest(Aliyun provider, Map<String, Object> params, 
 			AliyunRequestBuilder.Category category, String action, RequestMethod requestMethod, 
