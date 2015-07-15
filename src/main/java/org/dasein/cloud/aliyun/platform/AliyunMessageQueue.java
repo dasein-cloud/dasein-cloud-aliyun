@@ -6,7 +6,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 
-import org.apache.http.Header;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.ResponseHandler;
@@ -247,7 +246,7 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> {
 			HttpUriRequest request = builder.build();
 	
 			ResponseHandler<Message> responseHandler = new AliyunResponseHandler<Message>(
-					new XmlStreamToObjectProcessor(),
+					new XmlStreamToObjectProcessor<Message>(),
 					Message.class);
 			
 			Message recievedMessage = new AliyunRequestExecutor<Message>(getProvider(),
@@ -284,7 +283,7 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> {
                 .build();
 		
 		ResponseHandler<Message> responseHandler = new AliyunResponseHandler<Message>(
-				new XmlStreamToObjectProcessor(),
+				new XmlStreamToObjectProcessor<Message>(),
 				Message.class);
 		
 		Message recievedMessage = new AliyunRequestExecutor<Message>(getProvider(),
