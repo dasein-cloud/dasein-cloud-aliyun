@@ -39,6 +39,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Collection;
 import java.util.Date;
+import java.util.Locale;
 import java.util.Map;
 import java.util.SimpleTimeZone;
 
@@ -53,6 +54,7 @@ public class Aliyun extends AbstractCloud {
     static private Logger stdLogger = Aliyun.getStdLogger(Aliyun.class);
 
     static private final String ISO8601_DATE_FORMAT = "yyyy-MM-dd'T'HH:mm:ss'Z'";
+    static private final String RFC822_DATE_FORMAT = "EEE, dd MMM yyyy HH:mm:ss z";
     static public final String DSN_ACCESS_KEY = "accessKey";
 
     static private @Nonnull String getLastItem(@Nonnull String name) {
@@ -174,6 +176,12 @@ public class Aliyun extends AbstractCloud {
         } catch (ParseException parseException) {
             throw new InternalException("Could not parse date: " + date);
         }
+    }
+
+    public String formatRfc822Date(Date date) {
+        SimpleDateFormat rfc822DateFormat = new SimpleDateFormat(RFC822_DATE_FORMAT, Locale.US);
+        rfc822DateFormat.setTimeZone(new SimpleTimeZone(0, "GMT"));
+        return rfc822DateFormat.format(date);
     }
 
     public boolean isEmpty(CharSequence cs) {

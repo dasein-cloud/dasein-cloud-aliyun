@@ -21,23 +21,33 @@
 
 package org.dasein.cloud.aliyun.util.requester;
 
+import org.apache.http.Consts;
+import org.apache.http.HttpEntity;
 import org.apache.http.NameValuePair;
 import org.apache.http.ProtocolVersion;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.client.methods.RequestBuilder;
-import org.apache.http.client.utils.URIBuilder;
+import org.apache.http.client.utils.URLEncodedUtils;
 import org.apache.http.entity.ContentType;
+import org.apache.http.entity.FileEntity;
 import org.apache.http.entity.StringEntity;
+import org.apache.http.message.BasicHeader;
 import org.apache.http.message.BasicNameValuePair;
+import org.apache.http.message.HeaderGroup;
 import org.apache.log4j.Logger;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.aliyun.Aliyun;
+import org.dasein.cloud.util.requester.streamprocessors.JsonStreamToObjectProcessor;
 import org.dasein.cloud.util.requester.streamprocessors.StreamProcessor;
+import org.dasein.cloud.util.requester.streamprocessors.StreamToDocumentProcessor;
+import org.dasein.cloud.util.requester.streamprocessors.StreamToJSONObjectProcessor;
+import org.dasein.cloud.util.requester.streamprocessors.StreamToStringProcessor;
+import org.dasein.cloud.util.requester.streamprocessors.XmlStreamToObjectProcessor;
 
+import java.io.File;
 import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Constructor;
-import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -56,20 +66,30 @@ public class AliyunRequestBuilder {
 
     static protected final String ENCODING = "UTF-8";
 
-    private Aliyun aliyun;
     protected RequestBuilder requestBuilder;
 
-    private Category category;
+    protected Aliyun aliyun;
+    protected String subdomain;
+    protected String path;
+    protected Category category;
 
+    protected HeaderGroup headergroup;
     protected Map<String, String> formEntity;
-
-    private String stringEntity;
-    private ContentType stringContentType;
+    protected String stringEntity;
+    protected HttpEntity otherEntity;
+    protected ContentType contentType;
 
     private boolean clientToken; //TODO, handle resend case by use client token
 
+
     private AliyunRequestBuilder(RequestBuilder requestBuilder) {
         this.requestBuilder = requestBuilder;
+        this.headergroup = new HeaderGroup();
+        this.path = "/";
+    }
+
+    public static AliyunRequestBuilder head() {
+        return new AliyunRequestBuilder(RequestBuilder.head());
     }
 
     public static AliyunRequestBuilder get() {
@@ -98,13 +118,26 @@ public class AliyunRequestBuilder {
         return this;
     }
 
+    public AliyunRequestBuilder subdomain(String subdomain) {
+        this.subdomain = subdomain;
+        return this;
+    }
+
+    public AliyunRequestBuilder path(String path) {
+        this.path = path;
+        return this;
+    }
+
     public AliyunRequestBuilder header(final String name, final String value) {
         requestBuilder.addHeader(name, value);
+        headergroup.addHeader(new BasicHeader(name, value));
         return this;
     }
 
     private String asString(Object value) {
-        if (value instanceof Date) {
+        if (value == null) {
+            return null;
+        } else if (value instanceof Date) {
             return aliyun.formatIso8601Date((Date) value);
         } else {
             return value.toString();
@@ -126,11 +159,25 @@ public class AliyunRequestBuilder {
         return this;
     }
 
-    public <T> AliyunRequestBuilder entity(T object, StreamProcessor<T> streamProcessor, ContentType contentType) {
+    public <T> AliyunRequestBuilder entity(T object, StreamProcessor<T> streamProcessor) {
         stringEntity = streamProcessor.write(object);
-        stringContentType = contentType;
+        if (streamProcessor instanceof StreamToDocumentProcessor
+                || streamProcessor instanceof XmlStreamToObjectProcessor) {
+            contentType = ContentType.create("application/xml", Consts.UTF_8);
+        } else if(streamProcessor instanceof JsonStreamToObjectProcessor
+                || streamProcessor instanceof StreamToJSONObjectProcessor) {
+            contentType = ContentType.APPLICATION_JSON;
+        } else if(streamProcessor instanceof StreamToStringProcessor) {
+            contentType = ContentType.create("text/plain", Consts.UTF_8);
+        }
 
         formEntity = null;
+        return this;
+    }
+
+    public AliyunRequestBuilder entity(File file) {
+        otherEntity = new FileEntity(file, ContentType.APPLICATION_OCTET_STREAM);
+        contentType = ContentType.APPLICATION_OCTET_STREAM;
         return this;
     }
 
@@ -142,18 +189,6 @@ public class AliyunRequestBuilder {
     public HttpUriRequest build() throws InternalException {
         requestBuilder.setVersion(new ProtocolVersion("HTTP", 1, 1));
 
-        URIBuilder uriBuilder = new URIBuilder();
-        uriBuilder.setScheme("https").setHost(category.getHost(this.aliyun)).setPath("/");
-        try {
-            requestBuilder.setUri(uriBuilder.build().toString());
-        } catch (URISyntaxException uriSyntaxException) {
-            logger.error("RequestBuilderFactory.build() failed due to URI invalid: " + uriSyntaxException.getMessage());
-            throw new InternalException(uriSyntaxException);
-        }
-        AliyunRequestBuilderStrategy requestBuilderStrategy = category.getRequestBuilderStrategy(aliyun);
-        requestBuilderStrategy.applyFrameworkParameters(this);
-        requestBuilderStrategy.sign(this);
-
         if (formEntity != null) {
             List<NameValuePair> params = new ArrayList<NameValuePair>();
             for( Map.Entry<String, String> entry : formEntity.entrySet() ) {
@@ -161,6 +196,7 @@ public class AliyunRequestBuilder {
             }
             try {
                 requestBuilder.setEntity(new UrlEncodedFormEntity(params, ENCODING));
+                contentType = ContentType.create(URLEncodedUtils.CONTENT_TYPE, ENCODING);
             } catch (UnsupportedEncodingException unsupportedEncodingException) {
                 logger.error("AliyunRequestBuilder.build() failed due to encoding not supported: "
                         + unsupportedEncodingException.getMessage());
@@ -169,8 +205,17 @@ public class AliyunRequestBuilder {
         }
 
         if (stringEntity != null) {
-            requestBuilder.setEntity(new StringEntity(stringEntity, stringContentType));
+            requestBuilder.setEntity(new StringEntity(stringEntity, contentType));
         }
+
+        if(otherEntity != null) {
+            requestBuilder.setEntity(otherEntity);
+        }
+
+        AliyunRequestBuilderStrategy requestBuilderStrategy = category.getRequestBuilderStrategy(aliyun);
+        requestBuilderStrategy.applyUri(this);
+        requestBuilderStrategy.applyFrameworkParameters(this);
+        requestBuilderStrategy.sign(this);
 
         return requestBuilder.build();
     }
@@ -179,8 +224,8 @@ public class AliyunRequestBuilder {
         ECS("ecs", "Elastic Compute Service", AliyunEcsRequestBuilderStrategy.class),
         SLB("slb", "Server Load Balancer", AliyunSlbRequestBuilderStrategy.class),
         RDS("rds", "Relational Database Service", AliyunRdsRequestBuilderStrategy.class),
-        OSS("oss", "Open Storage Service", AliyunEcsRequestBuilderStrategy.class),
-        SLS("sls", "Simple Log Service", AliyunEcsRequestBuilderStrategy.class);
+        OSS("oss", "Open Storage Service", AliyunOssRequestBuilderStrategy.class),
+        MQS("mqs", "Message Queue Service", AliyunOssRequestBuilderStrategy.class);
 
         private String host;
         private String name;
@@ -194,6 +239,8 @@ public class AliyunRequestBuilder {
 
         public String getHost(Aliyun aliyun) {
             String endpoint = ".aliyuncs.com";
+            return host + endpoint;
+
             //ignore config one, use hardcode URL
             /*
             ProviderContext context = aliyun.getContext();
@@ -207,7 +254,6 @@ public class AliyunRequestBuilder {
                 }
             }
             */
-            return host + endpoint;
         }
 
         public AliyunRequestBuilderStrategy getRequestBuilderStrategy(Aliyun aliyun) throws InternalException {

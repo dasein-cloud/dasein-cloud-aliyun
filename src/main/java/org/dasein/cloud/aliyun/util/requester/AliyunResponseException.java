@@ -33,7 +33,7 @@ public class AliyunResponseException extends CloudResponseException {
     private String requestId;
     private String hostId;
 
-    protected AliyunResponseException(int httpCode, String providerCode, String message,
+    public AliyunResponseException(int httpCode, String providerCode, String message,
             String requestId, String hostId) {
         super(null, httpCode, providerCode, message);
         this.requestId = requestId;

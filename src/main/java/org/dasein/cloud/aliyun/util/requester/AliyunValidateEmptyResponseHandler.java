@@ -19,28 +19,18 @@
  *
  */
 
-package org.dasein.cloud.aliyun.storage;
+package org.dasein.cloud.aliyun.util.requester;
 
-import org.dasein.cloud.aliyun.Aliyun;
-import org.dasein.cloud.storage.AbstractStorageServices;
-import org.dasein.cloud.storage.BlobStoreSupport;
-import org.dasein.cloud.storage.StorageServices;
-
-import javax.annotation.Nullable;
+import org.dasein.cloud.util.requester.streamprocessors.StreamToStringProcessor;
 
 /**
- * Created by Jeffrey Yan on 7/7/2015.
+ * Created by Jeffrey Yan on 7/14/2015.
  *
  * @author Jeffrey Yan
  * @since 2015.09.1
  */
-public class AliyunStorage extends AbstractStorageServices<Aliyun> implements StorageServices{
-    public AliyunStorage(Aliyun provider) {
-        super(provider);
-    }
-
-    @Override
-    public @Nullable BlobStoreSupport getOnlineStorageSupport() {
-        return new AliyunBlobStore(getProvider());
+public class AliyunValidateEmptyResponseHandler extends AliyunResponseHandler<String> {
+    public AliyunValidateEmptyResponseHandler() {
+        super(new StreamToStringProcessor(), String.class);
     }
 }

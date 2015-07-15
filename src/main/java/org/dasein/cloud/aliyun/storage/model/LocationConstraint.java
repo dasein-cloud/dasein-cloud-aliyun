@@ -19,28 +19,30 @@
  *
  */
 
-package org.dasein.cloud.aliyun.storage;
+package org.dasein.cloud.aliyun.storage.model;
 
-import org.dasein.cloud.aliyun.Aliyun;
-import org.dasein.cloud.storage.AbstractStorageServices;
-import org.dasein.cloud.storage.BlobStoreSupport;
-import org.dasein.cloud.storage.StorageServices;
-
-import javax.annotation.Nullable;
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.bind.annotation.XmlValue;
 
 /**
- * Created by Jeffrey Yan on 7/7/2015.
+ * Created by Jeffrey Yan on 7/13/2015.
  *
  * @author Jeffrey Yan
  * @since 2015.09.1
  */
-public class AliyunStorage extends AbstractStorageServices<Aliyun> implements StorageServices{
-    public AliyunStorage(Aliyun provider) {
-        super(provider);
+@XmlRootElement(name="LocationConstraint")
+@XmlAccessorType(XmlAccessType.FIELD)
+public class LocationConstraint {
+    @XmlValue
+    private String locationConstraint;
+
+    public String getLocationConstraint() {
+        return locationConstraint;
     }
 
-    @Override
-    public @Nullable BlobStoreSupport getOnlineStorageSupport() {
-        return new AliyunBlobStore(getProvider());
+    public void setLocationConstraint(String locationConstraint) {
+        this.locationConstraint = locationConstraint;
     }
 }

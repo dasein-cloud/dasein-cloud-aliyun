@@ -62,7 +62,13 @@ public class AliyunResponseHandler<T> implements ResponseHandler<T> {
 
         stdLogger.debug("HTTP STATUS: " + httpCode);
 
+        /*
         if( httpCode == HttpStatus.SC_NOT_FOUND || httpCode == HttpStatus.SC_GONE ) {
+            return null;
+        }
+        */
+
+        if(httpCode == HttpStatus.SC_NO_CONTENT) {
             return null;
         }
 
@@ -72,7 +78,7 @@ public class AliyunResponseHandler<T> implements ResponseHandler<T> {
         }
 
         if (httpCode < HttpStatus.SC_OK || httpCode >= HttpStatus.SC_MULTIPLE_CHOICES) {
-            stdLogger.error("Unexpected OK for GET request, got " + httpCode);
+            stdLogger.error("Unexpected OK for request, got " + httpCode);
             throw extractException(httpCode, entity);
         } else {
             return processor.read(httpResponse.getEntity().getContent(), classType);

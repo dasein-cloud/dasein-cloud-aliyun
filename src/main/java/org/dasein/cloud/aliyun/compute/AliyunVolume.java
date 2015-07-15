@@ -178,7 +178,7 @@ public class AliyunVolume extends AbstractVolumeSupport<Aliyun> implements Volum
                         try {
                             totalCount.set(json.getInt("TotalCount"));
 
-                            JSONArray volumesJson = json.getJSONObject("Images").getJSONArray("Image");
+                            JSONArray volumesJson = json.getJSONObject("Disks").getJSONArray("Disk");
                             for (int i = 0; i < volumesJson.length(); i++) {
                                 JSONObject volumeJson = volumesJson.getJSONObject(i);
                                 Volume volume = toVolume(volumeJson);
