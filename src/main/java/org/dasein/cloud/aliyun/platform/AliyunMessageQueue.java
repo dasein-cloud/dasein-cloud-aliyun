@@ -16,6 +16,7 @@ import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.ResourceStatus;
 import org.dasein.cloud.aliyun.Aliyun;
+import org.dasein.cloud.aliyun.platform.model.Message;
 import org.dasein.cloud.aliyun.platform.model.Queue;
 import org.dasein.cloud.aliyun.platform.model.Queues;
 import org.dasein.cloud.aliyun.util.requester.AliyunHttpClientBuilderFactory;
@@ -145,13 +146,6 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> {
 		return statuses;
 	}
 
-	@Override
-	public MQMessageReceipt receiveMessage(String mqId) throws CloudException,
-			InternalException {
-		// TODO Auto-generated method stub
-		return super.receiveMessage(mqId);
-	}
-
 	/**
 	 * delete message queue by name and also delete all the messages in the queue.
 	 * @param mqId message queue id
@@ -231,6 +225,80 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> {
 
 		return messageQueues;
 	}
+
+	@Override
+	public Iterable<MQMessageReceipt> receiveMessages(String mqId,
+			TimePeriod<Second> waitTime, int count,
+			TimePeriod<Second> visibilityTimeout) throws CloudException,
+			InternalException {
+		
+		List<MQMessageReceipt> receipts = new ArrayList<MQMessageReceipt>();
+		
+		//recieve message
+		for (int i = 0; i < count; i++) {
+			
+			AliyunRequestBuilder builder = AliyunRequestBuilder.post()
+	                .provider(getProvider())
+	                .category(AliyunRequestBuilder.Category.MQS)
+	                .path("/" + mqId + "/messages");
+			if (waitTime != null) {
+				builder = builder.parameter("waitseconds", waitTime.intValue());
+			}
+			HttpUriRequest request = builder.build();
+	
+			ResponseHandler<Message> responseHandler = new AliyunResponseHandler<Message>(
+					new XmlStreamToObjectProcessor(),
+					Message.class);
+			
+			Message recievedMessage = new AliyunRequestExecutor<Message>(getProvider(),
+	                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+	                request,
+	                responseHandler).execute();
+			
+			receipts.add(MQMessageReceipt.getInstance(
+					new MQMessageIdentifier(recievedMessage.getMessageId(), recievedMessage.getMessageBodyMD5()),
+					recievedMessage.getReceiptHandle(), 
+					recievedMessage.getMessageBody(), 
+					recievedMessage.getEnqueueTime().getTime(), 
+					recievedMessage.getDequeueCount(), 
+					recievedMessage.getFirstDequeueTime().getTime()));
+		}
+		
+		//TODO check if delete message from queue is needed!
+
+		return receipts;
+	}
+
+	@Override
+	public MQMessageIdentifier sendMessage(String mqId, String message)
+			throws CloudException, InternalException {
+		
+		Message sendMessage = new Message();
+		sendMessage.setMessageBody(message);
+		
+		HttpUriRequest request = AliyunRequestBuilder.post()
+                .provider(getProvider())
+                .category(AliyunRequestBuilder.Category.MQS)
+                .path("/" + mqId + "/messages")
+                .entity(sendMessage, new XmlStreamToObjectProcessor<Message>())
+                .build();
+		
+		ResponseHandler<Message> responseHandler = new AliyunResponseHandler<Message>(
+				new XmlStreamToObjectProcessor(),
+				Message.class);
+		
+		Message recievedMessage = new AliyunRequestExecutor<Message>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                request,
+                responseHandler).execute();
+		
+		return new MQMessageIdentifier(recievedMessage.getMessageId(), recievedMessage.getMessageBodyMD5());
+		
+	}
+	
+	private String generateHost(String accountNumber, String regionId, String queueName) {
+		return accountNumber + ".mqs-" + regionId + ".aliyuncs.com/" + queueName;
+	}
 	
 	private MessageQueue toMessageQueue(Queue queue) throws InternalException {
 		return MessageQueue.getInstance(getContext().getAccountNumber(), 
@@ -244,25 +312,5 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> {
 				TimePeriod.valueOf(queue.getMessageRetentionPeriod(), "second"), 
 				TimePeriod.valueOf(queue.getVisibilityTimeout(), "second"), 
 				Storage.valueOf(queue.getMaximumMessageSize(), "byte"));
-	}
-
-	@Override
-	public Iterable<MQMessageReceipt> receiveMessages(String mqId,
-			TimePeriod<Second> waitTime, int count,
-			TimePeriod<Second> visibilityTimeout) throws CloudException,
-			InternalException {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
-	@Override
-	public MQMessageIdentifier sendMessage(String mqId, String message)
-			throws CloudException, InternalException {
-		// TODO Auto-generated method stub
-		return null;
-	}
-	
-	private String generateHost(String accountNumber, String regionId, String queueName) {
-		return accountNumber + ".mqs-" + regionId + ".aliyuncs.com/" + queueName;
 	}
 }
