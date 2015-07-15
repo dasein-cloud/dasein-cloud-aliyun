@@ -31,6 +31,7 @@ import java.util.regex.Pattern;
 
 import org.dasein.cloud.InternalException;
 import org.junit.Test;
+import org.junit.Assert.*;
 
 /**
  * Tests for DatabaseProvider
@@ -87,20 +88,23 @@ public class DatabaseProviderTests {
 	
 	@Test
 	public void testDatetime() throws ParseException {
+		
 		Calendar cal = Calendar.getInstance();
 		cal.set(Calendar.HOUR_OF_DAY, 6);
 		SimpleDateFormat format = new SimpleDateFormat("HH:00'Z'");
-		System.out.println(format.format(cal.getTime()));
+		assertEquals(format.format(cal.getTime()), "06:00Z");
 		cal.set(Calendar.HOUR_OF_DAY, 23);
-		System.out.println(format.format(cal.getTime()));
+		assertEquals(format.format(cal.getTime()), "23:00Z");
 		
 		format = new SimpleDateFormat("EEEE");
-		cal.set(Calendar.DAY_OF_WEEK, 2);
-		System.out.println(format.format(cal.getTime()));
+		cal.set(Calendar.DAY_OF_WEEK, 2); //start from Sunday
+		assertEquals(format.format(cal.getTime()), "Monday");
 		
 		SimpleDateFormat formatter = new SimpleDateFormat("HH:mm'Z'");
 		String timeStr = "06:32Z";
-		System.out.println(formatter.parse(timeStr).getHours() + ", " + formatter.parse(timeStr).getMinutes());
+		cal.setTime(formatter.parse(timeStr));
+		assertEquals(cal.get(Calendar.HOUR_OF_DAY), 6);
+		assertEquals(cal.get(Calendar.MINUTE), 32);
 	}
 	
 	@Test

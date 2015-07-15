@@ -236,7 +236,7 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> {
 		//recieve message
 		for (int i = 0; i < count; i++) {
 			
-			AliyunRequestBuilder builder = AliyunRequestBuilder.post()
+			AliyunRequestBuilder builder = AliyunRequestBuilder.get()
 	                .provider(getProvider())
 	                .category(AliyunRequestBuilder.Category.MQS)
 	                .path("/" + mqId + "/messages");
@@ -254,16 +254,14 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> {
 	                request,
 	                responseHandler).execute();
 			
+			//TODO check remove is ok
+			deleteMessage(recievedMessage.getMessageId(), recievedMessage.getReceiptHandle());
+			
 			receipts.add(MQMessageReceipt.getInstance(
 					new MQMessageIdentifier(recievedMessage.getMessageId(), recievedMessage.getMessageBodyMD5()),
-					recievedMessage.getReceiptHandle(), 
-					recievedMessage.getMessageBody(), 
-					recievedMessage.getEnqueueTime().getTime(), 
-					recievedMessage.getDequeueCount(), 
-					recievedMessage.getFirstDequeueTime().getTime()));
+					recievedMessage.getMessageBody(),
+					recievedMessage.getEnqueueTime().getTime()));
 		}
-		
-		//TODO check if delete message from queue is needed!
 
 		return receipts;
 	}
@@ -293,6 +291,25 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> {
 		
 		return new MQMessageIdentifier(recievedMessage.getMessageId(), recievedMessage.getMessageBodyMD5());
 		
+	}
+	
+	private void deleteMessage(String messageId, String receiptHandle) throws InternalException, CloudException {
+		
+		HttpUriRequest request = AliyunRequestBuilder.delete()
+                .provider(getProvider())
+                .category(AliyunRequestBuilder.Category.MQS)
+                .path("/" + messageId + "/messages")
+                .parameter("ReceiptHandle", receiptHandle)
+                .build();
+		
+		ResponseHandler<String> responseHandler = new AliyunResponseHandler<String>(
+				new StreamToStringProcessor(),
+				String.class);
+		
+		new AliyunRequestExecutor<String>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                request,
+                responseHandler).execute();
 	}
 	
 	private String generateHost(String accountNumber, String regionId, String queueName) {
