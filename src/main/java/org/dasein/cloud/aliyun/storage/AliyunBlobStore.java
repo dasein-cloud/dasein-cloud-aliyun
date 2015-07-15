@@ -368,8 +368,6 @@ public class AliyunBlobStore extends AbstractBlobStoreSupport<Aliyun> implements
     @Override
     public Storage<Byte> getObjectSize(@Nullable final String bucketName, @Nullable String objectName)
             throws InternalException, CloudException {
-        return getObject(bucketName, objectName).getSize();
-        /*
         final String regionId = getContext().getRegionId();
         if (regionId == null) {
             throw new InternalException("No region was set for this request");
@@ -380,6 +378,7 @@ public class AliyunBlobStore extends AbstractBlobStoreSupport<Aliyun> implements
                 .category(AliyunRequestBuilder.Category.OSS)
                 .subdomain(bucketName)
                 .path("/" + objectName)
+                .header("Accept-Encoding", "identity")
                 .build();
         ResponseHandler<Storage<Byte>> responseHandler = new ResponseHandler<Storage<Byte>>(){
             @Override
@@ -397,7 +396,7 @@ public class AliyunBlobStore extends AbstractBlobStoreSupport<Aliyun> implements
         };
         return new AliyunRequestExecutor<Storage<Byte>>(getProvider(),
                 AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request, responseHandler).execute();
-        */
+
     }
 
     @Override
