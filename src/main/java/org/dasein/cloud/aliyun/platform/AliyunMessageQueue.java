@@ -1,10 +1,14 @@
 package org.dasein.cloud.aliyun.platform;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 
+import org.apache.http.Header;
+import org.apache.http.HttpResponse;
+import org.apache.http.HttpStatus;
 import org.apache.http.client.ResponseHandler;
 import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.log4j.Logger;
@@ -17,6 +21,7 @@ import org.dasein.cloud.aliyun.platform.model.Queues;
 import org.dasein.cloud.aliyun.util.requester.AliyunHttpClientBuilderFactory;
 import org.dasein.cloud.aliyun.util.requester.AliyunRequestBuilder;
 import org.dasein.cloud.aliyun.util.requester.AliyunRequestExecutor;
+import org.dasein.cloud.aliyun.util.requester.AliyunResponseException;
 import org.dasein.cloud.aliyun.util.requester.AliyunResponseHandler;
 import org.dasein.cloud.platform.AbstractMQSupport;
 import org.dasein.cloud.platform.MQCreateOptions;
@@ -56,7 +61,7 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> {
 	 * @exception InternalException
 	 */
 	@Override
-	public String createMessageQueue(MQCreateOptions options)
+	public String createMessageQueue(final MQCreateOptions options)
 			throws CloudException, InternalException {
 		
 		Queue queue = new Queue();
@@ -83,16 +88,30 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> {
                 .entity(queue, new XmlStreamToObjectProcessor<Queue>())
                 .build();
 		
-		ResponseHandler<String> responseHandler = new AliyunResponseHandler<String>(
-                new StreamToStringProcessor(),
-                String.class);
+		final String regionId = getContext().getRegionId();
+		final String accountNumber = getContext().getAccountNumber();
+		ResponseHandler<String> responseHandler = new ResponseHandler<String>(){
+            @Override
+            public String handleResponse(HttpResponse response) throws IOException {
+                int httpCode = response.getStatusLine().getStatusCode();
+                if (httpCode == HttpStatus.SC_OK ) {
+                    return response.getFirstHeader("Location").getValue();
+                } else if (httpCode == HttpStatus.SC_CREATED) {
+                	stdLogger.error("Same name queue cannot be created for the same user, got " + httpCode);
+                	throw new AliyunResponseException(httpCode, null, 
+                			"Same name queue cannot be created for the same user, got " + httpCode,
+                			response.getFirstHeader("x-mqs-request-id").getValue(),
+                			generateHost(accountNumber, regionId, options.getName()));
+                } else if (httpCode == HttpStatus.SC_NO_CONTENT) {
+                	              }
+                return null;
+            }
+        };
 		
 		return new AliyunRequestExecutor<String>(getProvider(),
                 AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
                 request,
                 responseHandler).execute();
-		
-		//TODO fetch Location from the response header
 	}
 
 	@Override
@@ -243,4 +262,7 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> {
 		return null;
 	}
 	
+	private String generateHost(String accountNumber, String regionId, String queueName) {
+		return accountNumber + ".mqs-" + regionId + ".aliyuncs.com/" + queueName;
+	}
 }
