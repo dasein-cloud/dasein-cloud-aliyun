@@ -22,7 +22,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.http.client.ResponseHandler;
-import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.log4j.Logger;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
@@ -31,7 +30,6 @@ import org.dasein.cloud.aliyun.util.requester.AliyunHttpClientBuilderFactory;
 import org.dasein.cloud.aliyun.util.requester.AliyunRequestBuilder;
 import org.dasein.cloud.aliyun.util.requester.AliyunRequestExecutor;
 import org.dasein.cloud.aliyun.util.requester.AliyunResponseHandlerWithMapper;
-import org.dasein.cloud.aliyun.util.requester.AliyunValidateJsonResponseHandler;
 import org.dasein.cloud.util.requester.DriverToCoreMapper;
 import org.dasein.cloud.util.requester.streamprocessors.StreamToJSONObjectProcessor;
 import org.json.JSONException;
@@ -118,10 +116,10 @@ public class AliyunNetworkCommon {
 	public static final int DefaultPersistenceTimeout = 5 * 60;
 	public static final int DefaultLoadBalancerBandwidth = -1;
 
-	public static ResponseHandler<Map<String, Object>> getDefaultResponseHandler(
+	public static ResponseHandler<Map<String, Object>> getResponseMapHandler(
 			final Aliyun provider, final String... keys) {
 		return new AliyunResponseHandlerWithMapper<JSONObject, Map<String, Object>>(
-				new StreamToJSONObjectProcessor(),
+			new StreamToJSONObjectProcessor(),
 				new DriverToCoreMapper<JSONObject, Map<String, Object>>() {
 					@Override
 					public Map<String, Object> mapFrom(JSONObject json) {
@@ -137,23 +135,37 @@ public class AliyunNetworkCommon {
 							throw new RuntimeException(e.getMessage());
 						}
 					}
-				}, JSONObject.class);
+				}, JSONObject.class);	
 	}
+	
+	public static enum RequestMethod { GET, POST, DELETE, PUT }
+	
+	public static <V> V executeDefaultRequest(Aliyun provider, Map<String, Object> params, 
+			AliyunRequestBuilder.Category category, String action, RequestMethod requestMethod, 
+			boolean clientToken, ResponseHandler<V> handler) throws InternalException, CloudException {
 
-	public static void executeDefaultRequest(Aliyun provider,
-			Map<String, Object> params, AliyunRequestBuilder.Category category,
-			String methodName) throws InternalException, CloudException {
+		AliyunRequestBuilder builder = null;
+		if (requestMethod.equals(RequestMethod.GET)) { 
+			builder = AliyunRequestBuilder.get();
+			for (String key : params.keySet()) {
+				builder = builder.parameter(key, params.get(key));
+			}
+		} else if (requestMethod.equals(RequestMethod.POST)) {
+			builder = AliyunRequestBuilder.post();
+			builder = builder.entity(params);
+		} else {
+			throw new InternalException("Not supported request method " + requestMethod.name());
+		}
+		builder = builder.provider(provider).category(category).parameter("Action", action);
+		if (clientToken) {
+			builder = builder.clientToken(true);
+		}
 
-		HttpUriRequest request = AliyunRequestBuilder.post()
-				.provider(provider)
-				.category(category)
-				.parameter("Action", methodName)
-				.entity(params)
-				.build();
-
-		new AliyunRequestExecutor<Void>(provider,
-				AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
-				new AliyunValidateJsonResponseHandler(provider)).execute();
+		return new AliyunRequestExecutor<V>(
+				provider,
+				AliyunHttpClientBuilderFactory.newHttpClientBuilder(), 
+				builder.build(),
+				handler).execute();
 
 	}
 
