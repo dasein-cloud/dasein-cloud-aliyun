@@ -22,9 +22,12 @@
 package org.dasein.cloud.aliyun.util.requester;
 
 import org.apache.http.NameValuePair;
+import org.apache.http.client.utils.URIBuilder;
+import org.apache.log4j.Logger;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.aliyun.Aliyun;
 
+import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
@@ -38,9 +41,23 @@ import java.util.UUID;
  * @since 2015.05.1
  */
 public class AliyunEcsRequestBuilderStrategy extends AliyunRequestBuilderStrategy {
+    static private final Logger logger = Aliyun
+            .getStdLogger(AliyunEcsRequestBuilderStrategy.class);
 
     public AliyunEcsRequestBuilderStrategy(Aliyun aliyun) {
         super(aliyun);
+    }
+
+    public void applyUri(AliyunRequestBuilder aliyunRequestBuilder) throws InternalException {
+        URIBuilder uriBuilder = new URIBuilder();
+        String host = aliyunRequestBuilder.category.getHost(this.aliyun);
+        uriBuilder.setScheme("https").setHost(host).setPath(aliyunRequestBuilder.path);
+        try {
+            aliyunRequestBuilder.requestBuilder.setUri(uriBuilder.build().toString());
+        } catch (URISyntaxException uriSyntaxException) {
+            logger.error("RequestBuilderFactory.build() failed due to URI invalid: " + uriSyntaxException.getMessage());
+            throw new InternalException(uriSyntaxException);
+        }
     }
 
     protected Map<String, String> getFrameworkParameters() {
