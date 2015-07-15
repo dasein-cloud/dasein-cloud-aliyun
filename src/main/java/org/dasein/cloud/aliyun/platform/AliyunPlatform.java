@@ -36,8 +36,7 @@ public class AliyunPlatform extends AbstractPlatformServices<Aliyun> {
 
 	@Override
 	public MQSupport getMessageQueueSupport() {
-		// TODO Auto-generated method stub
-		return super.getMessageQueueSupport();
+		return new AliyunMessageQueue(getProvider());
 	}
 
 	@Override
