@@ -89,7 +89,7 @@ public class AliyunMqsRequestBuilderStrategy extends AliyunOssRequestBuilderStra
                     host.substring(firstDot);
         }
 
-        uriBuilder.setScheme("http").setHost(host).setPath(aliyunRequestBuilder.path);
+        uriBuilder.setScheme("https").setHost(host).setPath(aliyunRequestBuilder.path);
         try {
             aliyunRequestBuilder.requestBuilder.setUri(uriBuilder.build().toString());
         } catch (URISyntaxException uriSyntaxException) {
