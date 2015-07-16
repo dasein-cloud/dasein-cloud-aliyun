@@ -225,7 +225,7 @@ public class AliyunRequestBuilder {
         SLB("slb", "Server Load Balancer", AliyunSlbRequestBuilderStrategy.class),
         RDS("rds", "Relational Database Service", AliyunRdsRequestBuilderStrategy.class),
         OSS("oss", "Open Storage Service", AliyunOssRequestBuilderStrategy.class),
-        MQS("mqs", "Message Queue Service", AliyunOssRequestBuilderStrategy.class);
+        MQS("mqs", "Message Queue Service", AliyunMqsRequestBuilderStrategy.class);
 
         private String host;
         private String name;

@@ -52,13 +52,12 @@ import java.util.Map;
 public class AliyunOssRequestBuilderStrategy extends AliyunRequestBuilderStrategy {
     static private final Logger logger = Aliyun.getStdLogger(AliyunOssRequestBuilderStrategy.class);
 
-    private static final String OSS_PREFIX = "x-oss-";
-
     protected static final String NEW_LINE = "\n";
     protected static final String AUTHORIZATION = "Authorization";
     protected static final String CONTENT_MD5 = "Content-MD5";
-    protected static final String CONTENT_TYPE = "Content-Type";
     protected static final String DATE = "Date";
+
+    private static final String OSS_HEADER_PREFIX = "x-oss-";
 
     private static final String SUBRESOURCE_ACL = "acl";
     private static final String SUBRESOURCE_REFERER = "referer";
@@ -78,7 +77,6 @@ public class AliyunOssRequestBuilderStrategy extends AliyunRequestBuilderStrateg
     private static final String RESPONSE_HEADER_CACHE_CONTROL = "response-cache-control";
     private static final String RESPONSE_HEADER_CONTENT_DISPOSITION = "response-content-disposition";
     private static final String RESPONSE_HEADER_CONTENT_ENCODING = "response-content-encoding";
-
     private static final List<String> SIGNED_PARAMTERS = Arrays.asList(new String[] {
             SUBRESOURCE_ACL, SUBRESOURCE_UPLOADS, SUBRESOURCE_LOCATION,
             SUBRESOURCE_CORS, SUBRESOURCE_LOGGING, SUBRESOURCE_WEBSITE,
@@ -116,7 +114,7 @@ public class AliyunOssRequestBuilderStrategy extends AliyunRequestBuilderStrateg
         }
     }
 
-    private byte[] computeMD5Hash(InputStream is) throws NoSuchAlgorithmException, IOException {
+    protected byte[] computeMD5Hash(InputStream is) throws NoSuchAlgorithmException, IOException {
         BufferedInputStream bis = new BufferedInputStream(is);
 
         try {
@@ -158,6 +156,15 @@ public class AliyunOssRequestBuilderStrategy extends AliyunRequestBuilderStrateg
 
     @Override
     public void sign(AliyunRequestBuilder aliyunRequestBuilder) throws InternalException {
+        String stringToSign = buildCanonicalizedString(aliyunRequestBuilder);
+
+        byte[][] accessKey = (byte[][]) aliyun.getContext().getConfigurationValue(Aliyun.DSN_ACCESS_KEY);
+        byte[] accessKeySecret = accessKey[1];
+        String signature = computeSignature(accessKeySecret, stringToSign);
+        aliyunRequestBuilder.requestBuilder.addHeader(AUTHORIZATION, "OSS " + new String(accessKey[0]) + ":" + signature);
+    }
+
+    protected String buildCanonicalizedString(AliyunRequestBuilder aliyunRequestBuilder) {
         RequestBuilder requestBuilder = aliyunRequestBuilder.requestBuilder;
         StringBuilder stringToSign = new StringBuilder();
         stringToSign.append(requestBuilder.getMethod()).append(NEW_LINE);
@@ -172,12 +179,11 @@ public class AliyunOssRequestBuilderStrategy extends AliyunRequestBuilderStrateg
         stringToSign.append(requestBuilder.getFirstHeader(DATE).getValue()).append(NEW_LINE);
         stringToSign.append(buildCanonicalizedHeaders(aliyunRequestBuilder));
         stringToSign.append(buildCanonicalizedResource(aliyunRequestBuilder));
+        return stringToSign.toString();
+    }
 
-        byte[][] accessKey = (byte[][]) aliyun.getContext().getConfigurationValue(Aliyun.DSN_ACCESS_KEY);
-
-        byte[] accessKeySecret = accessKey[1];
-        String signature = computeSignature(accessKeySecret, stringToSign.toString());
-        aliyunRequestBuilder.requestBuilder.addHeader(AUTHORIZATION, "OSS " + new String(accessKey[0]) + ":" + signature);
+    protected boolean isCanonicalizedHeader(String name) {
+        return name.startsWith(OSS_HEADER_PREFIX);
     }
 
     protected String buildCanonicalizedHeaders(AliyunRequestBuilder aliyunRequestBuilder) {
@@ -185,7 +191,7 @@ public class AliyunOssRequestBuilderStrategy extends AliyunRequestBuilderStrateg
         for (Header header : aliyunRequestBuilder.headergroup.getAllHeaders()) {
             String name = header.getName();
             String nameLowerCase = name.toLowerCase();
-            if (nameLowerCase.startsWith(OSS_PREFIX) && !ossHeaders.containsKey(name)) {
+            if (isCanonicalizedHeader(nameLowerCase) && !ossHeaders.containsKey(name)) {
                 ossHeaders.put(nameLowerCase, aliyunRequestBuilder.headergroup.getHeaders(name));
             }
         }
@@ -208,7 +214,13 @@ public class AliyunOssRequestBuilderStrategy extends AliyunRequestBuilderStrateg
         return canonicalStringBuilder.toString();
     }
 
-    protected String buildCanonicalizedResource(AliyunRequestBuilder aliyunRequestBuilder) {
+    protected boolean isCanonicalizedResourceSignedParamter(String name) {
+        return SIGNED_PARAMTERS.contains(name);
+    }
+
+    protected String buildCanonicalizedParameters(AliyunRequestBuilder aliyunRequestBuilder) {
+        StringBuilder canonicalStringBuilder = new StringBuilder();
+
         Map<String, String> requestParameters = new HashMap<String, String>();
         for (NameValuePair nameValuePair : aliyunRequestBuilder.requestBuilder.getParameters()) {
             requestParameters.put(nameValuePair.getName(), nameValuePair.getValue());
@@ -217,15 +229,9 @@ public class AliyunOssRequestBuilderStrategy extends AliyunRequestBuilderStrateg
         String[] sortedKeys = requestParameters.keySet().toArray(new String[]{});
         Arrays.sort(sortedKeys);
 
-        StringBuilder canonicalStringBuilder = new StringBuilder();
-        canonicalStringBuilder.append('/');
-        if (!aliyun.isEmpty(aliyunRequestBuilder.subdomain)) {
-            canonicalStringBuilder.append(aliyunRequestBuilder.subdomain).append(aliyunRequestBuilder.path);
-        }
-
         char separator = '?';
         for(String key : sortedKeys) {
-            if (!SIGNED_PARAMTERS.contains(key)) {
+            if (!isCanonicalizedResourceSignedParamter(key)) {
                 continue;
             }
 
@@ -238,6 +244,16 @@ public class AliyunOssRequestBuilderStrategy extends AliyunRequestBuilderStrateg
             }
             separator = '&';
         }
+        return canonicalStringBuilder.toString();
+    }
+
+    protected String buildCanonicalizedResource(AliyunRequestBuilder aliyunRequestBuilder) {
+        StringBuilder canonicalStringBuilder = new StringBuilder();
+        canonicalStringBuilder.append('/');
+        if (!aliyun.isEmpty(aliyunRequestBuilder.subdomain)) {
+            canonicalStringBuilder.append(aliyunRequestBuilder.subdomain).append(aliyunRequestBuilder.path);
+        }
+        canonicalStringBuilder.append(buildCanonicalizedParameters(aliyunRequestBuilder));
         return canonicalStringBuilder.toString();
     }
 }

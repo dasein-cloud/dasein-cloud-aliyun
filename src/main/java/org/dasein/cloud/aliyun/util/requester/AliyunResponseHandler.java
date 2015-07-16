@@ -95,7 +95,8 @@ public class AliyunResponseHandler<T> implements ResponseHandler<T> {
 
 
     protected ClientProtocolException extractException(int httpCode, HttpEntity entity) {
-        String contentType = entity.getContentType().getValue();
+        //MQS doesn't response with Content-Type header when error
+        String contentType = entity.getContentType() == null ? "text/xml" : entity.getContentType().getValue();
 
         String code;
         String message;
