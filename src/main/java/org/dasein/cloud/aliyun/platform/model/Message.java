@@ -8,7 +8,7 @@ import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 
-@XmlRootElement(name="Message")
+@XmlRootElement(name="Message", namespace="http://mqs.aliyuncs.com/doc/v1/")
 @XmlAccessorType(XmlAccessType.FIELD)
 public class Message {
 

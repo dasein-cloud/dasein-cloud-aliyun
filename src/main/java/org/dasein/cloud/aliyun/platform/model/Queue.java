@@ -8,7 +8,7 @@ import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 
-@XmlRootElement(name="Queue")
+@XmlRootElement(name="Queue", namespace="http://mqs.aliyuncs.com/doc/v1/")
 @XmlAccessorType(XmlAccessType.FIELD)
 public class Queue {
 	
