@@ -10,6 +10,7 @@ import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.aliyun.Aliyun;
 import org.dasein.cloud.aliyun.platform.model.Message;
+import org.dasein.cloud.aliyun.platform.model.MqsError;
 import org.dasein.cloud.aliyun.platform.model.Queue;
 import org.dasein.cloud.aliyun.platform.model.Queues;
 import org.dasein.cloud.aliyun.util.requester.AliyunHttpClientBuilderFactory;
@@ -230,16 +231,27 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
 			}
 			HttpUriRequest request = builder.build();
 			
+			//also handle message not exist exception
 			ResponseHandler<Message> responseHandler = new AliyunResponseHandler<Message>(
 					new XmlStreamToObjectProcessor<Message>(),
-					Message.class);
-			
+					Message.class) {
+				public Message handleResponse(HttpResponse httpResponse) throws ClientProtocolException, IOException {
+			        if (httpResponse.getStatusLine().getStatusCode() == HttpStatus.SC_NOT_FOUND) {
+			        	MqsError error = new XmlStreamToObjectProcessor<MqsError>().read(httpResponse.getEntity().getContent(), MqsError.class);
+			        	if ("MessageNotExist".equals(error.getCode())) {	//no more messages
+			        		return null;
+			        	}
+			        }
+			        return super.handleResponse(httpResponse);
+				}
+			};
+		
 			Message recievedMessage = new AliyunRequestExecutor<Message>(getProvider(),
 	                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
 	                request,
 	                responseHandler).execute();
 			
-			if (recievedMessage == null) {	//no more message
+			if (recievedMessage == null) {
 				break;
 			}
 			
