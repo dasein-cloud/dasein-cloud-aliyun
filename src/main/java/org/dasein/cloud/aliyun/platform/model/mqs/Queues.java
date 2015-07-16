@@ -1,4 +1,4 @@
-package org.dasein.cloud.aliyun.platform.model;
+package org.dasein.cloud.aliyun.platform.model.mqs;
 
 import java.util.List;
 
@@ -7,7 +7,7 @@ import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
 
-@XmlRootElement(name="Queues", namespace="http://mqs.aliyuncs.com/doc/v1/")
+@XmlRootElement(name="Queues")
 @XmlAccessorType(XmlAccessType.FIELD)
 public class Queues {
 

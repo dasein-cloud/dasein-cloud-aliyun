@@ -1,11 +1,11 @@
-package org.dasein.cloud.aliyun.platform.model;
+package org.dasein.cloud.aliyun.platform.model.mqs;
 
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
 
-@XmlRootElement(name="Error", namespace="http://mqs.aliyuncs.com/doc/v1/")
+@XmlRootElement(name="Error")
 @XmlAccessorType(XmlAccessType.FIELD)
 public class MqsError {
 	

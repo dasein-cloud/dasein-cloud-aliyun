@@ -12,6 +12,9 @@ import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
 import javax.xml.bind.Unmarshaller;
 
+import org.dasein.cloud.aliyun.platform.model.mqs.Message;
+import org.dasein.cloud.aliyun.platform.model.mqs.Queue;
+import org.dasein.cloud.aliyun.platform.model.mqs.Queues;
 import org.junit.Ignore;
 import org.junit.Test;
 

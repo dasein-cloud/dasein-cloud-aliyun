@@ -1,4 +1,4 @@
-package org.dasein.cloud.aliyun.platform.model;
+package org.dasein.cloud.aliyun.platform.model.mqs;
 
 import java.util.Date;
 
