@@ -2,6 +2,7 @@ package org.dasein.cloud.aliyun.platform;
 
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
+import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.ResponseHandler;
 import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.log4j.Logger;
@@ -228,7 +229,7 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
 				changeQueueVisibilityTimeout(mqId, visibilityTimeout.intValue());
 			}
 			HttpUriRequest request = builder.build();
-	
+			
 			ResponseHandler<Message> responseHandler = new AliyunResponseHandler<Message>(
 					new XmlStreamToObjectProcessor<Message>(),
 					Message.class);
@@ -237,6 +238,10 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
 	                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
 	                request,
 	                responseHandler).execute();
+			
+			if (recievedMessage == null) {	//no more message
+				break;
+			}
 			
 			deleteMessage(recievedMessage.getMessageId(), recievedMessage.getReceiptHandle());
 			
