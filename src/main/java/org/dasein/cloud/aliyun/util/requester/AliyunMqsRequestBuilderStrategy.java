@@ -151,8 +151,8 @@ public class AliyunMqsRequestBuilderStrategy extends AliyunOssRequestBuilderStra
     }
 
     private static class AccountIdHolder {
-        private static final long CACHE_CLEAR_FREQUENCY = 2;
-        private static final long CACHE_ALIVE_MILLIS = 10*000; //1 hour
+        private static final long CACHE_CLEAR_FREQUENCY = 1000;
+        private static final long CACHE_ALIVE_MILLIS = 60 * 60 * 1000; //1 hour
 
         private static final ConcurrentMap<String, Future<Account>> cache = new ConcurrentHashMap<String, Future<Account>>();
         private static AtomicLong count = new AtomicLong();
