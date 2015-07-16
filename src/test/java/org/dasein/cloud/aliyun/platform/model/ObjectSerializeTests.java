@@ -58,8 +58,10 @@ public class ObjectSerializeTests {
 		Message message = new Message();
 		message.setEnqueueTime(new Date());
 		message.setMessageBody("XJIidjid");
+		message.setMessageBodyMD5("JIDXXJJIDID688WJDL");
 		message.setMessageId("msg-" + random.nextInt());
 		message.setNextVisibleTime(new Date());
+		message.setFirstDequeueTime(new Date());
 		message.setPriority(random.nextInt());
 		message.setReceiptHandle("some handle " + random.nextInt());
 		return message;
@@ -72,12 +74,12 @@ public class ObjectSerializeTests {
 	}
 	
 	@Test
-	@Ignore
 	public void testSerializeMessage() throws JAXBException {
 		marshal(makeMessage(), System.out);
 	}
 	
 	@Test
+	@Ignore
 	public void testUnserializeMessage() throws JAXBException {
 		Message message = unmarshal(this.getClass().getResourceAsStream("/platform/message-input.xml"), Message.class);
 		System.out.println(message.getMessageId() + ", " + message.getPriority() + ", " + message.getEnqueueTime().getTime());
@@ -93,4 +95,5 @@ public class ObjectSerializeTests {
 		queues.setQueue(queueList);
 		marshal(queues, System.out);
 	}
+
 }

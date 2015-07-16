@@ -7,7 +7,6 @@ import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.log4j.Logger;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
-import org.dasein.cloud.ResourceStatus;
 import org.dasein.cloud.aliyun.Aliyun;
 import org.dasein.cloud.aliyun.platform.model.Message;
 import org.dasein.cloud.aliyun.platform.model.Queue;
@@ -29,15 +28,15 @@ import org.dasein.cloud.util.requester.streamprocessors.XmlStreamToObjectProcess
 import org.dasein.util.uom.storage.Storage;
 import org.dasein.util.uom.time.Second;
 import org.dasein.util.uom.time.TimePeriod;
+import org.dasein.util.uom.time.TimePeriodUnit;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 
 public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQSupport {
-
+	
 	private static final Integer RequestPageSize = 1000;
 	
 	private static final Logger stdLogger = Aliyun.getStdLogger(AliyunMessageQueue.class);
@@ -93,7 +92,7 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
             public String handleResponse(HttpResponse response) throws IOException {
                 int httpCode = response.getStatusLine().getStatusCode();
                 if (httpCode == HttpStatus.SC_OK ) {
-                    return response.getFirstHeader("Location").getValue();
+                    return parseQueueNameFromLocation(response.getFirstHeader("Location").getValue());
                 } else if (httpCode == HttpStatus.SC_CREATED) {
                 	stdLogger.error("Same name queue cannot be created for the same user, got " + httpCode);
                 	throw new AliyunResponseException(httpCode, null, 
@@ -101,8 +100,24 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
                 			response.getFirstHeader("x-mqs-request-id").getValue(),
                 			generateHost(accountNumber, regionId, options.getName()));
                 } else if (httpCode == HttpStatus.SC_NO_CONTENT) {
-                	              }
-                return null;
+                	stdLogger.error("Same attribute found for the same name queue, got " + httpCode);
+                	throw new AliyunResponseException(httpCode, null, 
+                			"Same to another queue's attributes' settings, got " + httpCode,
+                			response.getFirstHeader("x-mqs-request-id").getValue(),
+                			generateHost(accountNumber, regionId, options.getName()));
+                } else if (httpCode == HttpStatus.SC_CONFLICT) {
+                	stdLogger.error("Conflict found, got " + httpCode);
+                	throw new AliyunResponseException(httpCode, null, 
+                			"Conflict found, got " + httpCode,
+                			response.getFirstHeader("x-mqs-request-id").getValue(),
+                			generateHost(accountNumber, regionId, options.getName()));
+                } else {
+                	stdLogger.error("Other exceptions found, got " + httpCode);
+                	throw new AliyunResponseException(httpCode, null, 
+                			"Other exceptions found, got " + httpCode,
+                			response.getFirstHeader("x-mqs-request-id").getValue(),
+                			generateHost(accountNumber, regionId, options.getName()));
+                }
             }
         };
 		
@@ -115,36 +130,29 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
 	@Override
 	public MessageQueue getMessageQueue(String mqId) throws CloudException,
 			InternalException {
+		
 		HttpUriRequest request = AliyunRequestBuilder.get()
                 .provider(getProvider())
                 .category(AliyunRequestBuilder.Category.MQS)
                 .path("/" + mqId)
                 .build();
 		
-		ResponseHandler<MessageQueue> responseHandler = new AliyunResponseHandler<MessageQueue>(
-				new XmlStreamToObjectProcessor<MessageQueue>(),
-                MessageQueue.class);
+		ResponseHandler<Queue> responseHandler = new AliyunResponseHandler<Queue>(
+				new XmlStreamToObjectProcessor<Queue>(),
+				Queue.class);
 		
-		return new AliyunRequestExecutor<MessageQueue>(getProvider(),
+		Queue queue = new AliyunRequestExecutor<Queue>(getProvider(),
                 AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
                 request,
                 responseHandler).execute();
-	}
-
-	@Override
-	public Iterable<ResourceStatus> listMessageQueueStatus()
-			throws CloudException, InternalException {
-		List<ResourceStatus> statuses = new ArrayList<ResourceStatus>();
-		Iterator<MessageQueue> queueIter = listMessageQueues().iterator();
-		while (queueIter.hasNext()) {
-			statuses.add(new ResourceStatus(queueIter.next().getName(), MQState.ACTIVE));
-		}
-		return statuses;
+		
+		return toMessageQueue(queue);
 	}
 
 	@Override
 	public void removeMessageQueue(String mqId, String reason)
 			throws CloudException, InternalException {
+		
 		HttpUriRequest request = AliyunRequestBuilder.delete()
                 .provider(getProvider())
                 .category(AliyunRequestBuilder.Category.MQS)
@@ -160,6 +168,7 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
 	@Override
 	public Iterable<MessageQueue> listMessageQueues() throws CloudException,
 			InternalException {
+		
 		List<MessageQueue> messageQueues = new ArrayList<MessageQueue>();
 		
 		String nextMarker = null;
@@ -186,8 +195,8 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
 		
 			if (queues != null) {
 				if (queues.getQueue() != null) {
-					for (Queue queue: queues.getQueue()) {
-						messageQueues.add(toMessageQueue(queue));
+					for (Queue queueWithUrl: queues.getQueue()) {
+						messageQueues.add(getMessageQueue(parseQueueNameFromLocation(queueWithUrl.getQueueURL())));
 					}
 				}
 				nextMarker = queues.getNextMarker();
@@ -195,24 +204,28 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
 			
 		} while (!getProvider().isEmpty(nextMarker));
 		
-
 		return messageQueues;
 	}
-
+	
 	@Override
 	public Iterable<MQMessageReceipt> receiveMessages(String mqId,
 			TimePeriod<Second> waitTime, int count,
 			TimePeriod<Second> visibilityTimeout) throws CloudException,
 			InternalException {
+		
 		List<MQMessageReceipt> receipts = new ArrayList<MQMessageReceipt>();
 		
 		for (int i = 0; i < count; i++) {
+			
 			AliyunRequestBuilder builder = AliyunRequestBuilder.get()
 	                .provider(getProvider())
 	                .category(AliyunRequestBuilder.Category.MQS)
 	                .path("/" + mqId + "/messages");
 			if (waitTime != null) {
 				builder = builder.parameter("waitseconds", waitTime.intValue());
+			}
+			if (visibilityTimeout != null) {
+				changeQueueVisibilityTimeout(mqId, visibilityTimeout.intValue());
 			}
 			HttpUriRequest request = builder.build();
 	
@@ -225,7 +238,6 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
 	                request,
 	                responseHandler).execute();
 			
-			//TODO check remove is ok
 			deleteMessage(recievedMessage.getMessageId(), recievedMessage.getReceiptHandle());
 			
 			receipts.add(MQMessageReceipt.getInstance(
@@ -264,6 +276,7 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
 	}
 	
 	private void deleteMessage(String messageId, String receiptHandle) throws InternalException, CloudException {
+		
 		HttpUriRequest request = AliyunRequestBuilder.delete()
                 .provider(getProvider())
                 .category(AliyunRequestBuilder.Category.MQS)
@@ -281,17 +294,66 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
 		return accountNumber + ".mqs-" + regionId + ".aliyuncs.com/" + queueName;
 	}
 	
+	private String parseQueueNameFromLocation(String location) {
+		return location.substring(location.lastIndexOf("/") + 1, location.length() - 1);
+	}
+	
+	/**
+	 * set both id and name to the name of the queue
+	 * @param queue
+	 * @return
+	 * @throws InternalException
+	 */
 	private MessageQueue toMessageQueue(Queue queue) throws InternalException {
+		
+		TimePeriod delaySeconds = null;
+		if (queue.getDelaySeconds() != null) {
+			delaySeconds = TimePeriod.valueOf(queue.getDelaySeconds(), "second");
+		}
+		TimePeriod messageRetentionPeriod = null;
+		if (queue.getMessageRetentionPeriod() != null) {
+			messageRetentionPeriod = TimePeriod.valueOf(queue.getMessageRetentionPeriod(), "second");
+		}
+		TimePeriod visibilityTimeout = null;
+		if (queue.getVisibilityTimeout() != null) {
+			visibilityTimeout = TimePeriod.valueOf(queue.getVisibilityTimeout(), "second");
+		}
+		Storage maximumMessageSize = null;
+		if (queue.getMaximumMessageSize() != null) {
+			maximumMessageSize = Storage.valueOf(queue.getMaximumMessageSize(), "byte");
+		}
+		
 		return MessageQueue.getInstance(getContext().getAccountNumber(), 
 				getContext().getRegionId(), 
-				"mq-" + queue.getQueueName(), 
+				queue.getQueueName(), 
 				queue.getQueueName(), 
 				MQState.ACTIVE, 
 				"message queue " + queue.getQueueName(), 
 				queue.getQueueURL(), 
-				TimePeriod.valueOf(queue.getDelaySeconds(), "second"), 
-				TimePeriod.valueOf(queue.getMessageRetentionPeriod(), "second"), 
-				TimePeriod.valueOf(queue.getVisibilityTimeout(), "second"), 
-				Storage.valueOf(queue.getMaximumMessageSize(), "byte"));
+				delaySeconds, 
+				messageRetentionPeriod, 
+				visibilityTimeout, 
+				maximumMessageSize);
 	}
+	
+	private void changeQueueVisibilityTimeout(String queueName, Integer visibilityTimeout) 
+			throws InternalException, CloudException {
+		
+		Queue queue = new Queue();
+		queue.setVisibilityTimeout(visibilityTimeout);
+		
+		HttpUriRequest request = AliyunRequestBuilder.get()
+                .provider(getProvider())
+                .category(AliyunRequestBuilder.Category.MQS)
+                .path("/" + queueName)
+                .parameter("metaoverride", "true")
+                .entity(queue, new XmlStreamToObjectProcessor<Queue>())
+                .build();
+		
+		new AliyunRequestExecutor<String>(getProvider(),
+                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                request,
+                new AliyunValidateEmptyResponseHandler()).execute();
+	}
+	
 }
