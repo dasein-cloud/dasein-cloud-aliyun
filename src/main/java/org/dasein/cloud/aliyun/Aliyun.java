@@ -21,14 +21,17 @@ package org.dasein.cloud.aliyun;
 import org.apache.log4j.Logger;
 import org.dasein.cloud.AbstractCloud;
 import org.dasein.cloud.CloudException;
+import org.dasein.cloud.CloudProvider;
 import org.dasein.cloud.ContextRequirements;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.aliyun.compute.AliyunCompute;
+import org.dasein.cloud.aliyun.platform.AliyunPlatform;
 import org.dasein.cloud.aliyun.storage.AliyunStorage;
 import org.dasein.cloud.compute.ComputeServices;
 import org.dasein.cloud.dc.DataCenterServices;
 import org.dasein.cloud.dc.Region;
+import org.dasein.cloud.platform.PlatformServices;
 import org.dasein.cloud.storage.StorageServices;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -156,6 +159,11 @@ public class Aliyun extends AbstractCloud {
     @Override
     public @Nonnull StorageServices getStorageServices() {
         return new AliyunStorage(this);
+    }
+
+    @Override
+    public @Nullable PlatformServices getPlatformServices() {
+        return new AliyunPlatform(this);
     }
 
     public String formatIso8601Date(Date date) {

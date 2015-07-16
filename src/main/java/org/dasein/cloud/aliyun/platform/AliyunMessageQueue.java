@@ -1,11 +1,5 @@
 package org.dasein.cloud.aliyun.platform;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Locale;
-
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.ResponseHandler;
@@ -23,19 +17,26 @@ import org.dasein.cloud.aliyun.util.requester.AliyunRequestBuilder;
 import org.dasein.cloud.aliyun.util.requester.AliyunRequestExecutor;
 import org.dasein.cloud.aliyun.util.requester.AliyunResponseException;
 import org.dasein.cloud.aliyun.util.requester.AliyunResponseHandler;
+import org.dasein.cloud.aliyun.util.requester.AliyunValidateEmptyResponseHandler;
 import org.dasein.cloud.platform.AbstractMQSupport;
 import org.dasein.cloud.platform.MQCreateOptions;
 import org.dasein.cloud.platform.MQMessageIdentifier;
 import org.dasein.cloud.platform.MQMessageReceipt;
 import org.dasein.cloud.platform.MQState;
+import org.dasein.cloud.platform.MQSupport;
 import org.dasein.cloud.platform.MessageQueue;
-import org.dasein.cloud.util.requester.streamprocessors.StreamToStringProcessor;
 import org.dasein.cloud.util.requester.streamprocessors.XmlStreamToObjectProcessor;
 import org.dasein.util.uom.storage.Storage;
 import org.dasein.util.uom.time.Second;
 import org.dasein.util.uom.time.TimePeriod;
 
-public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> {
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Locale;
+
+public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQSupport {
 
 	private static final Integer RequestPageSize = 1000;
 	
@@ -44,26 +45,23 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> {
 	public AliyunMessageQueue(Aliyun provider) {
 		super(provider);
 	}
-	
-	private transient volatile AliyunMessageQueueCapabilities capabilities;
-	
-	public AliyunMessageQueueCapabilities getCapabilities() {
-		if (capabilities == null) {
-			capabilities = new AliyunMessageQueueCapabilities(getProvider());
-		}
-		return capabilities;
+
+	@Override
+	public boolean isSubscribed() throws CloudException, InternalException {
+		return true;
 	}
-	
-	/**
-	 * @param options MQCreateOptions
+
+	@Override
+	public String getProviderTermForMessageQueue(Locale locale) {
+		return "queue";
+	}
+
+	/*
 	 * @return message queue url (http://$QueueOwnerId.mqs-<Region>.aliyuncs.com /$queueName)
-	 * @exception CloudException
-	 * @exception InternalException
 	 */
 	@Override
 	public String createMessageQueue(final MQCreateOptions options)
 			throws CloudException, InternalException {
-		
 		Queue queue = new Queue();
 		if (!getProvider().isEmpty(options.getMetaData().get("DelaySeconds"))) {
 			queue.setDelaySeconds(Integer.valueOf(options.getMetaData().get("DelaySeconds")));
@@ -117,7 +115,6 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> {
 	@Override
 	public MessageQueue getMessageQueue(String mqId) throws CloudException,
 			InternalException {
-		
 		HttpUriRequest request = AliyunRequestBuilder.get()
                 .provider(getProvider())
                 .category(AliyunRequestBuilder.Category.MQS)
@@ -145,47 +142,24 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> {
 		return statuses;
 	}
 
-	/**
-	 * delete message queue by name and also delete all the messages in the queue.
-	 * @param mqId message queue id
-	 * @param reason unused in aliyun
-	 * @exception CloudException
-	 * @exception InternalException
-	 */
 	@Override
 	public void removeMessageQueue(String mqId, String reason)
 			throws CloudException, InternalException {
-		
 		HttpUriRequest request = AliyunRequestBuilder.delete()
                 .provider(getProvider())
                 .category(AliyunRequestBuilder.Category.MQS)
                 .path("/" + mqId)
                 .build();
 		
-		ResponseHandler<String> responseHandler = new AliyunResponseHandler<String>(
-                new StreamToStringProcessor(),
-                String.class);
-		
 		new AliyunRequestExecutor<String>(getProvider(),
                 AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
                 request,
-                responseHandler).execute();
-	}
-
-	@Override
-	public String getProviderTermForMessageQueue(Locale locale) {
-		return getCapabilities().getProviderTermForMessageQueue(locale);
-	}
-
-	@Override
-	public boolean isSubscribed() throws CloudException, InternalException {
-		return true;
+                new AliyunValidateEmptyResponseHandler()).execute();
 	}
 
 	@Override
 	public Iterable<MessageQueue> listMessageQueues() throws CloudException,
 			InternalException {
-		
 		List<MessageQueue> messageQueues = new ArrayList<MessageQueue>();
 		
 		String nextMarker = null;
@@ -230,12 +204,9 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> {
 			TimePeriod<Second> waitTime, int count,
 			TimePeriod<Second> visibilityTimeout) throws CloudException,
 			InternalException {
-		
 		List<MQMessageReceipt> receipts = new ArrayList<MQMessageReceipt>();
 		
-		//recieve message
 		for (int i = 0; i < count; i++) {
-			
 			AliyunRequestBuilder builder = AliyunRequestBuilder.get()
 	                .provider(getProvider())
 	                .category(AliyunRequestBuilder.Category.MQS)
@@ -269,7 +240,6 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> {
 	@Override
 	public MQMessageIdentifier sendMessage(String mqId, String message)
 			throws CloudException, InternalException {
-		
 		Message sendMessage = new Message();
 		sendMessage.setMessageBody(message);
 		
@@ -294,7 +264,6 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> {
 	}
 	
 	private void deleteMessage(String messageId, String receiptHandle) throws InternalException, CloudException {
-		
 		HttpUriRequest request = AliyunRequestBuilder.delete()
                 .provider(getProvider())
                 .category(AliyunRequestBuilder.Category.MQS)
@@ -302,14 +271,10 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> {
                 .parameter("ReceiptHandle", receiptHandle)
                 .build();
 		
-		ResponseHandler<String> responseHandler = new AliyunResponseHandler<String>(
-				new StreamToStringProcessor(),
-				String.class);
-		
 		new AliyunRequestExecutor<String>(getProvider(),
                 AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
                 request,
-                responseHandler).execute();
+                new AliyunValidateEmptyResponseHandler()).execute();
 	}
 	
 	private String generateHost(String accountNumber, String regionId, String queueName) {

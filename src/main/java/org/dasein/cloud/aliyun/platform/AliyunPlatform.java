@@ -15,24 +15,6 @@ public class AliyunPlatform extends AbstractPlatformServices<Aliyun> {
 	public AliyunPlatform(Aliyun provider) {
 		super(provider);
 	}
-	
-	@Override
-	public CDNSupport getCDNSupport() {
-		// TODO Auto-generated method stub
-		return super.getCDNSupport();
-	}
-
-	@Override
-	public DataWarehouseSupport getDataWarehouseSupport() {
-		// TODO Auto-generated method stub
-		return super.getDataWarehouseSupport();
-	}
-
-	@Override
-	public KeyValueDatabaseSupport getKeyValueDatabaseSupport() {
-		// TODO Auto-generated method stub
-		return super.getKeyValueDatabaseSupport();
-	}
 
 	@Override
 	public MQSupport getMessageQueueSupport() {
@@ -40,21 +22,7 @@ public class AliyunPlatform extends AbstractPlatformServices<Aliyun> {
 	}
 
 	@Override
-	public PushNotificationSupport getPushNotificationSupport() {
-		// TODO Auto-generated method stub
-		return super.getPushNotificationSupport();
-	}
-
-	@Override
 	public RelationalDatabaseSupport getRelationalDatabaseSupport() {
 		return new AliyunRelationalDatabase(getProvider());
 	}
-
-	@Override
-	public MonitoringSupport getMonitoringSupport() {
-		// TODO Auto-generated method stub
-		return super.getMonitoringSupport();
-	}
-	
-	
 }
