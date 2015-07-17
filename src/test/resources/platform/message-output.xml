@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Message xmlns="http://mqs.aliyuncs.com/doc/v1/">
+    <MessageId>msg--702955831</MessageId>
+    <MessageBody>XJIidjid</MessageBody>
+    <MessageBodyMD5>JIDXXJJIDID688WJDL</MessageBodyMD5>
+    <Priority>1193590109</Priority>
+    <ReceiptHandle>some handle -1065386025</ReceiptHandle>
+    <EnqueueTime>1437104284602</EnqueueTime>
+    <NextVisibleTime>1437104284602</NextVisibleTime>
+    <FirstDequeueTime>1437104284602</FirstDequeueTime>
+</Message>

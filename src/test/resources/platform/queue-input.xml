@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Queue xmlns="http://mqs.aliyuncs.com/doc/v1/">
+    <QueueName>q-test--706733506</QueueName>
+    <CreateTime>1437104250057</CreateTime>
+    <LastModifyTime>1437104250057</LastModifyTime>
+    <InactiveMessages>1024389456</InactiveMessages>
+    <ActiveMessages>-1481674676</ActiveMessages>
+    <DelayMessages>2131302453</DelayMessages>
+    <DelaySeconds>-1305580075</DelaySeconds>
+    <MaximumMessageSize>65535</MaximumMessageSize>
+    <MessageRetentionPeriod>1024</MessageRetentionPeriod>
+    <VisibilityTimeout>2048</VisibilityTimeout>
+    <PollingWaitSeconds>5</PollingWaitSeconds>
+</Queue>

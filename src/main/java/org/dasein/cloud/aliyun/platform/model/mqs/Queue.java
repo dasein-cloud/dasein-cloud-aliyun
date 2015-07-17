@@ -36,8 +36,6 @@ public class Queue {
 	private Integer visibilityTimeout;
 	@XmlElement(name="PollingWaitSeconds")
 	private Integer pollingWaitSeconds;
-	@XmlElement(name="QueueURL")
-	private String queueURL;
 	
 	public Integer getDelaySeconds() {
 		return delaySeconds;
@@ -105,10 +103,5 @@ public class Queue {
 	public void setDelayMessages(Integer delayMessages) {
 		this.delayMessages = delayMessages;
 	}
-	public String getQueueURL() {
-		return queueURL;
-	}
-	public void setQueueURL(String queueURL) {
-		this.queueURL = queueURL;
-	}
+	
 }

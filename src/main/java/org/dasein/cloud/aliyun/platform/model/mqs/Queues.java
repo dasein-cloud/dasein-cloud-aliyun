@@ -11,6 +11,20 @@ import javax.xml.bind.annotation.XmlRootElement;
 @XmlAccessorType(XmlAccessType.FIELD)
 public class Queues {
 
+	@XmlAccessorType(XmlAccessType.FIELD)
+	public static class Queue {
+		
+		@XmlElement(name="QueueURL")
+		private String queueURL;
+		
+		public String getQueueURL() {
+			return queueURL;
+		}
+		public void setQueueURL(String queueURL) {
+			this.queueURL = queueURL;
+		}
+	}
+	
 	@XmlElement(name="Queue")
 	private List<Queue> queue;
 	@XmlElement(name="NextMarker")

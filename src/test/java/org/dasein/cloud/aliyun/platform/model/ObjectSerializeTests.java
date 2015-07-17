@@ -1,7 +1,12 @@
 package org.dasein.cloud.aliyun.platform.model;
 
+import static org.junit.Assert.*;
+
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -35,24 +40,27 @@ public class ObjectSerializeTests {
 		return (T) unmarshaller.unmarshal(is);
 	}
 	
-	public static Queue makeQueue(boolean urlOnly) {
+	public static Queue makeQueue() {
 		Random random = new Random();
 		Queue queue = new Queue();
-		if (!urlOnly) {
-			queue.setActiveMessages(random.nextInt());
-			queue.setDelayMessages(random.nextInt());
-			queue.setDelaySeconds(random.nextInt());
-			queue.setInactiveMessages(random.nextInt());
-			queue.setMaximumMessageSize(65535);
-			queue.setMessageRetentionPeriod(1024);
-			queue.setPollingWaitSeconds(5);
-			queue.setQueueName("q-test-" + random.nextInt());
-			queue.setVisibilityTimeout(2048);
-			queue.setCreateTime(new Date());
-			queue.setLastModifyTime(new Date());
-		} else {
-			queue.setQueueURL("http://ownertest.mqs-cn-hangzhou.aliyuncs.com/q-test" + random.nextInt());
-		}
+		queue.setActiveMessages(random.nextInt());
+		queue.setDelayMessages(random.nextInt());
+		queue.setDelaySeconds(random.nextInt());
+		queue.setInactiveMessages(random.nextInt());
+		queue.setMaximumMessageSize(65535);
+		queue.setMessageRetentionPeriod(1024);
+		queue.setPollingWaitSeconds(5);
+		queue.setQueueName("q-test-" + random.nextInt());
+		queue.setVisibilityTimeout(2048);
+		queue.setCreateTime(new Date());
+		queue.setLastModifyTime(new Date());
+		return queue;
+	}
+	
+	public static org.dasein.cloud.aliyun.platform.model.mqs.Queues.Queue makeQueuesQueue() {
+		Random random = new Random();
+		org.dasein.cloud.aliyun.platform.model.mqs.Queues.Queue queue = new org.dasein.cloud.aliyun.platform.model.mqs.Queues.Queue();
+		queue.setQueueURL("http://" + random.nextInt() + ".mqs-cn-hangzhou.aliyuncs.com/mq-" + random.nextInt());
 		return queue;
 	}
 	
@@ -71,32 +79,51 @@ public class ObjectSerializeTests {
 	}
 	
 	@Test
-	@Ignore
-	public void testSerializeQueue() throws JAXBException {
-		marshal(makeQueue(false), System.out);
+	public void testSerializeQueue() throws JAXBException, FileNotFoundException {
+		marshal(makeQueue(), new FileOutputStream("src/test/resources/platform/queue-output.xml"));
 	}
 	
 	@Test
-	public void testSerializeMessage() throws JAXBException {
-		marshal(makeMessage(), System.out);
+	public void testSerializeMessage() throws JAXBException, FileNotFoundException {
+		marshal(makeMessage(), new FileOutputStream("src/test/resources/platform/message-output.xml"));
 	}
 	
 	@Test
-	@Ignore
+	public void testSerializeQueues() throws JAXBException, FileNotFoundException {
+		Queues queues = new Queues();
+		List<org.dasein.cloud.aliyun.platform.model.mqs.Queues.Queue> queueList = new ArrayList<org.dasein.cloud.aliyun.platform.model.mqs.Queues.Queue>();
+		queueList.add(makeQueuesQueue());
+		queueList.add(makeQueuesQueue());
+		queues.setQueue(queueList);
+		marshal(queues, new FileOutputStream("src/test/resources/platform/queues-output.xml"));
+	}
+	
+	@Test
 	public void testUnserializeMessage() throws JAXBException {
 		Message message = unmarshal(this.getClass().getResourceAsStream("/platform/message-input.xml"), Message.class);
-		System.out.println(message.getMessageId() + ", " + message.getPriority() + ", " + message.getEnqueueTime().getTime());
+		assertNotNull(message);
+		assertEquals(message.getMessageId(), "msg-1103313753");
+		assertEquals(message.getMessageBody(), "XJIidjid");
+		assertEquals(message.getPriority().intValue(), 12);
+		assertEquals(message.getReceiptHandle(), "some handle 1044954046");
+		assertEquals(message.getEnqueueTime().getTime(), 1436859834690l);
+		assertEquals(message.getNextVisibleTime().getTime(), 1436859834690l);
+		assertNull(message.getDelaySeconds());
+		assertNull(message.getDequeueCount());
+		assertNull(message.getFirstDequeueTime());
+		assertNull(message.getMessageBodyMD5());
 	}
 
 	@Test
-	@Ignore
-	public void testSerializeQueues() throws JAXBException {
-		Queues queues = new Queues();
-		List<Queue> queueList = new ArrayList<Queue>();
-		queueList.add(makeQueue(true));
-		queueList.add(makeQueue(true));
-		queues.setQueue(queueList);
-		marshal(queues, System.out);
+	public void testUnserializeQueue() throws JAXBException {
+		Queue queue = unmarshal(this.getClass().getResourceAsStream("/platform/queue-input.xml"), Queue.class);
+		assertNotNull(queue);
+	}
+	
+	@Test
+	public void testUnserializeQueues() throws JAXBException {
+		Queues queues = unmarshal(this.getClass().getResourceAsStream("/platform/queues-input.xml"), Queues.class);
+		assertNotNull(queues);
 	}
 
 }
