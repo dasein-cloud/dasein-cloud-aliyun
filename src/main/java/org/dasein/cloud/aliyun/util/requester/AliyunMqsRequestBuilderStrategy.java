@@ -45,6 +45,8 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -195,7 +197,13 @@ public class AliyunMqsRequestBuilderStrategy extends AliyunOssRequestBuilderStra
             }
             try {
                 Account account = future.get();
-                account.refresh();
+                boolean success;
+                do {
+                    Future<Account> currentFuture = cache.get(accessKeyId);
+                    Account currentAccount = currentFuture.get();
+                    success = cache.replace(accessKeyId, currentFuture, currentAccount.newFuture());
+                } while (!success);
+
                 if (count.incrementAndGet() >= CACHE_CLEAR_FREQUENCY) {
                     clear();
                 }
@@ -216,15 +224,14 @@ public class AliyunMqsRequestBuilderStrategy extends AliyunOssRequestBuilderStra
                 if (count.compareAndSet(current, current - CACHE_CLEAR_FREQUENCY)) {
                     long now = System.currentTimeMillis();
 
-                    Iterator<Map.Entry<String, Future<Account>>> iterator = cache.entrySet().iterator();
-                    while (iterator.hasNext()) {
-                        Map.Entry<String, Future<Account>> entry = iterator.next();
-                        Future<Account> future = entry.getValue();
-                        if (future.isCancelled()) {
-                            iterator.remove();
+                    for(Map.Entry<String, Future<Account>> entry : cache.entrySet()) {
+                        String key = entry.getKey();
+                        Future<Account> value = entry.getValue();
+                        if(value.isCancelled()) {
+                            cache.remove(key);
                         }
-                        if (future.isDone() && now - future.get().getLastRetrieveTime() >= CACHE_ALIVE_MILLIS) {
-                            iterator.remove(); //may remove just refreshed object, but ignore it now
+                        if (value.isDone() && now - value.get().getLastRetrieveTime() >= CACHE_ALIVE_MILLIS) {
+                            cache.remove(key, value);//ignore if failed, as has been updated by another thread
                         }
                     }
                 }
@@ -238,31 +245,59 @@ public class AliyunMqsRequestBuilderStrategy extends AliyunOssRequestBuilderStra
             @XmlElement(name="AccountId", namespace = "http://mqs.aliyuncs.com/doc/v1")
             private String accountId;
 
-            private AtomicLong lastRetrieveTime = new AtomicLong(0);
+            private long lastRetrieveTime = System.currentTimeMillis();
+
+            public Account() {
+            }
+
+            public Account(String accountId) {
+                this.accountId = accountId;
+            }
 
             public String getAccountId() {
                 return accountId;
             }
 
-            public void setAccountId(String accountId) {
-                this.accountId = accountId;
-            }
-
             public long getLastRetrieveTime() {
-                return lastRetrieveTime.get();
+                return lastRetrieveTime;
             }
 
-            public void setLastRetrieveTime(long lastRetrieveTime) {
-                this.lastRetrieveTime.set(lastRetrieveTime);
+            public Future<Account> newFuture() {
+                return new AccountFuture(accountId);
             }
 
-            public void refresh() {
-                boolean success;
-                do {
-                    long now = System.currentTimeMillis();
-                    long oldRetrieveTime = this.lastRetrieveTime.get();
-                    success = this.lastRetrieveTime.compareAndSet(oldRetrieveTime, now);
-                } while (!success);
+            private class AccountFuture implements Future<Account> {
+                private Account account;
+
+                protected AccountFuture(String accountId) {
+                    account = new Account(accountId);
+                }
+
+                @Override
+                public boolean cancel(boolean mayInterruptIfRunning) {
+                    return false;
+                }
+
+                @Override
+                public boolean isCancelled() {
+                    return false;
+                }
+
+                @Override
+                public boolean isDone() {
+                    return true;
+                }
+
+                @Override
+                public Account get() throws InterruptedException, ExecutionException {
+                    return account;
+                }
+
+                @Override
+                public Account get(long timeout, TimeUnit unit)
+                        throws InterruptedException, ExecutionException, TimeoutException {
+                    return account;
+                }
             }
         }
     }
