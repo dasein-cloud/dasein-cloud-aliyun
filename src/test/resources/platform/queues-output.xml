@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Queues xmlns="http://mqs.aliyuncs.com/doc/v1/">
+    <Queue>
+        <QueueURL>http://-1089388579.mqs-cn-hangzhou.aliyuncs.com/mq-1850742607</QueueURL>
+    </Queue>
+    <Queue>
+        <QueueURL>http://2068906174.mqs-cn-hangzhou.aliyuncs.com/mq-1686678363</QueueURL>
+    </Queue>
+</Queues>

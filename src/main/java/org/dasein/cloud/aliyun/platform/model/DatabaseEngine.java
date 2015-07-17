@@ -16,16 +16,29 @@
  * limitations under the License.
  * ====================================================================
  */
-package org.dasein.cloud.aliyun;
 
-import org.dasein.cloud.test.GlobalTestSuite;
+package org.dasein.cloud.aliyun.platform.model;
 
-/**
- * Created by Jeffrey Yan on 5/6/2015.
- *
- * @author Jeffrey Yan
- * @since 2015.05.01
- */
-public class AliyunTestSuite extends GlobalTestSuite {
+import java.util.List;
 
+public class DatabaseEngine {
+
+    String               name;
+    List<DatabaseRegion> regions;
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName( String name ) {
+        this.name = name;
+    }
+
+    public List<DatabaseRegion> getRegions() {
+        return regions;
+    }
+
+    public void setRegions( List<DatabaseRegion> regions ) {
+        this.regions = regions;
+    }
 }
