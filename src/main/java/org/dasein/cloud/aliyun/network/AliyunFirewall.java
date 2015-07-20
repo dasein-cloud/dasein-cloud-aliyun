@@ -247,7 +247,8 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
     @Nonnull
     @Override
     public String create(@Nonnull FirewallCreateOptions options) throws InternalException, CloudException {
-        Map<String, Object> params = new HashMap<String, Object>();
+        
+    	Map<String, Object> params = new HashMap<String, Object>();
         params.put("RegionId", getContext().getRegionId());
         if (!getProvider().isEmpty(options.getDescription())) {
             params.put("Description", options.getDescription());
@@ -259,9 +260,22 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
             params.put("VpcId", options.getProviderVlanId());
         }
         
+        ResponseHandler<String> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, String>(
+    			new StreamToJSONObjectProcessor(),
+    				new DriverToCoreMapper<JSONObject, String>() {
+    					@Override
+    					public String mapFrom(JSONObject json) {
+    						try {
+								return json.getString("SecurityGroupId");
+							} catch (JSONException e) {
+								stdLogger.error("parse SecurityGroupId from response failed", e);
+								throw new RuntimeException(e);
+							}
+    					}
+    				}, JSONObject.class);	
+        
         return (String) AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.ECS, 
-        		"CreateSecurityGroup", AliyunNetworkCommon.RequestMethod.POST, true, 
-        		AliyunNetworkCommon.getResponseMapHandler(getProvider(), "SecurityGroupId")).get("SecurityGroupId");
+        		"CreateSecurityGroup", AliyunNetworkCommon.RequestMethod.POST, true, responseHandler);
         
     }
 

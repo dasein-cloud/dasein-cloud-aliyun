@@ -198,10 +198,24 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
             params.put("Description", options.getDescription());
         }
         
+        ResponseHandler<String> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, String>(
+            new StreamToJSONObjectProcessor(),
+              new DriverToCoreMapper<JSONObject, String>() {
+                 @Override
+                 public String mapFrom(JSONObject json ) {
+                	 try {
+                              return json.getString("VSwitchId" );
+                     } catch (JSONException e ) {
+                              stdLogger.error("parse VSwitchId from response failed", e);
+                              throw new RuntimeException(e);
+                     }
+                }
+             }, JSONObject. class);      
+
+        
         String vSwitchId = (String) AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, 
         		AliyunRequestBuilder.Category.ECS, "CreateVSwitch", 
-        		AliyunNetworkCommon.RequestMethod.POST, true, 
-        		AliyunNetworkCommon.getResponseMapHandler(getProvider(), "VSwitchId")).get("VSwitchId");
+        		AliyunNetworkCommon.RequestMethod.POST, true, responseHandler);
         
         return getSubnet(new IdentityGenerator(vlanId.getVlanId(), vSwitchId, null, null).toString());
         
@@ -236,12 +250,23 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
             params.put("Description", description);
         }
         
-        Map<String, Object> result = AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, 
-        		AliyunRequestBuilder.Category.ECS, "CreateVpc", AliyunNetworkCommon.RequestMethod.POST, true, 
-        		AliyunNetworkCommon.getResponseMapHandler(getProvider(), "VpcId", "VRouterId", "RouteTableId"));
-       
-        return getVlan(new IdentityGenerator((String)result.get("VpcId"), null, (String)result.get("VRouterId"), 
-        		(String)result.get("RouteTableId")).toString());
+        ResponseHandler<String> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, String>(
+            new StreamToJSONObjectProcessor(),
+                  new DriverToCoreMapper<JSONObject, String>() {
+	                     @Override
+	                     public String mapFrom(JSONObject json ) {
+	                    	 try {
+								return new IdentityGenerator(json.getString("VpcId"), null, json.getString("VRouterId"), json.getString("RouteTableId")).getVlanId();
+							} catch (JSONException e) {
+								stdLogger.error("parsing VpcId or VRouterId or RouteTableId failed", e);
+								throw new RuntimeException(e);
+							}
+	                    }
+                 }, JSONObject. class);
+        
+        return getVlan(
+        		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.ECS, 
+        				"CreateVpc", AliyunNetworkCommon.RequestMethod.POST, true, responseHandler));
     }
 
     @Nonnull

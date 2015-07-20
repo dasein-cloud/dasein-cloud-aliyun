@@ -1,5 +1,6 @@
 package org.dasein.cloud.aliyun.platform;
 
+import org.apache.commons.io.IOUtils;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.ClientProtocolException;
@@ -32,10 +33,16 @@ import org.dasein.cloud.util.requester.streamprocessors.XmlStreamToObjectProcess
 import org.dasein.util.uom.storage.Storage;
 import org.dasein.util.uom.time.Second;
 import org.dasein.util.uom.time.TimePeriod;
+
 import java.io.IOException;
+import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBException;
+import javax.xml.bind.Unmarshaller;
 
 public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQSupport {
 	
@@ -126,47 +133,85 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
 		
 		final String accountNumber = getContext().getAccountNumber();
 		final String regionId = getContext().getRegionId();
-		ResponseHandler<MessageQueue> responseHandler = new AliyunResponseHandlerWithMapper<Queue, MessageQueue>(
-                new XmlStreamToObjectProcessor<Queue>(),
-                new DriverToCoreMapper<Queue, MessageQueue>() {
-                    @Override
-                    public MessageQueue mapFrom(Queue queue) {
-                    	TimePeriod delaySeconds = null;
-                		if (queue.getDelaySeconds() != null) {
-                			delaySeconds = TimePeriod.valueOf(queue.getDelaySeconds(), "second");
-                		}
-                		TimePeriod messageRetentionPeriod = null;
-                		if (queue.getMessageRetentionPeriod() != null) {
-                			messageRetentionPeriod = TimePeriod.valueOf(queue.getMessageRetentionPeriod(), "second");
-                		}
-                		TimePeriod visibilityTimeout = null;
-                		if (queue.getVisibilityTimeout() != null) {
-                			visibilityTimeout = TimePeriod.valueOf(queue.getVisibilityTimeout(), "second");
-                		}
-                		Storage maximumMessageSize = null;
-                		if (queue.getMaximumMessageSize() != null) {
-                			maximumMessageSize = Storage.valueOf(queue.getMaximumMessageSize(), "byte");
-                		}
-                		
-                		return MessageQueue.getInstance(accountNumber, 
-                				regionId,
-                				queue.getQueueName(), 
-                				queue.getQueueName(), 
-                				MQState.ACTIVE, 
-                				"message queue " + queue.getQueueName(),
-                				"http://" + generateHost(accountNumber, regionId, queue.getQueueName()),
-                				delaySeconds, 
-                				messageRetentionPeriod, 
-                				visibilityTimeout, 
-                				maximumMessageSize);
-                    }
-                },
-                Queue.class);
 		
-		return new AliyunRequestExecutor<MessageQueue>(getProvider(),
+		ResponseHandler<Void> responseHandler = new ResponseHandler<Void>(){
+            @Override
+            public Void handleResponse(HttpResponse response) throws IOException {
+                int httpCode = response.getStatusLine().getStatusCode();
+                if (httpCode == HttpStatus.SC_OK) {
+                	StringWriter writer = new StringWriter();
+                	IOUtils.copy(response.getEntity().getContent(), writer, "UTF-8");
+                	String theString = writer.toString();
+                	stdLogger.warn(theString);
+                	
+                	JAXBContext context;
+					try {
+						context = JAXBContext.newInstance(Queue.class);
+						Unmarshaller u = context.createUnmarshaller();
+	                    Queue queue = (Queue) u.unmarshal(response.getEntity().getContent());
+	                    stdLogger.warn("queue info: " + queue.getQueueName());
+					} catch (JAXBException e) {
+						stdLogger.error("exception occurs during transfer input to queue", e);
+					}
+                	return null;
+                } else if (httpCode == HttpStatus.SC_CONFLICT) {
+                	stdLogger.error("Create queue failed, got " + httpCode);
+                	throw new AliyunResponseException(httpCode, null, 
+                			"Create queue failed, got " + httpCode,
+                			response.getFirstHeader("x-mns-request-id").getValue(),
+                			generateHost(accountNumber, regionId, null /*options.getName()*/));
+                } else {
+                	stdLogger.error("Other exceptions found, got " + httpCode);
+                	throw new AliyunResponseException(httpCode, null, 
+                			"Other exceptions found, got " + httpCode,
+                			response.getFirstHeader("x-mns-request-id").getValue(),
+                			generateHost(accountNumber, regionId, null/*options.getName()*/));
+                }
+            }
+        };
+//		ResponseHandler<MessageQueue> responseHandler = new AliyunResponseHandlerWithMapper<Queue, MessageQueue>(
+//                new XmlStreamToObjectProcessor<Queue>(),
+//                new DriverToCoreMapper<Queue, MessageQueue>() {
+//                    @Override
+//                    public MessageQueue mapFrom(Queue queue) {
+//                    	TimePeriod delaySeconds = null;
+//                		if (queue.getDelaySeconds() != null) {
+//                			delaySeconds = TimePeriod.valueOf(queue.getDelaySeconds(), "second");
+//                		}
+//                		TimePeriod messageRetentionPeriod = null;
+//                		if (queue.getMessageRetentionPeriod() != null) {
+//                			messageRetentionPeriod = TimePeriod.valueOf(queue.getMessageRetentionPeriod(), "second");
+//                		}
+//                		TimePeriod visibilityTimeout = null;
+//                		if (queue.getVisibilityTimeout() != null) {
+//                			visibilityTimeout = TimePeriod.valueOf(queue.getVisibilityTimeout(), "second");
+//                		}
+//                		Storage maximumMessageSize = null;
+//                		if (queue.getMaximumMessageSize() != null) {
+//                			maximumMessageSize = Storage.valueOf(queue.getMaximumMessageSize(), "byte");
+//                		}
+//                		
+//                		return MessageQueue.getInstance(accountNumber, 
+//                				regionId,
+//                				queue.getQueueName(), 
+//                				queue.getQueueName(), 
+//                				MQState.ACTIVE, 
+//                				"message queue " + queue.getQueueName(),
+//                				"http://" + generateHost(accountNumber, regionId, queue.getQueueName()),
+//                				delaySeconds, 
+//                				messageRetentionPeriod, 
+//                				visibilityTimeout, 
+//                				maximumMessageSize);
+//                    }
+//                },
+//                Queue.class);
+		
+		new AliyunRequestExecutor<Void>(getProvider(),
                 AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
                 request,
                 responseHandler).execute();
+		
+		return null;
 	}
 
 	@Override
@@ -194,13 +239,14 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
 		String nextMarker = null;
 		do {
 
-			AliyunRequestBuilder builder = AliyunRequestBuilder.delete()
+			AliyunRequestBuilder builder = AliyunRequestBuilder.get()
 					.provider(getProvider())
-					.category(AliyunRequestBuilder.Category.MQS);
+					.category(AliyunRequestBuilder.Category.MQS)
+					.path("/")
+					.header("x-mqs-ret-number", RequestPageSize.toString());
 			if (!getProvider().isEmpty(nextMarker)) {
 				builder.header("x-mqs-marker", nextMarker);
 			}
-			builder.header("x-mqs-ret-number", RequestPageSize.toString());
 			
 			HttpUriRequest request = builder.build();
 		

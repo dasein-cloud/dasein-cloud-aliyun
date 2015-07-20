@@ -99,10 +99,24 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 						.toLowerCase());
 		params.put("Bandwidth", 1000);
 		
+		ResponseHandler<String> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, String>(
+            new StreamToJSONObjectProcessor(),
+              new DriverToCoreMapper<JSONObject, String>() {
+                 @Override
+                 public String mapFrom(JSONObject json ) {
+                      try {
+                          return json.getString("LoadBalancerId" );
+                      } catch (JSONException e ) {
+                              stdLogger.error("parse LoadBalancerId from response failed", e);
+                          throw new RuntimeException(e);
+                      }
+                }
+             }, JSONObject. class);      
+
+		
 		String loadBalancerId = (String) AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, 
 				AliyunRequestBuilder.Category.SLB, "CreateLoadBalancer", 
-				AliyunNetworkCommon.RequestMethod.POST, true, 
-				AliyunNetworkCommon.getResponseMapHandler(getProvider(), "LoadBalancerId")).get("LoadBalancerId");
+				AliyunNetworkCommon.RequestMethod.POST, true, responseHandler);
 
 		if (loadBalancerId != null) {
 

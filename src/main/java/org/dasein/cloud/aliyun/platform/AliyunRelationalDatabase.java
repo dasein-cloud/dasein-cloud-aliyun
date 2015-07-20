@@ -29,6 +29,7 @@ import org.dasein.cloud.ResourceStatus;
 import org.dasein.cloud.TimeWindow;
 import org.dasein.cloud.aliyun.Aliyun;
 import org.dasein.cloud.aliyun.network.AliyunNetworkCommon;
+import org.dasein.cloud.aliyun.network.AliyunNetworkCommon.RequestMethod;
 import org.dasein.cloud.aliyun.platform.model.DatabaseProvider;
 import org.dasein.cloud.aliyun.util.requester.AliyunHttpClientBuilderFactory;
 import org.dasein.cloud.aliyun.util.requester.AliyunRequestBuilder;
@@ -256,7 +257,7 @@ public class AliyunRelationalDatabase extends
 		accessBuilder.append(sourceCidr);
 		params.put("SecurityIps", accessBuilder.toString());
 		
-		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+		executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
 				"ModifySecurityIps", AliyunNetworkCommon.RequestMethod.POST, false, 
 				new AliyunValidateJsonResponseHandler(getProvider()));
 		
@@ -295,7 +296,7 @@ public class AliyunRelationalDatabase extends
 				params.put("DBInstanceStorage", storageInGigabytes);
 			}
 			
-			AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+			executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
 					"ModifyDBInstanceSpec", AliyunNetworkCommon.RequestMethod.POST, false, 
 					new AliyunValidateJsonResponseHandler(getProvider()));
 		}
@@ -311,7 +312,7 @@ public class AliyunRelationalDatabase extends
 			params.put("DBInstanceId", databaseId.getDatabaseInstanceId());
 			params.put("MaintainTime", parseTimeWindow(preferredMaintenanceWindow));
 			
-			AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+			executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
 					"ModifyDBInstanceMaintainTime", AliyunNetworkCommon.RequestMethod.POST, false, 
 					new AliyunValidateJsonResponseHandler(getProvider()));
 		}
@@ -326,7 +327,7 @@ public class AliyunRelationalDatabase extends
 			} else {
 				params.put("PreferredBackupPeriod", getProvider().capitalize(preferredBackupWindow.getStartDayOfWeek().name()));
 			}
-			AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+			executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
 					"ModifyBackupPolicy", AliyunNetworkCommon.RequestMethod.POST, false, 
 					new AliyunValidateJsonResponseHandler(getProvider()));
 		}
@@ -381,9 +382,23 @@ public class AliyunRelationalDatabase extends
 		}
 		
 		//create DB instance
-		String instanceId = (String) AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, 
-				AliyunRequestBuilder.Category.RDS, "CreateDBInstance", AliyunNetworkCommon.RequestMethod.POST, true, 
-				AliyunNetworkCommon.getResponseMapHandler(getProvider(), "DBInstanceId")).get("DBInstanceId");
+		ResponseHandler<String> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, String>(
+                new StreamToJSONObjectProcessor(),
+                      new DriverToCoreMapper<JSONObject, String>() {
+                             @Override
+                             public String mapFrom(JSONObject json ) {
+                            	  try {
+                                      return json.getString("DBInstanceId" );
+	                              } catch (JSONException e ) {
+	                                      stdLogger.error("parse SecurityGroupId from response failed", e);
+                                      throw new RuntimeException(e);
+	                              }
+                            }
+                     }, JSONObject. class);  
+
+		String instanceId = (String) executeDefaultRequest(getProvider(), params, 
+				AliyunRequestBuilder.Category.RDS, "CreateDBInstance", AliyunNetworkCommon.RequestMethod.POST, 
+				true, responseHandler);
 		
 		//create database
 		params = new HashMap<String, Object>();
@@ -397,7 +412,7 @@ public class AliyunRelationalDatabase extends
 			params.put("CharacterSetName", "Chinese_PRC_CI_AS");
 		}
 		
-		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+		executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
 				"CreateDatabase", AliyunNetworkCommon.RequestMethod.POST, false, 
 				new AliyunValidateJsonResponseHandler(getProvider()));
 		
@@ -758,7 +773,7 @@ public class AliyunRelationalDatabase extends
 		params.put("DBInstanceId", databaseId.getDatabaseInstanceId());
 		params.put("DBName", databaseId.getDatabaseName());
 		
-		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+		executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
 				"DeleteDatabase", AliyunNetworkCommon.RequestMethod.POST, false, 
 				new AliyunValidateJsonResponseHandler(getProvider()));
 	}
@@ -772,7 +787,7 @@ public class AliyunRelationalDatabase extends
 		Map<String, Object> params = new HashMap<String, Object>();
 		params.put("DBInstanceId", databaseId.getDatabaseInstanceId());
 		
-		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+		executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
 				"RestartDBInstance", AliyunNetworkCommon.RequestMethod.POST, false, 
 				new AliyunValidateJsonResponseHandler(getProvider()));
 	}
@@ -797,7 +812,7 @@ public class AliyunRelationalDatabase extends
 		accessBuilder.deleteCharAt(accessBuilder.length() - 1);
 		params.put("SecurityIps", accessBuilder.toString());
 		
-		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+		executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
 				"ModifySecurityIps", AliyunNetworkCommon.RequestMethod.POST, false, 
 				new AliyunValidateJsonResponseHandler(getProvider()));
 	}
@@ -938,34 +953,46 @@ public class AliyunRelationalDatabase extends
 		Map<String, Object> params = new HashMap<String, Object>();
 		params.put("DBInstanceId", databaseInstanceId);
 		
-		Map<String, Object> backupTimeWindow = AliyunNetworkCommon.executeDefaultRequest(getProvider(), 
+		ResponseHandler<TimeWindow> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, TimeWindow>(
+            new StreamToJSONObjectProcessor(),
+                  new DriverToCoreMapper<JSONObject, TimeWindow>() {
+                     @Override
+                     public TimeWindow mapFrom(JSONObject json ) {
+                        try {
+                            TimeWindow timeWindow = new TimeWindow();
+                      		SimpleDateFormat timeFormatter = new SimpleDateFormat("HH:mm'Z'");
+                      		String[] segments = json.getString("PreferredBackupTime").split("-");
+                      		try {
+                      			Calendar cal = Calendar.getInstance();
+                      			cal.setTime(timeFormatter.parse(segments[0].trim()));
+                      			
+                      			timeWindow.setStartHour(cal.get(Calendar.HOUR_OF_DAY));
+                      			timeWindow.setStartMinute(cal.get(Calendar.MINUTE));
+                      			cal.setTime(timeFormatter.parse(segments[1].trim()));
+                      			
+                      			timeWindow.setEndHour(cal.get(Calendar.HOUR_OF_DAY));
+                      			timeWindow.setEndMinute(cal.get(Calendar.MINUTE));
+                      			
+                      			timeWindow.setStartDayOfWeek(DayOfWeek.valueOf(json.getString("PreferredBackupPeriod").toUpperCase()));
+                      			timeWindow.setEndDayOfWeek(DayOfWeek.valueOf(json.getString("PreferredBackupPeriod").toUpperCase()));
+                      			
+                      			return timeWindow;
+                      		} catch (ParseException e) {
+                      			stdLogger.error("parsing start and end hour/minutes failed for backup time", e);
+                      			throw new RuntimeException(e);
+                      		}
+                        } catch (JSONException e ) {
+                              stdLogger.error("parse SecurityGroupId from response failed", e);
+                              throw new RuntimeException(e);
+                        }
+                    }
+                 }, JSONObject. class);  
+
+		
+		return executeDefaultRequest(getProvider(), 
 				params, AliyunRequestBuilder.Category.RDS, "DescribeBackupPolicy", 
 				AliyunNetworkCommon.RequestMethod.POST, false, 
-				AliyunNetworkCommon.getResponseMapHandler(getProvider(), "PreferredBackupTime", "PreferredBackupPeriod"));
-		
-		TimeWindow timeWindow = new TimeWindow();
-		SimpleDateFormat timeFormatter = new SimpleDateFormat("HH:mm'Z'");
-		String[] segments = ((String) backupTimeWindow.get("PreferredBackupTime")).split("-");
-		try {
-			Calendar cal = Calendar.getInstance();
-			cal.setTime(timeFormatter.parse(segments[0].trim()));
-			
-			timeWindow.setStartHour(cal.get(Calendar.HOUR_OF_DAY));
-			timeWindow.setStartMinute(cal.get(Calendar.MINUTE));
-			cal.setTime(timeFormatter.parse(segments[1].trim()));
-			
-			timeWindow.setEndHour(cal.get(Calendar.HOUR_OF_DAY));
-			timeWindow.setEndMinute(cal.get(Calendar.MINUTE));
-			
-			timeWindow.setStartDayOfWeek(DayOfWeek.valueOf(backupTimeWindow.get("PreferredBackupPeriod").toString().toUpperCase()));
-			timeWindow.setEndDayOfWeek(DayOfWeek.valueOf(backupTimeWindow.get("PreferredBackupPeriod").toString().toUpperCase()));
-			
-			return timeWindow;
-		} catch (ParseException e) {
-			stdLogger.error("parsing start and end hour/minutes failed for backup time", e);
-			throw new InternalException(e);
-		}
-		
+				responseHandler);
 	}
 	
 	/**
@@ -1138,7 +1165,7 @@ public class AliyunRelationalDatabase extends
 		params.put("AccountPassword", adminPassword);
 		params.put("AccountDescription", "User " + adminUser + " for DB Instance " + dbInstanceId);
 		
-		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+		executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
 				"CreateAccount", AliyunNetworkCommon.RequestMethod.POST, false, 
 				new AliyunValidateJsonResponseHandler(getProvider()));
 		
@@ -1149,7 +1176,7 @@ public class AliyunRelationalDatabase extends
 		params.put("DBName", dbName);
 		params.put("AccountpPrivilege", "ReadWrite");
 		
-		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+		executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
 				"GrantAccountPrivilege", AliyunNetworkCommon.RequestMethod.POST, false, 
 				new AliyunValidateJsonResponseHandler(getProvider()));
 	}
@@ -1167,9 +1194,38 @@ public class AliyunRelationalDatabase extends
 		params.put("DBInstanceId", dbInstanceId);
 		params.put("AccountName", adminUser);
 		
-		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+		executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
 				"DeleteAccount", AliyunNetworkCommon.RequestMethod.POST, false, 
 				new AliyunValidateJsonResponseHandler(getProvider()));
+	}
+	
+	public static <V> V executeDefaultRequest(Aliyun provider, Map<String, Object> params, 
+			AliyunRequestBuilder.Category category, String action, RequestMethod requestMethod, 
+			boolean clientToken, ResponseHandler<V> handler) throws InternalException, CloudException {
+
+		AliyunRequestBuilder builder = null;
+		if (requestMethod.equals(RequestMethod.GET)) { 
+			builder = AliyunRequestBuilder.get();
+			for (String key : params.keySet()) {
+				builder = builder.parameter(key, params.get(key));
+			}
+		} else if (requestMethod.equals(RequestMethod.POST)) {
+			builder = AliyunRequestBuilder.post();
+			builder = builder.entity(params);
+		} else {
+			throw new InternalException("Not supported request method " + requestMethod.name());
+		}
+		builder = builder.provider(provider).category(category).parameter("Action", action);
+		if (clientToken) {
+			builder = builder.clientToken(true);
+		}
+
+		return new AliyunRequestExecutor<V>(
+				provider,
+				AliyunHttpClientBuilderFactory.newHttpClientBuilder(), 
+				builder.build(),
+				handler).execute();
+
 	}
 	
 	
