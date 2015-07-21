@@ -282,7 +282,7 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
 				break;
 			}
 			
-			deleteMessage(recievedMessage.getMessageId(), recievedMessage.getReceiptHandle());
+			deleteMessage(mqId, recievedMessage.getReceiptHandle());
 			
 			receipts.add(MQMessageReceipt.getInstance(
 					new MQMessageIdentifier(recievedMessage.getMessageId(), recievedMessage.getMessageBodyMD5()),
@@ -319,12 +319,12 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
 		
 	}
 	
-	private void deleteMessage(String messageId, String receiptHandle) throws InternalException, CloudException {
+	private void deleteMessage(String queueId, String receiptHandle) throws InternalException, CloudException {
 		
 		HttpUriRequest request = AliyunRequestBuilder.delete()
                 .provider(getProvider())
                 .category(AliyunRequestBuilder.Category.MQS)
-                .path("/" + messageId + "/messages")
+                .path("/" + queueId + "/messages")
                 .parameter("ReceiptHandle", receiptHandle)
                 .build();
 		
