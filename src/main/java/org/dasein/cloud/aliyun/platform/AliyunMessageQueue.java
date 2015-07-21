@@ -273,21 +273,21 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
 				}
 			};
 		
-			Message recievedMessage = new AliyunRequestExecutor<Message>(getProvider(),
+			Message receivedMessage = new AliyunRequestExecutor<Message>(getProvider(),
 	                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
 	                request,
 	                responseHandler).execute();
 			
-			if (recievedMessage == null) {
+			if (receivedMessage == null) {
 				break;
 			}
 			
-			deleteMessage(mqId, recievedMessage.getReceiptHandle());
+			deleteMessage(mqId, receivedMessage.getReceiptHandle());
 			
 			receipts.add(MQMessageReceipt.getInstance(
-					new MQMessageIdentifier(recievedMessage.getMessageId(), recievedMessage.getMessageBodyMD5()),
-					recievedMessage.getMessageBody(),
-					recievedMessage.getEnqueueTime().getTime()));
+					new MQMessageIdentifier(receivedMessage.getMessageId(), receivedMessage.getMessageBodyMD5()),
+					receivedMessage.getMessageBody(),
+					receivedMessage.getEnqueueTime().getTime()));
 		}
 
 		return receipts;
@@ -310,12 +310,12 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
 				new XmlStreamToObjectProcessor<Message>(),
 				Message.class);
 		
-		Message recievedMessage = new AliyunRequestExecutor<Message>(getProvider(),
+		Message receivedMessage = new AliyunRequestExecutor<Message>(getProvider(),
                 AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
                 request,
                 responseHandler).execute();
 		
-		return new MQMessageIdentifier(recievedMessage.getMessageId(), recievedMessage.getMessageBodyMD5());
+		return new MQMessageIdentifier(receivedMessage.getMessageId(), receivedMessage.getMessageBodyMD5());
 		
 	}
 	
@@ -348,7 +348,7 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
 		Queue queue = new Queue();
 		queue.setVisibilityTimeout(visibilityTimeout);
 		
-		HttpUriRequest request = AliyunRequestBuilder.get()
+		HttpUriRequest request = AliyunRequestBuilder.put()
                 .provider(getProvider())
                 .category(AliyunRequestBuilder.Category.MQS)
                 .path("/" + queueName)
