@@ -134,84 +134,47 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
 		final String accountNumber = getContext().getAccountNumber();
 		final String regionId = getContext().getRegionId();
 		
-		ResponseHandler<Void> responseHandler = new ResponseHandler<Void>(){
-            @Override
-            public Void handleResponse(HttpResponse response) throws IOException {
-                int httpCode = response.getStatusLine().getStatusCode();
-                if (httpCode == HttpStatus.SC_OK) {
-                	StringWriter writer = new StringWriter();
-                	IOUtils.copy(response.getEntity().getContent(), writer, "UTF-8");
-                	String theString = writer.toString();
-                	stdLogger.warn(theString);
-                	
-                	JAXBContext context;
-					try {
-						context = JAXBContext.newInstance(Queue.class);
-						Unmarshaller u = context.createUnmarshaller();
-	                    Queue queue = (Queue) u.unmarshal(response.getEntity().getContent());
-	                    stdLogger.warn("queue info: " + queue.getQueueName());
-					} catch (JAXBException e) {
-						stdLogger.error("exception occurs during transfer input to queue", e);
-					}
-                	return null;
-                } else if (httpCode == HttpStatus.SC_CONFLICT) {
-                	stdLogger.error("Create queue failed, got " + httpCode);
-                	throw new AliyunResponseException(httpCode, null, 
-                			"Create queue failed, got " + httpCode,
-                			response.getFirstHeader("x-mns-request-id").getValue(),
-                			generateHost(accountNumber, regionId, null /*options.getName()*/));
-                } else {
-                	stdLogger.error("Other exceptions found, got " + httpCode);
-                	throw new AliyunResponseException(httpCode, null, 
-                			"Other exceptions found, got " + httpCode,
-                			response.getFirstHeader("x-mns-request-id").getValue(),
-                			generateHost(accountNumber, regionId, null/*options.getName()*/));
-                }
-            }
-        };
-//		ResponseHandler<MessageQueue> responseHandler = new AliyunResponseHandlerWithMapper<Queue, MessageQueue>(
-//                new XmlStreamToObjectProcessor<Queue>(),
-//                new DriverToCoreMapper<Queue, MessageQueue>() {
-//                    @Override
-//                    public MessageQueue mapFrom(Queue queue) {
-//                    	TimePeriod delaySeconds = null;
-//                		if (queue.getDelaySeconds() != null) {
-//                			delaySeconds = TimePeriod.valueOf(queue.getDelaySeconds(), "second");
-//                		}
-//                		TimePeriod messageRetentionPeriod = null;
-//                		if (queue.getMessageRetentionPeriod() != null) {
-//                			messageRetentionPeriod = TimePeriod.valueOf(queue.getMessageRetentionPeriod(), "second");
-//                		}
-//                		TimePeriod visibilityTimeout = null;
-//                		if (queue.getVisibilityTimeout() != null) {
-//                			visibilityTimeout = TimePeriod.valueOf(queue.getVisibilityTimeout(), "second");
-//                		}
-//                		Storage maximumMessageSize = null;
-//                		if (queue.getMaximumMessageSize() != null) {
-//                			maximumMessageSize = Storage.valueOf(queue.getMaximumMessageSize(), "byte");
-//                		}
-//                		
-//                		return MessageQueue.getInstance(accountNumber, 
-//                				regionId,
-//                				queue.getQueueName(), 
-//                				queue.getQueueName(), 
-//                				MQState.ACTIVE, 
-//                				"message queue " + queue.getQueueName(),
-//                				"http://" + generateHost(accountNumber, regionId, queue.getQueueName()),
-//                				delaySeconds, 
-//                				messageRetentionPeriod, 
-//                				visibilityTimeout, 
-//                				maximumMessageSize);
-//                    }
-//                },
-//                Queue.class);
+		ResponseHandler<MessageQueue> responseHandler = new AliyunResponseHandlerWithMapper<Queue, MessageQueue>(
+                new XmlStreamToObjectProcessor<Queue>(),
+                new DriverToCoreMapper<Queue, MessageQueue>() {
+                    @Override
+                    public MessageQueue mapFrom(Queue queue) {
+                    	TimePeriod delaySeconds = null;
+                		if (queue.getDelaySeconds() != null) {
+                			delaySeconds = TimePeriod.valueOf(queue.getDelaySeconds(), "second");
+                		}
+                		TimePeriod messageRetentionPeriod = null;
+                		if (queue.getMessageRetentionPeriod() != null) {
+                			messageRetentionPeriod = TimePeriod.valueOf(queue.getMessageRetentionPeriod(), "second");
+                		}
+                		TimePeriod visibilityTimeout = null;
+                		if (queue.getVisibilityTimeout() != null) {
+                			visibilityTimeout = TimePeriod.valueOf(queue.getVisibilityTimeout(), "second");
+                		}
+                		Storage maximumMessageSize = null;
+                		if (queue.getMaximumMessageSize() != null) {
+                			maximumMessageSize = Storage.valueOf(queue.getMaximumMessageSize(), "byte");
+                		}
+                		
+                		return MessageQueue.getInstance(accountNumber, 
+                				regionId,
+                				queue.getQueueName(), 
+                				queue.getQueueName(), 
+                				MQState.ACTIVE, 
+                				"message queue " + queue.getQueueName(),
+                				"http://" + generateHost(accountNumber, regionId, queue.getQueueName()),
+                				delaySeconds, 
+                				messageRetentionPeriod, 
+                				visibilityTimeout, 
+                				maximumMessageSize);
+                    }
+                },
+                Queue.class);
 		
-		new AliyunRequestExecutor<Void>(getProvider(),
+		return new AliyunRequestExecutor<MessageQueue>(getProvider(),
                 AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
                 request,
                 responseHandler).execute();
-		
-		return null;
 	}
 
 	@Override
@@ -376,7 +339,7 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
 	}
 	
 	private String parseQueueNameFromLocation(String location) {
-		return location.substring(location.lastIndexOf("/") + 1, location.length() - 1);
+		return location.substring(location.lastIndexOf("/") + 1, location.length());
 	}
 	
 	private void changeQueueVisibilityTimeout(String queueName, Integer visibilityTimeout) 
