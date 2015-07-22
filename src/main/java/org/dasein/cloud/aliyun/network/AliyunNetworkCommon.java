@@ -18,34 +18,22 @@
  */
 package org.dasein.cloud.aliyun.network;
 
-import java.util.HashMap;
 import java.util.Map;
-
 import org.apache.http.client.ResponseHandler;
-import org.apache.log4j.Logger;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.aliyun.Aliyun;
 import org.dasein.cloud.aliyun.util.requester.AliyunHttpClientBuilderFactory;
 import org.dasein.cloud.aliyun.util.requester.AliyunRequestBuilder;
 import org.dasein.cloud.aliyun.util.requester.AliyunRequestExecutor;
-import org.dasein.cloud.aliyun.util.requester.AliyunResponseHandlerWithMapper;
-import org.dasein.cloud.util.requester.DriverToCoreMapper;
-import org.dasein.cloud.util.requester.streamprocessors.StreamToJSONObjectProcessor;
-import org.json.JSONException;
-import org.json.JSONObject;
 
 /**
  * Created by Jane Wang on 5/7/2015.
  *
  * @author Jane Wang
  * @since 2015.05.01
- *
  */
 public class AliyunNetworkCommon {
-
-	private static final Logger stdLogger = Aliyun
-			.getStdLogger(AliyunNetworkCommon.class);
 
 	public static final int DefaultPageSize = 10; // from 10 to 50, default is
 													// 10
@@ -146,5 +134,4 @@ public class AliyunNetworkCommon {
 				handler).execute();
 
 	}
-
 }

@@ -30,6 +30,7 @@ import org.dasein.cloud.aliyun.util.requester.AliyunRequestExecutor;
 import org.dasein.cloud.aliyun.util.requester.AliyunResponseHandlerWithMapper;
 import org.dasein.cloud.aliyun.util.requester.AliyunValidateJsonResponseHandler;
 import org.dasein.cloud.network.*;
+import org.dasein.cloud.util.APITrace;
 import org.dasein.cloud.util.requester.DriverToCoreMapper;
 import org.dasein.cloud.util.requester.streamprocessors.StreamToJSONObjectProcessor;
 import org.json.JSONArray;
@@ -60,21 +61,24 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
 
 	public void assign(@Nonnull String addressId, @Nonnull String serverId)
 			throws InternalException, CloudException {
-
-		Map<String, Object> params = new HashMap<String, Object>();
-		params.put("AllocationId", addressId);
-		params.put("InstanceId", serverId);
-
-		HttpUriRequest request = AliyunRequestBuilder.post()
-				.provider(getProvider())
-				.category(AliyunRequestBuilder.Category.ECS)
-				.parameter("Action", "AssociateEipAddress").entity(params)
-				.build();
-
-		new AliyunRequestExecutor<Void>(getProvider(),
-				AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
-				new AliyunValidateJsonResponseHandler(getProvider())).execute();
-
+		APITrace.begin(getProvider(), "assign");
+		try {
+			Map<String, Object> params = new HashMap<String, Object>();
+			params.put("AllocationId", addressId);
+			params.put("InstanceId", serverId);
+	
+			HttpUriRequest request = AliyunRequestBuilder.post()
+					.provider(getProvider())
+					.category(AliyunRequestBuilder.Category.ECS)
+					.parameter("Action", "AssociateEipAddress").entity(params)
+					.build();
+	
+			new AliyunRequestExecutor<Void>(getProvider(),
+					AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
+					new AliyunValidateJsonResponseHandler(getProvider())).execute();
+		} finally {
+			APITrace.end();
+		}
 	}
 
 	public void assignToNetworkInterface(@Nonnull String addressId,
@@ -101,43 +105,47 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
 
 	public IpAddress getIpAddress(@Nonnull String addressId)
 			throws InternalException, CloudException {
-
-		HttpUriRequest request = AliyunRequestBuilder.get()
-				.provider(getProvider())
-				.category(AliyunRequestBuilder.Category.ECS)
-				.parameter("Action", "DescribeEipAddresses")
-				.parameter("RegionId", getContext().getRegionId())
-				.parameter("AllocationId", addressId).build();
-
-		ResponseHandler<IpAddress> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, IpAddress>(
-				new StreamToJSONObjectProcessor(),
-				new DriverToCoreMapper<JSONObject, IpAddress>() {
-					@Override
-					public IpAddress mapFrom(JSONObject json) {
-						try {
-							JSONArray eipAddresses = json.getJSONObject(
-									"EipAddresses").getJSONArray("EipAddress");
-							if (eipAddresses != null
-									&& eipAddresses.length() > 0) {
-								return toIpAddress(eipAddresses
-										.getJSONObject(0));
+		APITrace.begin(getProvider(), "getIpAddress");
+		try {
+			HttpUriRequest request = AliyunRequestBuilder.get()
+					.provider(getProvider())
+					.category(AliyunRequestBuilder.Category.ECS)
+					.parameter("Action", "DescribeEipAddresses")
+					.parameter("RegionId", getContext().getRegionId())
+					.parameter("AllocationId", addressId).build();
+	
+			ResponseHandler<IpAddress> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, IpAddress>(
+					new StreamToJSONObjectProcessor(),
+					new DriverToCoreMapper<JSONObject, IpAddress>() {
+						@Override
+						public IpAddress mapFrom(JSONObject json) {
+							try {
+								JSONArray eipAddresses = json.getJSONObject(
+										"EipAddresses").getJSONArray("EipAddress");
+								if (eipAddresses != null
+										&& eipAddresses.length() > 0) {
+									return toIpAddress(eipAddresses
+											.getJSONObject(0));
+								}
+								return null;
+							} catch (InternalException internalException) {
+								stdLogger.error("Failed to validate response",
+										internalException);
+								throw new RuntimeException(internalException
+										.getMessage());
+							} catch (JSONException e) {
+								stdLogger.error("Failed to parse EIP address", e);
+								throw new RuntimeException(e.getMessage());
 							}
-							return null;
-						} catch (InternalException internalException) {
-							stdLogger.error("Failed to validate response",
-									internalException);
-							throw new RuntimeException(internalException
-									.getMessage());
-						} catch (JSONException e) {
-							stdLogger.error("Failed to parse EIP address", e);
-							throw new RuntimeException(e.getMessage());
 						}
-					}
-				}, JSONObject.class);
-
-		return new AliyunRequestExecutor<IpAddress>(getProvider(),
-				AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
-				responseHandler).execute();
+					}, JSONObject.class);
+	
+			return new AliyunRequestExecutor<IpAddress>(getProvider(),
+					AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
+					responseHandler).execute();
+		} finally {
+			APITrace.end();
+		}
 
 	}
 
@@ -147,71 +155,72 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
 
 	public Iterable<IpAddress> listIpPool(@Nonnull IPVersion version,
 			boolean unassignedOnly) throws InternalException, CloudException {
-
-		if (!version.equals(IPVersion.IPV4)) {
-			return Collections.emptyList();
-		}
-
-		List<IpAddress> allIpAddresses = new ArrayList<IpAddress>();
-		final AtomicInteger currentPageNumber = new AtomicInteger(1);
-		final AtomicInteger maxPageNumber = new AtomicInteger(1);
-
-		ResponseHandler<List<IpAddress>> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, List<IpAddress>>(
-				new StreamToJSONObjectProcessor(),
-				new DriverToCoreMapper<JSONObject, List<IpAddress>>() {
-					@Override
-					public List<IpAddress> mapFrom(JSONObject json) {
-						try {
-							List<IpAddress> ipAddresses = new ArrayList<IpAddress>();
-							JSONArray eipAddresses = json.getJSONObject(
-									"EipAddresses").getJSONArray("EipAddress");
-							for (int i = 0; i < eipAddresses.length(); i++) {
-								JSONObject eipAddress = eipAddresses
-										.getJSONObject(i);
-								ipAddresses.add(toIpAddress(eipAddress));
-							}
-							maxPageNumber.addAndGet(json.getInt("TotalCount")
-									/ AliyunNetworkCommon.DefaultPageSize
-									+ (json.getInt("TotalCount")
-											% AliyunNetworkCommon.DefaultPageSize > 0 ? 1
-											: 0));
-							currentPageNumber.incrementAndGet();
-							return ipAddresses;
-						} catch (InternalException internalException) {
-							stdLogger.error("Failed to validate response",
-									internalException);
-							throw new RuntimeException(internalException
-									.getMessage());
-						} catch (JSONException e) {
-							stdLogger.error("Parsing firewall failed", e);
-							throw new RuntimeException(e.getMessage());
-						}
-					}
-				}, JSONObject.class);
-
-		do {
-
-			AliyunRequestBuilder builder = AliyunRequestBuilder.get()
-					.provider(getProvider())
-					.category(AliyunRequestBuilder.Category.ECS)
-					.parameter("Action", "DescribeEipAddresses")
-					.parameter("RegionId", getContext().getRegionId())
-					.parameter("PageSize", AliyunNetworkCommon.DefaultPageSize)
-					.parameter("PageNumber", currentPageNumber);
-			if (unassignedOnly) {
-				builder.parameter("Status",
-						AliyunNetworkCommon.IpAddressStatus.Available.name());
+		APITrace.begin(getProvider(), "listIpPool");
+		try {
+			if (!version.equals(IPVersion.IPV4)) {
+				return Collections.emptyList();
 			}
-			HttpUriRequest request = builder.build();
+	
+			List<IpAddress> allIpAddresses = new ArrayList<IpAddress>();
+			final AtomicInteger currentPageNumber = new AtomicInteger(1);
+			final AtomicInteger maxPageNumber = new AtomicInteger(1);
+			ResponseHandler<List<IpAddress>> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, List<IpAddress>>(
+					new StreamToJSONObjectProcessor(),
+					new DriverToCoreMapper<JSONObject, List<IpAddress>>() {
+						@Override
+						public List<IpAddress> mapFrom(JSONObject json) {
+							try {
+								List<IpAddress> ipAddresses = new ArrayList<IpAddress>();
+								JSONArray eipAddresses = json.getJSONObject(
+										"EipAddresses").getJSONArray("EipAddress");
+								for (int i = 0; i < eipAddresses.length(); i++) {
+									JSONObject eipAddress = eipAddresses
+											.getJSONObject(i);
+									ipAddresses.add(toIpAddress(eipAddress));
+								}
+								maxPageNumber.addAndGet(json.getInt("TotalCount")
+										/ AliyunNetworkCommon.DefaultPageSize
+										+ (json.getInt("TotalCount")
+												% AliyunNetworkCommon.DefaultPageSize > 0 ? 1
+												: 0));
+								currentPageNumber.incrementAndGet();
+								return ipAddresses;
+							} catch (InternalException internalException) {
+								stdLogger.error("Failed to validate response",
+										internalException);
+								throw new RuntimeException(internalException
+										.getMessage());
+							} catch (JSONException e) {
+								stdLogger.error("Parsing firewall failed", e);
+								throw new RuntimeException(e.getMessage());
+							}
+						}
+					}, JSONObject.class);
+	
+			do {
+				AliyunRequestBuilder builder = AliyunRequestBuilder.get()
+						.provider(getProvider())
+						.category(AliyunRequestBuilder.Category.ECS)
+						.parameter("Action", "DescribeEipAddresses")
+						.parameter("RegionId", getContext().getRegionId())
+						.parameter("PageSize", AliyunNetworkCommon.DefaultPageSize)
+						.parameter("PageNumber", currentPageNumber);
+				if (unassignedOnly) {
+					builder.parameter("Status",
+							AliyunNetworkCommon.IpAddressStatus.Available.name());
+				}
+				HttpUriRequest request = builder.build();
+	
+				allIpAddresses.addAll(new AliyunRequestExecutor<List<IpAddress>>(
+						getProvider(), AliyunHttpClientBuilderFactory
+								.newHttpClientBuilder(), request, responseHandler)
+						.execute());
+			} while (currentPageNumber.intValue() < maxPageNumber.intValue());
 
-			allIpAddresses.addAll(new AliyunRequestExecutor<List<IpAddress>>(
-					getProvider(), AliyunHttpClientBuilderFactory
-							.newHttpClientBuilder(), request, responseHandler)
-					.execute());
-
-		} while (currentPageNumber.intValue() < maxPageNumber.intValue());
-
-		return allIpAddresses;
+			return allIpAddresses;
+		} finally {
+			APITrace.end();
+		}
 	}
 
 	/**
@@ -226,137 +235,152 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
 	 */
 	public Iterable<ResourceStatus> listIpPoolStatus(@Nonnull IPVersion version)
 			throws InternalException, CloudException {
-		if (!version.equals(IPVersion.IPV4)) {
-			return Collections.emptyList();
-		}
-		Map<String, Object> params = new HashMap<String, Object>();
-		params.put("RegionId", getContext().getRegionId());
-		params.put("PageSize", AliyunNetworkCommon.DefaultPageSize);
-		List<ResourceStatus> allResourceStatuses = new ArrayList<ResourceStatus>();
-		final AtomicInteger currentPageNumber = new AtomicInteger(1);
-		final AtomicInteger maxPageNumber = new AtomicInteger(1);
-
-		ResponseHandler<List<ResourceStatus>> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, List<ResourceStatus>>(
-				new StreamToJSONObjectProcessor(),
-				new DriverToCoreMapper<JSONObject, List<ResourceStatus>>() {
-					@Override
-					public List<ResourceStatus> mapFrom(JSONObject json) {
-						try {
-							List<ResourceStatus> resourceStatuses = new ArrayList<ResourceStatus>();
-							JSONArray eipAddresses = json.getJSONObject(
-									"EipAddresses").getJSONArray("EipAddress");
-							for (int i = 0; i < eipAddresses.length(); i++) {
-								JSONObject eipAddress = eipAddresses
-										.getJSONObject(i);
-								resourceStatuses.add(new ResourceStatus(
-										eipAddress.getString("AllocationId"),
-										eipAddress.getString("Status")));
+		APITrace.begin(getProvider(), "listIpPoolStatus");
+		try {
+			if (!version.equals(IPVersion.IPV4)) {
+				return Collections.emptyList();
+			}
+			Map<String, Object> params = new HashMap<String, Object>();
+			params.put("RegionId", getContext().getRegionId());
+			params.put("PageSize", AliyunNetworkCommon.DefaultPageSize);
+			
+			List<ResourceStatus> allResourceStatuses = new ArrayList<ResourceStatus>();
+			final AtomicInteger currentPageNumber = new AtomicInteger(1);
+			final AtomicInteger maxPageNumber = new AtomicInteger(1);
+			ResponseHandler<List<ResourceStatus>> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, List<ResourceStatus>>(
+					new StreamToJSONObjectProcessor(),
+					new DriverToCoreMapper<JSONObject, List<ResourceStatus>>() {
+						@Override
+						public List<ResourceStatus> mapFrom(JSONObject json) {
+							try {
+								List<ResourceStatus> resourceStatuses = new ArrayList<ResourceStatus>();
+								JSONArray eipAddresses = json.getJSONObject(
+										"EipAddresses").getJSONArray("EipAddress");
+								for (int i = 0; i < eipAddresses.length(); i++) {
+									JSONObject eipAddress = eipAddresses
+											.getJSONObject(i);
+									resourceStatuses.add(new ResourceStatus(
+											eipAddress.getString("AllocationId"),
+											eipAddress.getString("Status")));
+								}
+								maxPageNumber.addAndGet(json.getInt("TotalCount")
+										/ AliyunNetworkCommon.DefaultPageSize
+										+ (json.getInt("TotalCount")
+												% AliyunNetworkCommon.DefaultPageSize > 0 ? 1
+												: 0));
+								currentPageNumber.incrementAndGet();
+								return resourceStatuses;
+							} catch (JSONException e) {
+								stdLogger.error("Parsing firewall failed", e);
+								throw new RuntimeException(e.getMessage());
 							}
-							maxPageNumber.addAndGet(json.getInt("TotalCount")
-									/ AliyunNetworkCommon.DefaultPageSize
-									+ (json.getInt("TotalCount")
-											% AliyunNetworkCommon.DefaultPageSize > 0 ? 1
-											: 0));
-							currentPageNumber.incrementAndGet();
-							return resourceStatuses;
-						} catch (JSONException e) {
-							stdLogger.error("Parsing firewall failed", e);
-							throw new RuntimeException(e.getMessage());
 						}
-					}
-				}, JSONObject.class);
+					}, JSONObject.class);
+	
+			do {
+				HttpUriRequest request = AliyunRequestBuilder.get()
+						.provider(getProvider())
+						.category(AliyunRequestBuilder.Category.ECS)
+						.parameter("Action", "DescribeEipAddresses")
+						.parameter("RegionId", getContext().getRegionId())
+						.parameter("PageSize", AliyunNetworkCommon.DefaultPageSize)
+						.parameter("PageNumber", currentPageNumber).build();
+	
+				allResourceStatuses
+						.addAll(new AliyunRequestExecutor<List<ResourceStatus>>(
+								getProvider(), AliyunHttpClientBuilderFactory
+										.newHttpClientBuilder(), request,
+								responseHandler).execute());
+			} while (currentPageNumber.intValue() < maxPageNumber.intValue());
 
-		do {
-
-			HttpUriRequest request = AliyunRequestBuilder.get()
-					.provider(getProvider())
-					.category(AliyunRequestBuilder.Category.ECS)
-					.parameter("Action", "DescribeEipAddresses")
-					.parameter("RegionId", getContext().getRegionId())
-					.parameter("PageSize", AliyunNetworkCommon.DefaultPageSize)
-					.parameter("PageNumber", currentPageNumber).build();
-
-			allResourceStatuses
-					.addAll(new AliyunRequestExecutor<List<ResourceStatus>>(
-							getProvider(), AliyunHttpClientBuilderFactory
-									.newHttpClientBuilder(), request,
-							responseHandler).execute());
-
-		} while (currentPageNumber.intValue() < maxPageNumber.intValue());
-
-		return allResourceStatuses;
+			return allResourceStatuses;
+		} finally {
+			APITrace.end();
+		}
 	}
 
 	public void releaseFromPool(@Nonnull String addressId)
 			throws InternalException, CloudException {
-		Map<String, Object> params = new HashMap<String, Object>();
-		params.put("AllocationId", addressId);
-
-		HttpUriRequest request = AliyunRequestBuilder.post()
-				.provider(getProvider())
-				.category(AliyunRequestBuilder.Category.ECS)
-				.parameter("Action", "ReleaseEipAddress").entity(params)
-				.build();
-
-		new AliyunRequestExecutor<Void>(getProvider(),
-				AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
-				new AliyunValidateJsonResponseHandler(getProvider())).execute();
+		APITrace.begin(getProvider(), "releaseFromPool");
+		try {
+			Map<String, Object> params = new HashMap<String, Object>();
+			params.put("AllocationId", addressId);
+	
+			HttpUriRequest request = AliyunRequestBuilder.post()
+					.provider(getProvider())
+					.category(AliyunRequestBuilder.Category.ECS)
+					.parameter("Action", "ReleaseEipAddress").entity(params)
+					.build();
+	
+			new AliyunRequestExecutor<Void>(getProvider(),
+					AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
+					new AliyunValidateJsonResponseHandler(getProvider())).execute();
+		} finally {
+			APITrace.end();
+		}
 	}
 
 	public void releaseFromServer(@Nonnull String addressId)
 			throws InternalException, CloudException {
-
-		Map<String, Object> params = new HashMap<String, Object>();
-		IpAddress ipAddress = getIpAddress(addressId);
-		if (ipAddress != null
-				&& !getProvider().isEmpty(ipAddress.getServerId())) {
-
-			params.put("AllocationId", addressId);
-			params.put("InstanceId", ipAddress.getServerId());
-
-			HttpUriRequest request = AliyunRequestBuilder.post()
-					.provider(getProvider())
-					.category(AliyunRequestBuilder.Category.ECS)
-					.parameter("Action", "UnassociateEipAddresss")
-					.entity(params).build();
-
-			new AliyunRequestExecutor<Void>(getProvider(),
-					AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-					request, new AliyunValidateJsonResponseHandler(
-							getProvider())).execute();
+		APITrace.begin(getProvider(), "releaseFromServer");
+		try {
+			Map<String, Object> params = new HashMap<String, Object>();
+			IpAddress ipAddress = getIpAddress(addressId);
+			if (ipAddress != null
+					&& !getProvider().isEmpty(ipAddress.getServerId())) {
+	
+				params.put("AllocationId", addressId);
+				params.put("InstanceId", ipAddress.getServerId());
+	
+				HttpUriRequest request = AliyunRequestBuilder.post()
+						.provider(getProvider())
+						.category(AliyunRequestBuilder.Category.ECS)
+						.parameter("Action", "UnassociateEipAddresss")
+						.entity(params).build();
+	
+				new AliyunRequestExecutor<Void>(getProvider(),
+						AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+						request, new AliyunValidateJsonResponseHandler(
+								getProvider())).execute();
+			}
+		} finally {
+			APITrace.end();
 		}
 	}
 
 	public String request(@Nonnull IPVersion version) throws InternalException,
 			CloudException {
-
-		if (!version.equals(IPVersion.IPV4)) {
-			throw new InternalException("Aliyun supports IPV4 ip address only!");
-		}
-
-		Map<String, Object> params = new HashMap<String, Object>();
-		params.put("RegionId", getContext().getRegionId());
-		params.put("InternetChargeType",
-				AliyunNetworkCommon.InternetChargeType.PayByTraffic.name());
-		params.put("Bandwidth", AliyunNetworkCommon.DefaultIpAddressBandwidth);
-
-		ResponseHandler<String> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, String>(
-				new StreamToJSONObjectProcessor(),
-				new DriverToCoreMapper<JSONObject, String>() {
-					@Override
-					public String mapFrom(JSONObject json) {
-						try {
-							return json.getString("AllocationId");
-						} catch (JSONException e) {
-							stdLogger.error("parse AllocationId from response failed", e);
-							throw new RuntimeException(e);
+		APITrace.begin(getProvider(), "request");
+		try {
+			if (!version.equals(IPVersion.IPV4)) {
+				throw new InternalException("Aliyun supports IPV4 ip address only!");
+			}
+	
+			Map<String, Object> params = new HashMap<String, Object>();
+			params.put("RegionId", getContext().getRegionId());
+			params.put("InternetChargeType",
+					AliyunNetworkCommon.InternetChargeType.PayByTraffic.name());
+			params.put("Bandwidth", AliyunNetworkCommon.DefaultIpAddressBandwidth);
+	
+			ResponseHandler<String> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, String>(
+					new StreamToJSONObjectProcessor(),
+					new DriverToCoreMapper<JSONObject, String>() {
+						@Override
+						public String mapFrom(JSONObject json) {
+							try {
+								return json.getString("AllocationId");
+							} catch (JSONException e) {
+								stdLogger.error("parse AllocationId from response failed", e);
+								throw new RuntimeException(e);
+							}
 						}
-					}
-				}, JSONObject.class);
-
-		return AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.ECS,
-				"AllocateEipAddress", AliyunNetworkCommon.RequestMethod.POST, true, responseHandler);
-
+					}, JSONObject.class);
+	
+			return AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.ECS,
+					"AllocateEipAddress", AliyunNetworkCommon.RequestMethod.POST, true, responseHandler);
+		} finally {
+			APITrace.end();
+		}
 	}
 
 	public String requestForVLAN(@Nonnull IPVersion version)
