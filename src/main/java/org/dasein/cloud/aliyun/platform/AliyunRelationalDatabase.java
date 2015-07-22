@@ -194,9 +194,10 @@ public class AliyunRelationalDatabase extends
 			} else if (configuration.getEngine().equals(DatabaseEngine.POSTGRES)) {
 				engineName = "PostgreSQL";
 			} else {
+				stdLogger.error("Database engine " + configuration.getEngine().name() + " is not supported!");
 				throw new OperationNotSupportedException("Database engine " + configuration.getEngine().name() + " is not supported!");
 			}
-			
+		
 			HttpUriRequest request = AliyunRequestBuilder.get()
 					.provider(getProvider())
 					.category(AliyunRequestBuilder.Category.RDS)
@@ -270,6 +271,7 @@ public class AliyunRelationalDatabase extends
 	@Override
 	public void addAccess(String providerDatabaseId, String sourceCidr)
 			throws CloudException, InternalException {
+		
 		APITrace.begin(getProvider(), "addAccess");
 		try {
 			Map<String, Object> params = new HashMap<String, Object>();
@@ -302,13 +304,9 @@ public class AliyunRelationalDatabase extends
 	 * - preferredBackupWindow
 	 */
 	@Override
-	public void alterDatabase(String providerDatabaseId,
-			boolean applyImmediately, String productSize,
-			int storageInGigabytes, String configurationId,
-			String newAdminUser, String newAdminPassword, int newPort,
-			int snapshotRetentionInDays, TimeWindow preferredMaintenanceWindow,
-			TimeWindow preferredBackupWindow) throws CloudException,
-		InternalException {
+	public void alterDatabase(String providerDatabaseId, boolean applyImmediately, String productSize, int storageInGigabytes, 
+			String configurationId, String newAdminUser, String newAdminPassword, int newPort, int snapshotRetentionInDays, 
+			TimeWindow preferredMaintenanceWindow, TimeWindow preferredBackupWindow) throws CloudException, InternalException {
 		DatabaseId databaseId = new DatabaseId(providerDatabaseId);
 		//alter db instance attribute
 		if (!getProvider().isEmpty(productSize) || storageInGigabytes >= 5) {
@@ -348,38 +346,39 @@ public class AliyunRelationalDatabase extends
 			String withAdminUser, String withAdminPassword, int hostPort)
 			throws CloudException, InternalException {
 		
-		Map<String, Object> params = new HashMap<String, Object>();
-		params.put("RegionId", getContext().getRegionId());
-		
-		if (product.getEngine().equals(DatabaseEngine.MYSQL)) {
-			params.put("Engine", "MySQL");
-		} else if (product.getEngine().equals(DatabaseEngine.POSTGRES)) {
-			params.put("Engine", "PostgreSQL");
-		} else if (product.getEngine().equals(DatabaseEngine.SQLSERVER_EE)) {
-			params.put("Engine", "SQLServer");
-		} else {
-			stdLogger.error("not support database engine " + product.getEngine().name());
-			throw new OperationNotSupportedException("Aliyun doesn't support database engine " + product.getEngine().name());
-		}
-		
-		if (!getProvider().isEmpty(databaseVersion)) {
-			params.put("EngineVersion", databaseVersion);
-		} else {
-			params.put("EngineVersion", this.getDefaultVersion(product.getEngine()));
-		}
-		
-		params.put("DBInstanceClass", product.getName());
-		params.put("DBInstanceStorage", product.getStorageInGigabytes());
-		params.put("DBInstanceNetType", "Internet");
-		params.put("DBInstanceDescription", "DB Instance - " + product.getName() + " " + product.getStorageInGigabytes());
-		params.put("SecurityIPList", "0.0.0.0/0");
-		params.put("PayType", "Postpaid");
-		if (!getProvider().isEmpty(product.getProviderDataCenterId())) {
-			params.put("ZoneId", product.getProviderDataCenterId());
-		}
-		
 		APITrace.begin(getProvider(), "createFromScratch");
 		try {
+			
+			Map<String, Object> params = new HashMap<String, Object>();
+			params.put("RegionId", getContext().getRegionId());
+			
+			if (product.getEngine().equals(DatabaseEngine.MYSQL)) {
+				params.put("Engine", "MySQL");
+			} else if (product.getEngine().equals(DatabaseEngine.POSTGRES)) {
+				params.put("Engine", "PostgreSQL");
+			} else if (product.getEngine().equals(DatabaseEngine.SQLSERVER_EE)) {
+				params.put("Engine", "SQLServer");
+			} else {
+				stdLogger.error("not support database engine " + product.getEngine().name());
+				throw new OperationNotSupportedException("Aliyun doesn't support database engine " + product.getEngine().name());
+			}
+			
+			if (!getProvider().isEmpty(databaseVersion)) {
+				params.put("EngineVersion", databaseVersion);
+			} else {
+				params.put("EngineVersion", this.getDefaultVersion(product.getEngine()));
+			}
+			
+			params.put("DBInstanceClass", product.getName());
+			params.put("DBInstanceStorage", product.getStorageInGigabytes());
+			params.put("DBInstanceNetType", "Internet");
+			params.put("DBInstanceDescription", "DB Instance - " + product.getName() + " " + product.getStorageInGigabytes());
+			params.put("SecurityIPList", "0.0.0.0/0");
+			params.put("PayType", "Postpaid");
+			if (!getProvider().isEmpty(product.getProviderDataCenterId())) {
+				params.put("ZoneId", product.getProviderDataCenterId());
+			}
+			
 			//create DB instance
 			ResponseHandler<String> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, String>(
 	                new StreamToJSONObjectProcessor(),
@@ -389,7 +388,7 @@ public class AliyunRelationalDatabase extends
 	                            	  try {
 	                                      return json.getString("DBInstanceId" );
 		                              } catch (JSONException e ) {
-		                                      stdLogger.error("parse SecurityGroupId from response failed", e);
+		                                  stdLogger.error("parse SecurityGroupId from response failed", e);
 	                                      throw new RuntimeException(e);
 		                              }
 	                            }
@@ -427,11 +426,13 @@ public class AliyunRelationalDatabase extends
 	@Override
 	public Database getDatabase(String providerDatabaseId)
 			throws CloudException, InternalException {
-		final DatabaseId databaseId = new DatabaseId(providerDatabaseId);
-		final JSONObject dbInstanceAttribute = getDBInstanceAttribute(databaseId.getDatabaseInstanceId());
 		
 		APITrace.begin(getProvider(), "getDatabase");
 		try {
+		
+			final DatabaseId databaseId = new DatabaseId(providerDatabaseId);
+			final JSONObject dbInstanceAttribute = getDBInstanceAttribute(databaseId.getDatabaseInstanceId());
+		
 			HttpUriRequest request = AliyunRequestBuilder.get()
 					.provider(getProvider())
 					.category(AliyunRequestBuilder.Category.RDS)
@@ -533,6 +534,7 @@ public class AliyunRelationalDatabase extends
 		} else if (forEngine.equals(DatabaseEngine.POSTGRES)) {
 			return "9.4";
 		} else {
+			stdLogger.error("Aliyun doesn't support database engine " + forEngine.name());
 			throw new OperationNotSupportedException("Aliyun doesn't support database engine " + forEngine.name());
 		}
 	}
@@ -547,6 +549,7 @@ public class AliyunRelationalDatabase extends
 		} else if (forEngine.equals(DatabaseEngine.POSTGRES)) {
 			return Arrays.asList("9.4");
 		} else {
+			stdLogger.error("Aliyun doesn't support database engine " + forEngine.name());
 			throw new OperationNotSupportedException("Aliyun doesn't support database engine " + forEngine.name());
 		}
 	}
@@ -554,6 +557,7 @@ public class AliyunRelationalDatabase extends
 	@Override
 	public Iterable<DatabaseProduct> listDatabaseProducts(
 			DatabaseEngine forEngine) throws CloudException, InternalException {
+		
 		List<DatabaseProduct> retProducts = new ArrayList<DatabaseProduct>();
 		DatabaseProvider provider = DatabaseProvider.fromFile("/platform/dbproducts.json", "Aliyun");
 		String engineName = null;
@@ -564,7 +568,7 @@ public class AliyunRelationalDatabase extends
 		} else if (forEngine.equals(DatabaseEngine.SQLSERVER_EE)) {
 			engineName = "SQLServer";
 		} else {
-			stdLogger.error("not support database engine " + forEngine.name());
+			stdLogger.error("Aliyun doesn't support database engine " + forEngine.name());
 			throw new OperationNotSupportedException("Aliyun doesn't support database engine " + forEngine.name());
 		}
 		org.dasein.cloud.aliyun.platform.model.DatabaseEngine engine = provider.findEngine(engineName);
@@ -598,9 +602,8 @@ public class AliyunRelationalDatabase extends
 			throws CloudException, InternalException {
 		
 		DatabaseId databaseId = new DatabaseId(toProviderDatabaseId);
-		String databaseInstanceId = databaseId.getDatabaseInstanceId();
 		
-		JSONObject databaseInstanceAttribute = getDBInstanceAttribute(databaseInstanceId);	
+		JSONObject databaseInstanceAttribute = getDBInstanceAttribute(databaseId.getDatabaseInstanceId());	
 		try {
 			String securityIPList = databaseInstanceAttribute.getString("SecurityIPList");
 			
@@ -615,7 +618,7 @@ public class AliyunRelationalDatabase extends
 			
 			return accessList;
 		} catch (JSONException e) {
-			stdLogger.error("parsing security ip list from database instance " + databaseInstanceId + " failed", e);
+			stdLogger.error("parsing security ip list from database instance " + databaseId.getDatabaseInstanceId() + " failed", e);
 			throw new InternalException(e);
 		}
 	}
@@ -636,191 +639,208 @@ public class AliyunRelationalDatabase extends
 	public Iterable<Database> listDatabases() throws CloudException,
 			InternalException {
 		
-		//query all db instance ids
-		List<String> allDbInstanceIds = new ArrayList<String>();
-        final AtomicInteger totalPageNumber = new AtomicInteger(1);
-        final AtomicInteger currentPageNumber = new AtomicInteger(1);
-		
-		ResponseHandler<List<String>> dbInstResponseHandler = new AliyunResponseHandlerWithMapper<JSONObject, List<String>>(
-				new StreamToJSONObjectProcessor(),
-				new DriverToCoreMapper<JSONObject, List<String>>() {
-					@Override
-					public List<String> mapFrom(JSONObject json) {
-						try {
-							List<String> dbInstanceIds = new ArrayList<String>();
-							JSONArray dbInstances = json.getJSONObject("Items").getJSONArray("DBInstance");
-							for (int i = 0; i < dbInstances.length(); i++) {
-								dbInstanceIds.add(dbInstances.getJSONObject(i).getString("DBInstanceId"));
-								
-							}
-							totalPageNumber.addAndGet(json.getInt("TotalRecordCount") / AliyunNetworkCommon.DefaultPageSize +
-                                    json.getInt("TotalRecordCount") % AliyunNetworkCommon.DefaultPageSize > 0 ? 1 : 0);
-                            currentPageNumber.incrementAndGet();
-							return dbInstanceIds;
-						} catch (JSONException e) {
-							stdLogger.error("parsing db instance attribute failed", e);
-							throw new RuntimeException(e);
-						}
-					}
-				}, JSONObject.class);
-
-		do {
+		APITrace.begin(getProvider(), "listDatabases");
+		try {
+			//query all db instance ids
+			List<String> allDbInstanceIds = new ArrayList<String>();
+	        final AtomicInteger totalPageNumber = new AtomicInteger(1);
+	        final AtomicInteger currentPageNumber = new AtomicInteger(1);
 			
-            HttpUriRequest request = AliyunRequestBuilder.get()
-    				.provider(getProvider())
-    				.category(AliyunRequestBuilder.Category.RDS)
-    				.parameter("Action", "DescribeDBInstances")
-    				.parameter("RegionId", getContext().getRegionId())
-    				.parameter("PageSize", AliyunNetworkCommon.DefaultPageSize)
-            		.parameter("PageNumber", currentPageNumber)
-    				.build();
-            
-            
-            allDbInstanceIds.addAll(new AliyunRequestExecutor<List<String>>(getProvider(),
-                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                    request,
-                    dbInstResponseHandler).execute());
-            
-        } while (currentPageNumber.intValue() < totalPageNumber.intValue());
-		
-		//query databases by instance ids
-		List<Database> allDatabases = new ArrayList<Database>();
-		for (final String dbInstanceId : allDbInstanceIds) {
-			
-			final JSONObject dbInstanceAttribute = getDBInstanceAttribute(dbInstanceId);
-			
-			HttpUriRequest request = AliyunRequestBuilder.get()
-    				.provider(getProvider())
-    				.category(AliyunRequestBuilder.Category.RDS)
-    				.parameter("Action", "DescribeDBInstances")
-    				.parameter("DBInstanceId", dbInstanceId)
-    				.build();
-			
-			ResponseHandler<List<Database>> dbResponseHandler = new AliyunResponseHandlerWithMapper<JSONObject, List<Database>>(
+			ResponseHandler<List<String>> dbInstResponseHandler = new AliyunResponseHandlerWithMapper<JSONObject, List<String>>(
 					new StreamToJSONObjectProcessor(),
-					new DriverToCoreMapper<JSONObject, List<Database>>() {
+					new DriverToCoreMapper<JSONObject, List<String>>() {
 						@Override
-						public List<Database> mapFrom(JSONObject json) {
+						public List<String> mapFrom(JSONObject json) {
 							try {
-								List<Database> databases = new ArrayList<Database>();
-								JSONArray databaseArr = json.getJSONObject("Databases").getJSONArray("Database");
-								for (int i = 0; i < databaseArr.length(); i++) {
-									JSONObject respDatabase = databaseArr.getJSONObject(i);
-									Database database = new Database();
+								List<String> dbInstanceIds = new ArrayList<String>();
+								JSONArray dbInstances = json.getJSONObject("Items").getJSONArray("DBInstance");
+								for (int i = 0; i < dbInstances.length(); i++) {
+									dbInstanceIds.add(dbInstances.getJSONObject(i).getString("DBInstanceId"));
 									
-									database.setAdminUser(respDatabase.getJSONObject("Accounts").getJSONArray("AccountPrivilegeInfo").getJSONObject(0).getString("Account"));
-									database.setAllocatedStorageInGb(dbInstanceAttribute.getInt("DBInstanceStorage"));
-									database.setBackupWindow(getBackupTimeWindow(dbInstanceId));
-									database.setEngineVersion(dbInstanceAttribute.getString("EngineVersion"));
-									database.setHostName(dbInstanceAttribute.getString("ConnectionString"));
-									database.setHostPort(dbInstanceAttribute.getInt("Port"));
-									database.setCreationTimestamp(new SimpleDateFormat("YYYY-MM-DD'T'hh:mm:ss'Z'").parse(dbInstanceAttribute.getString("CreationTime")).getTime());
-									database.setMaintenanceWindow(formatTimeWindow(dbInstanceAttribute.getString("MaintainTime")));
-									database.setName(respDatabase.getString("DBName"));
-									database.setProductSize(dbInstanceAttribute.getString("DBInstanceClass"));
-									database.setProviderDatabaseId(new DatabaseId(dbInstanceId, respDatabase.getString("DBName")).getDatabaseId());
-									database.setProviderOwnerId(getContext().getAccountNumber());
-									database.setProviderRegionId(getContext().getRegionId());
-									
-									if ("Creating".equals(respDatabase.getString("DBStatus"))) {
-										database.setCurrentState(DatabaseState.PENDING);
-									} else if ("Running".equals(respDatabase.getString("DBStatus"))) {
-										database.setCurrentState(DatabaseState.AVAILABLE);
-									} else if ("Deleting".equals(respDatabase.getString("DBStatus"))) {
-										database.setCurrentState(DatabaseState.DELETING);
-									} else {
-										database.setCurrentState(DatabaseState.UNKNOWN);
-									}
-									
-									if ("MySQL".equals(dbInstanceAttribute.getString("Engine"))) {
-										database.setEngine(DatabaseEngine.MYSQL);
-									} else if ("SQLServer".equals(dbInstanceAttribute.getString("Engine"))) {
-										database.setEngine(DatabaseEngine.SQLSERVER_EE);
-									} else if ("PostgreSQL".equals(dbInstanceAttribute.getString("Engine"))) {
-										database.setEngine(DatabaseEngine.POSTGRES);
-									}
-									
-									databases.add(database);
 								}
-								return databases;
+								totalPageNumber.addAndGet(json.getInt("TotalRecordCount") / AliyunNetworkCommon.DefaultPageSize +
+	                                    json.getInt("TotalRecordCount") % AliyunNetworkCommon.DefaultPageSize > 0 ? 1 : 0);
+	                            currentPageNumber.incrementAndGet();
+								return dbInstanceIds;
 							} catch (JSONException e) {
 								stdLogger.error("parsing db instance attribute failed", e);
-								throw new RuntimeException(e);
-							} catch (InternalException e) {
-								stdLogger.error("get datbase by instance id failed", e);
-								throw new RuntimeException(e);
-							} catch (CloudException e) {
-								stdLogger.error("get datbase by instance id failed", e);
-								throw new RuntimeException(e);
-							} catch (ParseException e) {
-								stdLogger.error("parsing time window failed", e);
 								throw new RuntimeException(e);
 							}
 						}
 					}, JSONObject.class);
+	
+			do {
+				
+	            HttpUriRequest request = AliyunRequestBuilder.get()
+	    				.provider(getProvider())
+	    				.category(AliyunRequestBuilder.Category.RDS)
+	    				.parameter("Action", "DescribeDBInstances")
+	    				.parameter("RegionId", getContext().getRegionId())
+	    				.parameter("PageSize", AliyunNetworkCommon.DefaultPageSize)
+	            		.parameter("PageNumber", currentPageNumber)
+	    				.build();
+	            
+	            
+	            allDbInstanceIds.addAll(new AliyunRequestExecutor<List<String>>(getProvider(),
+	                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+	                    request,
+	                    dbInstResponseHandler).execute());
+	            
+	        } while (currentPageNumber.intValue() < totalPageNumber.intValue());
 			
-			allDatabases.addAll(new AliyunRequestExecutor<List<Database>>(getProvider(),
-                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                    request,
-                    dbResponseHandler).execute());
+			//query databases by instance ids
+			List<Database> allDatabases = new ArrayList<Database>();
+			for (final String dbInstanceId : allDbInstanceIds) {
+				
+				final JSONObject dbInstanceAttribute = getDBInstanceAttribute(dbInstanceId);
+				
+				HttpUriRequest request = AliyunRequestBuilder.get()
+	    				.provider(getProvider())
+	    				.category(AliyunRequestBuilder.Category.RDS)
+	    				.parameter("Action", "DescribeDBInstances")
+	    				.parameter("DBInstanceId", dbInstanceId)
+	    				.build();
+				
+				ResponseHandler<List<Database>> dbResponseHandler = new AliyunResponseHandlerWithMapper<JSONObject, List<Database>>(
+						new StreamToJSONObjectProcessor(),
+						new DriverToCoreMapper<JSONObject, List<Database>>() {
+							@Override
+							public List<Database> mapFrom(JSONObject json) {
+								try {
+									List<Database> databases = new ArrayList<Database>();
+									JSONArray databaseArr = json.getJSONObject("Databases").getJSONArray("Database");
+									for (int i = 0; i < databaseArr.length(); i++) {
+										JSONObject respDatabase = databaseArr.getJSONObject(i);
+										Database database = new Database();
+										
+										database.setAdminUser(respDatabase.getJSONObject("Accounts").getJSONArray("AccountPrivilegeInfo").getJSONObject(0).getString("Account"));
+										database.setAllocatedStorageInGb(dbInstanceAttribute.getInt("DBInstanceStorage"));
+										database.setBackupWindow(getBackupTimeWindow(dbInstanceId));
+										database.setEngineVersion(dbInstanceAttribute.getString("EngineVersion"));
+										database.setHostName(dbInstanceAttribute.getString("ConnectionString"));
+										database.setHostPort(dbInstanceAttribute.getInt("Port"));
+										database.setCreationTimestamp(new SimpleDateFormat("YYYY-MM-DD'T'hh:mm:ss'Z'").parse(dbInstanceAttribute.getString("CreationTime")).getTime());
+										database.setMaintenanceWindow(formatTimeWindow(dbInstanceAttribute.getString("MaintainTime")));
+										database.setName(respDatabase.getString("DBName"));
+										database.setProductSize(dbInstanceAttribute.getString("DBInstanceClass"));
+										database.setProviderDatabaseId(new DatabaseId(dbInstanceId, respDatabase.getString("DBName")).getDatabaseId());
+										database.setProviderOwnerId(getContext().getAccountNumber());
+										database.setProviderRegionId(getContext().getRegionId());
+										
+										if ("Creating".equals(respDatabase.getString("DBStatus"))) {
+											database.setCurrentState(DatabaseState.PENDING);
+										} else if ("Running".equals(respDatabase.getString("DBStatus"))) {
+											database.setCurrentState(DatabaseState.AVAILABLE);
+										} else if ("Deleting".equals(respDatabase.getString("DBStatus"))) {
+											database.setCurrentState(DatabaseState.DELETING);
+										} else {
+											database.setCurrentState(DatabaseState.UNKNOWN);
+										}
+										
+										if ("MySQL".equals(dbInstanceAttribute.getString("Engine"))) {
+											database.setEngine(DatabaseEngine.MYSQL);
+										} else if ("SQLServer".equals(dbInstanceAttribute.getString("Engine"))) {
+											database.setEngine(DatabaseEngine.SQLSERVER_EE);
+										} else if ("PostgreSQL".equals(dbInstanceAttribute.getString("Engine"))) {
+											database.setEngine(DatabaseEngine.POSTGRES);
+										}
+										
+										databases.add(database);
+									}
+									return databases;
+								} catch (JSONException e) {
+									stdLogger.error("parsing db instance attribute failed", e);
+									throw new RuntimeException(e);
+								} catch (InternalException e) {
+									stdLogger.error("get datbase by instance id failed", e);
+									throw new RuntimeException(e);
+								} catch (CloudException e) {
+									stdLogger.error("get datbase by instance id failed", e);
+									throw new RuntimeException(e);
+								} catch (ParseException e) {
+									stdLogger.error("parsing time window failed", e);
+									throw new RuntimeException(e);
+								}
+							}
+						}, JSONObject.class);
+				
+				allDatabases.addAll(new AliyunRequestExecutor<List<Database>>(getProvider(),
+	                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+	                    request,
+	                    dbResponseHandler).execute());
+				
+			}
 			
+			return allDatabases;
+		} finally {
+			APITrace.end();
 		}
-		
-		return allDatabases;
 	}
 
 	@Override
 	public void removeDatabase(String providerDatabaseId)
 			throws CloudException, InternalException {
-		
-		DatabaseId databaseId = new DatabaseId(providerDatabaseId);
-		
-		Map<String, Object> params = new HashMap<String, Object>();
-		params.put("DBInstanceId", databaseId.getDatabaseInstanceId());
-		params.put("DBName", databaseId.getDatabaseName());
-		
-		executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
-				"DeleteDatabase", AliyunNetworkCommon.RequestMethod.POST, false, 
-				new AliyunValidateJsonResponseHandler(getProvider()));
+		APITrace.begin(getProvider(), "removeDatabase");
+		try {
+			DatabaseId databaseId = new DatabaseId(providerDatabaseId);
+			
+			Map<String, Object> params = new HashMap<String, Object>();
+			params.put("DBInstanceId", databaseId.getDatabaseInstanceId());
+			params.put("DBName", databaseId.getDatabaseName());
+			
+			executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+					"DeleteDatabase", AliyunNetworkCommon.RequestMethod.POST, false, 
+					new AliyunValidateJsonResponseHandler(getProvider()));
+		} finally {
+			APITrace.end();
+		}
 	}
 
 	@Override
 	public void restart(String providerDatabaseId, boolean blockUntilDone)
 			throws CloudException, InternalException {
-		
-		DatabaseId databaseId = new DatabaseId(providerDatabaseId);
-		
-		Map<String, Object> params = new HashMap<String, Object>();
-		params.put("DBInstanceId", databaseId.getDatabaseInstanceId());
-		
-		executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
-				"RestartDBInstance", AliyunNetworkCommon.RequestMethod.POST, false, 
-				new AliyunValidateJsonResponseHandler(getProvider()));
+		APITrace.begin(getProvider(), "restart");
+		try {
+			DatabaseId databaseId = new DatabaseId(providerDatabaseId);
+			
+			Map<String, Object> params = new HashMap<String, Object>();
+			params.put("DBInstanceId", databaseId.getDatabaseInstanceId());
+			
+			executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+					"RestartDBInstance", AliyunNetworkCommon.RequestMethod.POST, false, 
+					new AliyunValidateJsonResponseHandler(getProvider()));
+		} finally {
+			APITrace.end();
+		}
 	}
 
 	@Override
 	public void revokeAccess(String providerDatabaseId, String sourceCidr)
 			throws CloudException, InternalException {
-
-		Map<String, Object> params = new HashMap<String, Object>();
-		
-		DatabaseId id = new DatabaseId(providerDatabaseId);
-		params.put("DBInstanceId", id.getDatabaseInstanceId());
-		
-		StringBuilder accessBuilder = new StringBuilder();
-		Iterator<String> access = listAccess(providerDatabaseId).iterator();
-		while (access.hasNext()) {
-			String cidr = access.next();
-			if (!cidr.equals(sourceCidr)) {
-				accessBuilder.append(access.next() + ",");
+		APITrace.begin(getProvider(), "revokeAccess");
+		try {
+			Map<String, Object> params = new HashMap<String, Object>();
+			
+			DatabaseId id = new DatabaseId(providerDatabaseId);
+			params.put("DBInstanceId", id.getDatabaseInstanceId());
+			
+			StringBuilder accessBuilder = new StringBuilder();
+			Iterator<String> access = listAccess(providerDatabaseId).iterator();
+			while (access.hasNext()) {
+				String cidr = access.next();
+				if (!cidr.equals(sourceCidr)) {
+					accessBuilder.append(access.next() + ",");
+				}
 			}
+			accessBuilder.deleteCharAt(accessBuilder.length() - 1);
+			params.put("SecurityIps", accessBuilder.toString());
+			
+			executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+					"ModifySecurityIps", AliyunNetworkCommon.RequestMethod.POST, false, 
+					new AliyunValidateJsonResponseHandler(getProvider()));
+		} finally {
+			APITrace.end();
 		}
-		accessBuilder.deleteCharAt(accessBuilder.length() - 1);
-		params.put("SecurityIps", accessBuilder.toString());
-		
-		executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
-				"ModifySecurityIps", AliyunNetworkCommon.RequestMethod.POST, false, 
-				new AliyunValidateJsonResponseHandler(getProvider()));
 	}
 
 	@Override
@@ -853,7 +873,6 @@ public class AliyunRelationalDatabase extends
 				throw new RuntimeException(e);
 			}
 		}
-		
 		return closestBackup;
 	}
 	
@@ -863,69 +882,71 @@ public class AliyunRelationalDatabase extends
 	public Iterable<DatabaseBackup> listBackups(
 			String forOptionalProviderDatabaseId) throws CloudException,
 			InternalException {
-		
-		List<DatabaseBackup> allBackups = new ArrayList<DatabaseBackup>();
-        final AtomicInteger totalPageNumber = new AtomicInteger(1);
-        final AtomicInteger currentPageNumber = new AtomicInteger(1);
-        final DatabaseId databaseId = new DatabaseId(forOptionalProviderDatabaseId);
-        
-		ResponseHandler<List<DatabaseBackup>> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, List<DatabaseBackup>>(
-				new StreamToJSONObjectProcessor(),
-				new DriverToCoreMapper<JSONObject, List<DatabaseBackup>>() {
-					@Override
-					public List<DatabaseBackup> mapFrom(JSONObject json) {
-						try {
-							List<DatabaseBackup> backups = new ArrayList<DatabaseBackup>();
-							JSONArray respBackups = json.getJSONObject("Items").getJSONArray("Backup");
-							for (int i = 0; i < respBackups.length(); i++) {
-								JSONObject respBackup = respBackups.getJSONObject(i);
-								DatabaseBackup backup = new DatabaseBackup();
-								backup.setCurrentState(DatabaseBackupState.ERROR);
-								if ("Success".equals(respBackup.getString("BackupStatus"))) {
-									backup.setCurrentState(DatabaseBackupState.AVAILABLE);
+		APITrace.begin(getProvider(), "listBackups");
+		try {
+			List<DatabaseBackup> allBackups = new ArrayList<DatabaseBackup>();
+	        final AtomicInteger totalPageNumber = new AtomicInteger(1);
+	        final AtomicInteger currentPageNumber = new AtomicInteger(1);
+	        final DatabaseId databaseId = new DatabaseId(forOptionalProviderDatabaseId);
+	        
+			ResponseHandler<List<DatabaseBackup>> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, List<DatabaseBackup>>(
+					new StreamToJSONObjectProcessor(),
+					new DriverToCoreMapper<JSONObject, List<DatabaseBackup>>() {
+						@Override
+						public List<DatabaseBackup> mapFrom(JSONObject json) {
+							try {
+								List<DatabaseBackup> backups = new ArrayList<DatabaseBackup>();
+								JSONArray respBackups = json.getJSONObject("Items").getJSONArray("Backup");
+								for (int i = 0; i < respBackups.length(); i++) {
+									JSONObject respBackup = respBackups.getJSONObject(i);
+									DatabaseBackup backup = new DatabaseBackup();
+									backup.setCurrentState(DatabaseBackupState.ERROR);
+									if ("Success".equals(respBackup.getString("BackupStatus"))) {
+										backup.setCurrentState(DatabaseBackupState.AVAILABLE);
+									}
+									backup.setStartTime(respBackup.getString("BackupStartTime"));
+									backup.setEndTime(respBackup.getString("BackupEndTime"));
+									backup.setProviderBackupId(String.valueOf(respBackup.getInt("BackupId")));
+									backup.setProviderDatabaseId(databaseId.getDatabaseId());
+									backup.setProviderOwnerId(getContext().getAccountNumber());
+									backup.setProviderRegionId(getContext().getRegionId());
+									backup.setStorageInGigabytes((int)(respBackup.getLong("storageInGigabytes") / 1024l * 1024l * 1024l));
+									backups.add(backup);
 								}
-								backup.setStartTime(respBackup.getString("BackupStartTime"));
-								backup.setEndTime(respBackup.getString("BackupEndTime"));
-								backup.setProviderBackupId(String.valueOf(respBackup.getInt("BackupId")));
-								backup.setProviderDatabaseId(databaseId.getDatabaseId());
-								backup.setProviderOwnerId(getContext().getAccountNumber());
-								backup.setProviderRegionId(getContext().getRegionId());
-								backup.setStorageInGigabytes((int)(respBackup.getLong("storageInGigabytes") / 1024l * 1024l * 1024l));
-								backups.add(backup);
+								totalPageNumber.addAndGet(json.getInt("TotalRecordCount") / AliyunNetworkCommon.DefaultPageSize +
+	                                    json.getInt("TotalRecordCount") % AliyunNetworkCommon.DefaultPageSize > 0 ? 1 : 0);
+	                            currentPageNumber.incrementAndGet();
+								return backups;
+							} catch (JSONException e) {
+								stdLogger.error("parsing db instance attribute failed", e);
+								throw new RuntimeException(e);
+							} catch (InternalException e) {
+								stdLogger.error("get accont number or region id from context failed", e);
+								throw new RuntimeException(e);
 							}
-							totalPageNumber.addAndGet(json.getInt("TotalRecordCount") / AliyunNetworkCommon.DefaultPageSize +
-                                    json.getInt("TotalRecordCount") % AliyunNetworkCommon.DefaultPageSize > 0 ? 1 : 0);
-                            currentPageNumber.incrementAndGet();
-							return backups;
-						} catch (JSONException e) {
-							stdLogger.error("parsing db instance attribute failed", e);
-							throw new RuntimeException(e);
-						} catch (InternalException e) {
-							stdLogger.error("get accont number or region id from context failed", e);
-							throw new RuntimeException(e);
 						}
-					}
-				}, JSONObject.class);
-		
-		do {
+					}, JSONObject.class);
 			
-            HttpUriRequest request = AliyunRequestBuilder.get()
-    				.provider(getProvider())
-    				.category(AliyunRequestBuilder.Category.RDS)
-    				.parameter("Action", "DescribeBackups")
-    				.parameter("DBInstanceId", databaseId.getDatabaseInstanceId())
-    				.parameter("PageSize", AliyunNetworkCommon.DefaultPageSize)
-            		.parameter("PageNumber", currentPageNumber)
-    				.build();
-            
-            allBackups.addAll(new AliyunRequestExecutor<List<DatabaseBackup>>(getProvider(),
-                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                    request,
-                    responseHandler).execute());
-            
-        } while (currentPageNumber.intValue() < totalPageNumber.intValue());
-		
-		return allBackups;
+			do {
+	            HttpUriRequest request = AliyunRequestBuilder.get()
+	    				.provider(getProvider())
+	    				.category(AliyunRequestBuilder.Category.RDS)
+	    				.parameter("Action", "DescribeBackups")
+	    				.parameter("DBInstanceId", databaseId.getDatabaseInstanceId())
+	    				.parameter("PageSize", AliyunNetworkCommon.DefaultPageSize)
+	            		.parameter("PageNumber", currentPageNumber)
+	    				.build();
+	            
+	            allBackups.addAll(new AliyunRequestExecutor<List<DatabaseBackup>>(getProvider(),
+	                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+	                    request,
+	                    responseHandler).execute());
+	        } while (currentPageNumber.intValue() < totalPageNumber.intValue());
+			
+			return allBackups;
+		} finally {
+			APITrace.end();
+		}
 	}
 
 	@Override
@@ -956,19 +977,21 @@ public class AliyunRelationalDatabase extends
 	 */
 	private TimeWindow getBackupTimeWindow(String databaseInstanceId) throws InternalException, CloudException {
 		
-		Map<String, Object> params = new HashMap<String, Object>();
-		params.put("DBInstanceId", databaseInstanceId);
-		
-		ResponseHandler<TimeWindow> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, TimeWindow>(
-            new StreamToJSONObjectProcessor(),
-                  new DriverToCoreMapper<JSONObject, TimeWindow>() {
-                     @Override
-                     public TimeWindow mapFrom(JSONObject json ) {
-                        try {
-                            TimeWindow timeWindow = new TimeWindow();
-                      		SimpleDateFormat timeFormatter = new SimpleDateFormat("HH:mm'Z'");
-                      		String[] segments = json.getString("PreferredBackupTime").split("-");
-                      		try {
+		APITrace.begin(getProvider(), "getBackupTimeWindow");
+		try {
+			Map<String, Object> params = new HashMap<String, Object>();
+			params.put("DBInstanceId", databaseInstanceId);
+			
+			ResponseHandler<TimeWindow> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, TimeWindow>(
+	            new StreamToJSONObjectProcessor(),
+	                  new DriverToCoreMapper<JSONObject, TimeWindow>() {
+	                     @Override
+	                     public TimeWindow mapFrom(JSONObject json ) {
+	                        try {
+	                            TimeWindow timeWindow = new TimeWindow();
+	                      		SimpleDateFormat timeFormatter = new SimpleDateFormat("HH:mm'Z'");
+	                      		String[] segments = json.getString("PreferredBackupTime").split("-");
+	                      		
                       			Calendar cal = Calendar.getInstance();
                       			cal.setTime(timeFormatter.parse(segments[0].trim()));
                       			
@@ -983,22 +1006,24 @@ public class AliyunRelationalDatabase extends
                       			timeWindow.setEndDayOfWeek(DayOfWeek.valueOf(json.getString("PreferredBackupPeriod").toUpperCase()));
                       			
                       			return timeWindow;
-                      		} catch (ParseException e) {
-                      			stdLogger.error("parsing start and end hour/minutes failed for backup time", e);
-                      			throw new RuntimeException(e);
-                      		}
-                        } catch (JSONException e ) {
-                              stdLogger.error("parse SecurityGroupId from response failed", e);
-                              throw new RuntimeException(e);
-                        }
-                    }
-                 }, JSONObject. class);  
-
-		
-		return executeDefaultRequest(getProvider(), 
-				params, AliyunRequestBuilder.Category.RDS, "DescribeBackupPolicy", 
-				AliyunNetworkCommon.RequestMethod.POST, false, 
-				responseHandler);
+	                        } catch (JSONException e ) {
+	                        	stdLogger.error("parse SecurityGroupId from response failed", e);
+	                        	throw new RuntimeException(e);
+	                        } catch (ParseException e) {
+	                        	stdLogger.error("parsing start and end hour/minutes failed for backup time", e);
+	                        	throw new RuntimeException(e);
+							}
+	                    }
+	                 }, JSONObject. class);  
+	
+			
+			return executeDefaultRequest(getProvider(), 
+					params, AliyunRequestBuilder.Category.RDS, "DescribeBackupPolicy", 
+					AliyunNetworkCommon.RequestMethod.POST, false, 
+					responseHandler);
+		} finally {
+			APITrace.end();
+		}
 	}
 	
 	/**
@@ -1024,36 +1049,38 @@ public class AliyunRelationalDatabase extends
 	 * @throws CloudException
 	 */
 	private JSONObject getDBInstanceAttribute(String databaseInstanceId) throws InternalException, CloudException {
-		
-		HttpUriRequest request = AliyunRequestBuilder.get()
-				.provider(getProvider())
-				.category(AliyunRequestBuilder.Category.RDS)
-				.parameter("Action", "DescribeDBInstanceAttribute")
-				.parameter("DBInstanceId", databaseInstanceId)
-				.build();
-		
-		ResponseHandler<JSONObject> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, JSONObject>(
-				new StreamToJSONObjectProcessor(),
-				new DriverToCoreMapper<JSONObject, JSONObject>() {
-					@Override
-					public JSONObject mapFrom(JSONObject json) {
-						try {
-							return json.getJSONObject("Items").getJSONArray("DBInstanceAttribute").getJSONObject(0);
-						} catch (JSONException e) {
-							stdLogger.error("parsing db instance attribute failed", e);
-							throw new RuntimeException(e);
+		APITrace.begin(getProvider(), "getDBInstanceAttribute");
+		try {
+			HttpUriRequest request = AliyunRequestBuilder.get()
+					.provider(getProvider())
+					.category(AliyunRequestBuilder.Category.RDS)
+					.parameter("Action", "DescribeDBInstanceAttribute")
+					.parameter("DBInstanceId", databaseInstanceId)
+					.build();
+			
+			ResponseHandler<JSONObject> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, JSONObject>(
+					new StreamToJSONObjectProcessor(),
+					new DriverToCoreMapper<JSONObject, JSONObject>() {
+						@Override
+						public JSONObject mapFrom(JSONObject json) {
+							try {
+								return json.getJSONObject("Items").getJSONArray("DBInstanceAttribute").getJSONObject(0);
+							} catch (JSONException e) {
+								stdLogger.error("parsing db instance attribute failed", e);
+								throw new RuntimeException(e);
+							}
 						}
-					}
-				}, JSONObject.class);
-		
-		return new AliyunRequestExecutor<JSONObject>(getProvider(),
-				AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
-				responseHandler).execute();
-		
+					}, JSONObject.class);
+			
+			return new AliyunRequestExecutor<JSONObject>(getProvider(),
+					AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
+					responseHandler).execute();
+		} finally {
+			APITrace.end();
+		}
 	}
 	
 	private TimeWindow formatTimeWindow (String timespan) throws ParseException {
-		
 		SimpleDateFormat format = new SimpleDateFormat("HH:mm'Z'");
 		String[] segments = timespan.split("-");
 		
@@ -1077,7 +1104,6 @@ public class AliyunRelationalDatabase extends
 	 * @return parsed timewindow
 	 */
 	private String parseTimeWindow(TimeWindow timeWindow) {
-		
 		StringBuilder timeSpan = new StringBuilder();
 		SimpleDateFormat format = new SimpleDateFormat("HH:mm'Z'");
 		
@@ -1119,38 +1145,41 @@ public class AliyunRelationalDatabase extends
 	 */
 	private String getDBInstanceAccount (final String dbInstanceId) 
 			throws CloudException, InternalException {
-		
-		HttpUriRequest request = AliyunRequestBuilder.get()
-				.provider(getProvider())
-				.category(AliyunRequestBuilder.Category.RDS)
-				.parameter("Action", "DescribeAccounts")
-				.parameter("DBInstanceId", dbInstanceId)
-				.build();
-		
-		ResponseHandler<String> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, String>(
-        		new StreamToJSONObjectProcessor(),
-        		new DriverToCoreMapper<JSONObject, String>() {
-                    @Override
-                    public String mapFrom(JSONObject json) {
-                        try {
-                        	JSONArray accounts = json.getJSONObject("Accounts").getJSONArray("DBInstanceAccount");
-                        	if (accounts.length() > 0) {
-                        		return accounts.getJSONObject(0).getString("AccountName");
-                        	} else {
-                        		return null;
-                        	}
-                        } catch (JSONException e) {
-                        	stdLogger.error("Failed to parse account for db instance " + dbInstanceId, e);
-                            throw new RuntimeException(e.getMessage());
-						} 
-                    }
-                },
-                JSONObject.class);
-		
-		return new AliyunRequestExecutor<String>(getProvider(),
-                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                request,
-                responseHandler).execute();
+		APITrace.begin(getProvider(), "getDBInstanceAccount");
+		try {
+			HttpUriRequest request = AliyunRequestBuilder.get()
+					.provider(getProvider())
+					.category(AliyunRequestBuilder.Category.RDS)
+					.parameter("Action", "DescribeAccounts")
+					.parameter("DBInstanceId", dbInstanceId)
+					.build();
+			
+			ResponseHandler<String> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, String>(
+	        		new StreamToJSONObjectProcessor(),
+	        		new DriverToCoreMapper<JSONObject, String>() {
+	                    @Override
+	                    public String mapFrom(JSONObject json) {
+	                        try {
+	                        	JSONArray accounts = json.getJSONObject("Accounts").getJSONArray("DBInstanceAccount");
+	                        	if (accounts.length() > 0) {
+	                        		return accounts.getJSONObject(0).getString("AccountName");
+	                        	} 
+	                        	return null;
+	                        } catch (JSONException e) {
+	                        	stdLogger.error("Failed to parse account for db instance " + dbInstanceId, e);
+	                            throw new RuntimeException(e);
+							} 
+	                    }
+	                },
+	                JSONObject.class);
+			
+			return new AliyunRequestExecutor<String>(getProvider(),
+	                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+	                request,
+	                responseHandler).execute();
+		} finally {
+			APITrace.end();
+		}
 	}
 	
 	/**
@@ -1163,28 +1192,30 @@ public class AliyunRelationalDatabase extends
 	 * @throws CloudException
 	 */
 	private void createDBInstanceAccount (String dbInstanceId, String dbName, String adminUser, String adminPassword) throws InternalException, CloudException {
-		
-		//create db account
-		HashMap<String, Object> params = new HashMap<String, Object>();
-		params.put("DBInstanceId", dbInstanceId);
-		params.put("AccountName", adminUser);
-		params.put("AccountPassword", adminPassword);
-		params.put("AccountDescription", "User " + adminUser + " for DB Instance " + dbInstanceId);
-		
-		executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
-				"CreateAccount", AliyunNetworkCommon.RequestMethod.POST, false, 
-				new AliyunValidateJsonResponseHandler(getProvider()));
-		
-		//authorize READ&WRITE privilege for the account
-		params = new HashMap<String, Object>();
-		params.put("DBInstanceId", dbInstanceId);
-		params.put("AccountName", adminUser);
-		params.put("DBName", dbName);
-		params.put("AccountpPrivilege", "ReadWrite");
-		
-		executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
-				"GrantAccountPrivilege", AliyunNetworkCommon.RequestMethod.POST, false, 
-				new AliyunValidateJsonResponseHandler(getProvider()));
+		APITrace.begin(getProvider(), "createDBInstanceAccount");
+		try {
+			//create db account
+			HashMap<String, Object> params = new HashMap<String, Object>();
+			params.put("DBInstanceId", dbInstanceId);
+			params.put("AccountName", adminUser);
+			params.put("AccountPassword", adminPassword);
+			params.put("AccountDescription", "User " + adminUser + " for DB Instance " + dbInstanceId);
+			executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+					"CreateAccount", AliyunNetworkCommon.RequestMethod.POST, false, 
+					new AliyunValidateJsonResponseHandler(getProvider()));
+			
+			//authorize READ&WRITE privilege for the account
+			params = new HashMap<String, Object>();
+			params.put("DBInstanceId", dbInstanceId);
+			params.put("AccountName", adminUser);
+			params.put("DBName", dbName);
+			params.put("AccountpPrivilege", "ReadWrite");
+			executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+					"GrantAccountPrivilege", AliyunNetworkCommon.RequestMethod.POST, false, 
+					new AliyunValidateJsonResponseHandler(getProvider()));
+		} finally {
+			APITrace.end();
+		}
 	}
 	
 	/**
@@ -1195,20 +1226,81 @@ public class AliyunRelationalDatabase extends
 	 * @throws CloudException
 	 */
 	private void removeDBInstanceAccount (String dbInstanceId, String adminUser) throws InternalException, CloudException {
-		
-		HashMap<String, Object> params = new HashMap<String, Object>();
-		params.put("DBInstanceId", dbInstanceId);
-		params.put("AccountName", adminUser);
-		
-		executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
-				"DeleteAccount", AliyunNetworkCommon.RequestMethod.POST, false, 
-				new AliyunValidateJsonResponseHandler(getProvider()));
+		APITrace.begin(getProvider(), "removeDBInstanceAccount");
+		try {
+			HashMap<String, Object> params = new HashMap<String, Object>();
+			params.put("DBInstanceId", dbInstanceId);
+			params.put("AccountName", adminUser);
+			executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+					"DeleteAccount", AliyunNetworkCommon.RequestMethod.POST, false, 
+					new AliyunValidateJsonResponseHandler(getProvider()));
+		} finally {
+			APITrace.end();
+		}
 	}
+
+	private void alterPreferredBackupWindow(String databaseInstanceId, TimeWindow preferredBackupWindow) 
+			throws InternalException, CloudException {
+		APITrace.begin(getProvider(), "alterPreferredBackupWindow");
+		try {
+			Map<String, Object> params = new HashMap<String, Object>();
+			params.put("DBInstanceId", databaseInstanceId);
+			params.put("PreferredBackupTime", parseTimeWindow(preferredBackupWindow));
+			if (!preferredBackupWindow.getStartDayOfWeek().equals(preferredBackupWindow.getEndDayOfWeek())) {
+				throw new InternalException("Backup window setting wrong: the start day and the end day should be the same!");
+			} else {
+				params.put("PreferredBackupPeriod", getProvider().capitalize(preferredBackupWindow.getStartDayOfWeek().name()));
+			}
+			executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+					"ModifyBackupPolicy", AliyunNetworkCommon.RequestMethod.POST, false, 
+					new AliyunValidateJsonResponseHandler(getProvider()));
+		} finally {
+			APITrace.end();
+		}
+	}
+	
+	private void alterPreferredMaintenanceWindow(String databaseInstanceId, TimeWindow preferredMaintenanceWindow) 
+			throws InternalException, CloudException {
+		APITrace.begin(getProvider(), "alterPreferredMaintenanceWindow");
+		try {
+			Map<String, Object> params = new HashMap<String, Object>();
+			params.put("DBInstanceId", databaseInstanceId);
+			params.put("MaintainTime", parseTimeWindow(preferredMaintenanceWindow));
+			
+			executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+					"ModifyDBInstanceMaintainTime", AliyunNetworkCommon.RequestMethod.POST, false, 
+					new AliyunValidateJsonResponseHandler(getProvider()));
+		} finally {
+			APITrace.end();
+		}
+	}
+	
+	private void alterDBInstanceAttribute(String databaseInstanceId, String productSize, int storageInGigabytes) 
+			throws InternalException, CloudException {
+		APITrace.begin(getProvider(), "alterDBInstanceAttribute");
+		try {
+			Map<String, Object> params = new HashMap<String, Object>();
+			params.put("DBInstanceId", databaseInstanceId);
+			params.put("PayType", "Postpaid");
+			if (!getProvider().isEmpty(productSize)) {
+				params.put("DBInstanceClass", productSize);
+			}
+			if (storageInGigabytes >= 5) {
+				params.put("DBInstanceStorage", storageInGigabytes);
+			}
+			
+			executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+					"ModifyDBInstanceSpec", AliyunNetworkCommon.RequestMethod.POST, false, 
+					new AliyunValidateJsonResponseHandler(getProvider()));
+		} finally {
+			APITrace.end();
+		}
+	}	
 	
 	private static <V> V executeDefaultRequest(Aliyun provider, Map<String, Object> params, 
 			AliyunRequestBuilder.Category category, String action, RequestMethod requestMethod, 
 			boolean clientToken, ResponseHandler<V> handler) throws InternalException, CloudException {
-
+		
 		AliyunRequestBuilder builder = null;
 		if (requestMethod.equals(RequestMethod.GET)) { 
 			builder = AliyunRequestBuilder.get();
@@ -1219,6 +1311,7 @@ public class AliyunRelationalDatabase extends
 			builder = AliyunRequestBuilder.post();
 			builder = builder.entity(params);
 		} else {
+			stdLogger.error("Not supported request method " + requestMethod.name());
 			throw new InternalException("Not supported request method " + requestMethod.name());
 		}
 		builder = builder.provider(provider).category(category).parameter("Action", action);
@@ -1233,49 +1326,5 @@ public class AliyunRelationalDatabase extends
 				handler).execute();
 
 	}
-
-	private void alterPreferredBackupWindow(String databaseInstanceId, TimeWindow preferredBackupWindow) 
-			throws InternalException, CloudException {
-		Map<String, Object> params = new HashMap<String, Object>();
-		params.put("DBInstanceId", databaseInstanceId);
-		params.put("PreferredBackupTime", parseTimeWindow(preferredBackupWindow));
-		if (!preferredBackupWindow.getStartDayOfWeek().equals(preferredBackupWindow.getEndDayOfWeek())) {
-			throw new InternalException("Backup window setting wrong: the start day and the end day should be the same!");
-		} else {
-			params.put("PreferredBackupPeriod", getProvider().capitalize(preferredBackupWindow.getStartDayOfWeek().name()));
-		}
-		executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
-				"ModifyBackupPolicy", AliyunNetworkCommon.RequestMethod.POST, false, 
-				new AliyunValidateJsonResponseHandler(getProvider()));
-	}
-	
-	private void alterPreferredMaintenanceWindow(String databaseInstanceId, TimeWindow preferredMaintenanceWindow) 
-			throws InternalException, CloudException {
-		Map<String, Object> params = new HashMap<String, Object>();
-		params.put("DBInstanceId", databaseInstanceId);
-		params.put("MaintainTime", parseTimeWindow(preferredMaintenanceWindow));
-		
-		executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
-				"ModifyDBInstanceMaintainTime", AliyunNetworkCommon.RequestMethod.POST, false, 
-				new AliyunValidateJsonResponseHandler(getProvider()));
-	}
-	
-	private void alterDBInstanceAttribute(String databaseInstanceId, String productSize, int storageInGigabytes) 
-			throws InternalException, CloudException {
-		
-		Map<String, Object> params = new HashMap<String, Object>();
-		params.put("DBInstanceId", databaseInstanceId);
-		params.put("PayType", "Postpaid");
-		if (!getProvider().isEmpty(productSize)) {
-			params.put("DBInstanceClass", productSize);
-		}
-		if (storageInGigabytes >= 5) {
-			params.put("DBInstanceStorage", storageInGigabytes);
-		}
-		
-		executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
-				"ModifyDBInstanceSpec", AliyunNetworkCommon.RequestMethod.POST, false, 
-				new AliyunValidateJsonResponseHandler(getProvider()));
-	}	
 	
 }
