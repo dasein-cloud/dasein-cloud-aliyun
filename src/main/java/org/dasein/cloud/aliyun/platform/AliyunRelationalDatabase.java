@@ -140,7 +140,16 @@ public class AliyunRelationalDatabase extends
 
 	@Override
 	public boolean isSubscribed() throws CloudException, InternalException {
-		return true;
+		String regionId = getContext().getRegionId();
+		if (regionId == null) {
+			throw new InternalException("No region was set for this request");
+		}
+
+		if (Arrays.asList("cn-hangzhou", "cn-qingdao", "cn-beijing", "cn-hongkong").contains(regionId)) {
+			return true;
+		} else {
+			return false;
+		}
 	}
 
 	@Override

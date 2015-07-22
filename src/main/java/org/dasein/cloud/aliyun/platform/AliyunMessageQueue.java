@@ -54,6 +54,7 @@ import org.dasein.util.uom.time.TimePeriod;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
@@ -75,7 +76,16 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
 
 	@Override
 	public boolean isSubscribed() throws CloudException, InternalException {
-		return true;
+		String regionId = getContext().getRegionId();
+		if (regionId == null) {
+			throw new InternalException("No region was set for this request");
+		}
+
+		if (Arrays.asList("cn-hangzhou", "cn-qingdao", "cn-beijing").contains(regionId)) {
+			return true;
+		} else {
+			return false;
+		}
 	}
 
 	@Override
