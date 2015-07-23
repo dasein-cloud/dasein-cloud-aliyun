@@ -323,7 +323,7 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 			} else if (product.getEngine().equals(DatabaseEngine.POSTGRES)) {
 				params.put("CharacterSetName", "UTF8");
 			} else if (product.getEngine().equals(DatabaseEngine.SQLSERVER_EE)) {
-				params.put("CharacterSetName", "UTF-16"); //TODO, use global charset, not Chinese
+				params.put("CharacterSetName", "Latin1_General_CI_AS");
 			}
 
 			executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS,
