@@ -38,6 +38,7 @@ import org.dasein.cloud.compute.VolumeFormat;
 import org.dasein.cloud.compute.VolumeState;
 import org.dasein.cloud.compute.VolumeSupport;
 import org.dasein.cloud.compute.VolumeType;
+import org.dasein.cloud.util.APITrace;
 import org.dasein.cloud.util.requester.DriverToCoreMapper;
 import org.dasein.cloud.util.requester.streamprocessors.StreamToJSONObjectProcessor;
 import org.dasein.util.uom.storage.Gigabyte;
@@ -115,218 +116,236 @@ public class AliyunVolume extends AbstractVolumeSupport<Aliyun> implements Volum
 
     @Override
     public Volume getVolume(@Nonnull String volumeId) throws InternalException, CloudException {
-        String regionId = getContext().getRegionId();
-        if (regionId == null) {
-            throw new InternalException("No region was set for this request");
-        }
+        APITrace.begin(getProvider(), "Volume.getVolume");
+        try {
+            String regionId = getContext().getRegionId();
+            if (regionId == null) {
+                throw new InternalException("No region was set for this request");
+            }
 
-        HttpUriRequest request = AliyunRequestBuilder.get()
-                .provider(getProvider())
-                .category(AliyunRequestBuilder.Category.ECS)
-                .parameter("Action", "DescribeDisks")
-                .parameter("RegionId", regionId)
-                .parameter("DiskIds", "[\"" + volumeId + "\"]")
-                .clientToken(true)
-                .build();
+            HttpUriRequest request = AliyunRequestBuilder.get().provider(getProvider())
+                    .category(AliyunRequestBuilder.Category.ECS)
+                    .parameter("Action", "DescribeDisks")
+                    .parameter("RegionId", regionId).parameter("DiskIds", "[\"" + volumeId + "\"]").clientToken(true)
+                    .build();
 
-        ResponseHandler<Volume> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, Volume>(
-                new StreamToJSONObjectProcessor(),
-                new DriverToCoreMapper<JSONObject, Volume>() {
-                    @Override
-                    public Volume mapFrom(JSONObject json) {
-                        try {
-                            JSONArray volumesJson = json.getJSONObject("Disks").getJSONArray("Disk");
-                            if (volumesJson.length() >= 1) {
-                                JSONObject volumeJson = volumesJson.getJSONObject(0);
-                                return toVolume(volumeJson);
-                            } else {
-                                return null;
+            ResponseHandler<Volume> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, Volume>(
+                    new StreamToJSONObjectProcessor(),
+                    new DriverToCoreMapper<JSONObject, Volume>() {
+                        @Override
+                        public Volume mapFrom(JSONObject json) {
+                            try {
+                                JSONArray volumesJson = json.getJSONObject("Disks").getJSONArray("Disk");
+                                if (volumesJson.length() >= 1) {
+                                    JSONObject volumeJson = volumesJson.getJSONObject(0);
+                                    return toVolume(volumeJson);
+                                } else {
+                                    return null;
+                                }
+                            } catch (JSONException jsonException) {
+                                stdLogger.error("Failed to parse JSON", jsonException);
+                                throw new RuntimeException(jsonException);
+                            } catch (InternalException internalException) {
+                                stdLogger.error("Failed to parse JSON", internalException);
+                                throw new RuntimeException(internalException.getMessage());
                             }
-                        } catch (JSONException jsonException) {
-                            stdLogger.error("Failed to parse JSON", jsonException);
-                            throw new RuntimeException(jsonException);
-                        } catch (InternalException internalException) {
-                            stdLogger.error("Failed to parse JSON", internalException);
-                            throw new RuntimeException(internalException.getMessage());
                         }
-                    }
-                },
-                JSONObject.class);
+                    },
+                    JSONObject.class);
 
-        return new AliyunRequestExecutor<Volume>(getProvider(),
-                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                request,
-                responseHandler).execute();
+            return new AliyunRequestExecutor<Volume>(getProvider(),
+                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                    request,
+                    responseHandler).execute();
+        } finally {
+            APITrace.end();
+        }
     }
 
     @Override
     public @Nonnull Iterable<Volume> listVolumes() throws InternalException, CloudException {
-        String regionId = getContext().getRegionId();
-        if (regionId == null) {
-            throw new InternalException("No region was set for this request");
-        }
+        APITrace.begin(getProvider(), "Volume.listVolumes");
+        try {
+            String regionId = getContext().getRegionId();
+            if (regionId == null) {
+                throw new InternalException("No region was set for this request");
+            }
 
-        final List<Volume> result = new ArrayList<Volume>();
-        final AtomicInteger totalCount = new AtomicInteger(0);
-        final AtomicInteger processedCount = new AtomicInteger(0);
+            final List<Volume> result = new ArrayList<Volume>();
+            final AtomicInteger totalCount = new AtomicInteger(0);
+            final AtomicInteger processedCount = new AtomicInteger(0);
 
-        ResponseHandler<Void> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, Void>(
-                new StreamToJSONObjectProcessor(),
-                new DriverToCoreMapper<JSONObject, Void>() {
-                    @Override
-                    public Void mapFrom(JSONObject json) {
-                        try {
-                            totalCount.set(json.getInt("TotalCount"));
+            ResponseHandler<Void> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, Void>(
+                    new StreamToJSONObjectProcessor(),
+                    new DriverToCoreMapper<JSONObject, Void>() {
+                        @Override
+                        public Void mapFrom(JSONObject json) {
+                            try {
+                                totalCount.set(json.getInt("TotalCount"));
 
-                            JSONArray volumesJson = json.getJSONObject("Disks").getJSONArray("Disk");
-                            for (int i = 0; i < volumesJson.length(); i++) {
-                                JSONObject volumeJson = volumesJson.getJSONObject(i);
-                                Volume volume = toVolume(volumeJson);
-                                //TODO, should we filter Portal=false disks?
-                                result.add(volume);
-                                processedCount.incrementAndGet();
+                                JSONArray volumesJson = json.getJSONObject("Disks").getJSONArray("Disk");
+                                for (int i = 0; i < volumesJson.length(); i++) {
+                                    JSONObject volumeJson = volumesJson.getJSONObject(i);
+                                    Volume volume = toVolume(volumeJson);
+                                    //TODO, should we filter Portal=false disks?
+                                    result.add(volume);
+                                    processedCount.incrementAndGet();
+                                }
+                                return null;
+                            } catch (JSONException jsonException) {
+                                stdLogger.error("Failed to parse JSON", jsonException);
+                                throw new RuntimeException(jsonException);
+                            } catch (InternalException internalException) {
+                                stdLogger.error("Failed to parse JSON", internalException);
+                                throw new RuntimeException(internalException.getMessage());
                             }
-                            return null;
-                        } catch (JSONException jsonException) {
-                            stdLogger.error("Failed to parse JSON", jsonException);
-                            throw new RuntimeException(jsonException);
-                        } catch (InternalException internalException) {
-                            stdLogger.error("Failed to parse JSON", internalException);
-                            throw new RuntimeException(internalException.getMessage());
                         }
-                    }
-                },
-                JSONObject.class);
+                    },
+                    JSONObject.class);
 
-        int pageNumber = 1;
-        while(true) {
-            HttpUriRequest request = AliyunRequestBuilder.get()
-                    .provider(getProvider())
+            int pageNumber = 1;
+            while(true) {
+                HttpUriRequest request = AliyunRequestBuilder.get()
+                        .provider(getProvider())
+                        .category(AliyunRequestBuilder.Category.ECS)
+                        .parameter("Action", "DescribeDisks")
+                        .parameter("RegionId", regionId)
+                        .parameter("PageNumber", pageNumber++)
+                        .parameter("PageSize", 50)//max
+                        .build();
+
+                new AliyunRequestExecutor<Void>(getProvider(),
+                        AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                        request,
+                        responseHandler).execute();
+
+                if (processedCount.intValue() >= totalCount.intValue()) {
+                    break;
+                }
+            }
+            return result;
+        } finally {
+            APITrace.end();
+        }
+    }
+
+    @Override
+    public @Nonnull String createVolume(@Nonnull VolumeCreateOptions options) throws InternalException, CloudException {
+        APITrace.begin(getProvider(), "Volume.createVolume");
+        try {
+            String regionId = getContext().getRegionId();
+            if (regionId == null) {
+                throw new InternalException("No region was set for this request");
+            }
+
+            Map<String, Object> entity = new HashMap<String, Object>();
+            entity.put("RegionId", regionId);
+            entity.put("ZoneId", options.getDataCenterId());
+            entity.put("DiskName", options.getName());
+            entity.put("Description", options.getDescription());
+            if (options.getVolumeSize() != null) {
+                entity.put("Size", options.getVolumeSize().getQuantity().intValue());
+            }
+            entity.put("SnapshotId", options.getSnapshotId());
+
+            HttpUriRequest request = AliyunRequestBuilder.post().provider(getProvider())
                     .category(AliyunRequestBuilder.Category.ECS)
-                    .parameter("Action", "DescribeDisks")
-                    .parameter("RegionId", regionId)
-                    .parameter("PageNumber", pageNumber++)
-                    .parameter("PageSize", 50)//max
+                    .parameter("Action", "CreateDisk").entity(entity).clientToken(true)
+                    .build();
+
+            ResponseHandler<String> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, String>(
+                    new StreamToJSONObjectProcessor(),
+                    new DriverToCoreMapper<JSONObject, String>() {
+                        @Override
+                        public String mapFrom(JSONObject json) {
+                            try {
+                                return json.getString("DiskId");
+                            } catch (JSONException jsonException) {
+                                stdLogger.error("Failed to parse JSON", jsonException);
+                                throw new RuntimeException(jsonException);
+                            }
+                        }
+                    },
+                    JSONObject.class);
+
+            return new AliyunRequestExecutor<String>(getProvider(),
+                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                    request,
+                    responseHandler).execute();
+        } finally {
+            APITrace.end();
+        }
+    }
+
+    @Override
+    public void remove(@Nonnull String volumeId) throws InternalException, CloudException {
+        APITrace.begin(getProvider(), "Volume.remove");
+        try {
+            Map<String, Object> entity = new HashMap<String, Object>();
+            entity.put("DiskId", volumeId);
+
+            HttpUriRequest request = AliyunRequestBuilder.post().provider(getProvider())
+                    .category(AliyunRequestBuilder.Category.ECS)
+                    .parameter("Action", "DeleteDisk").entity(entity)
                     .build();
 
             new AliyunRequestExecutor<Void>(getProvider(),
                     AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
                     request,
-                    responseHandler).execute();
-
-            if (processedCount.intValue() >= totalCount.intValue()) {
-                break;
-            }
+                    new AliyunValidateJsonResponseHandler(getProvider())).execute();
+        } finally {
+            APITrace.end();
         }
-        return result;
-    }
-
-    @Override
-    public @Nonnull String createVolume(@Nonnull VolumeCreateOptions options) throws InternalException, CloudException {
-        String regionId = getContext().getRegionId();
-        if (regionId == null) {
-            throw new InternalException("No region was set for this request");
-        }
-
-        Map<String, Object> entity = new HashMap<String, Object>();
-        entity.put("RegionId", regionId);
-        entity.put("ZoneId", options.getDataCenterId());
-        entity.put("DiskName", options.getName());
-        entity.put("Description", options.getDescription());
-        if (options.getVolumeSize() != null) {
-            entity.put("Size", options.getVolumeSize().getQuantity().intValue());
-        }
-        entity.put("SnapshotId", options.getSnapshotId());
-
-        HttpUriRequest request = AliyunRequestBuilder.post()
-                .provider(getProvider())
-                .category(AliyunRequestBuilder.Category.ECS)
-                .parameter("Action", "CreateDisk")
-                .entity(entity)
-                .clientToken(true)
-                .build();
-
-        ResponseHandler<String> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, String>(
-                new StreamToJSONObjectProcessor(),
-                new DriverToCoreMapper<JSONObject, String>() {
-                    @Override
-                    public String mapFrom(JSONObject json) {
-                        try {
-                            return json.getString("DiskId");
-                        } catch (JSONException jsonException) {
-                            stdLogger.error("Failed to parse JSON", jsonException);
-                            throw new RuntimeException(jsonException);
-                        }
-                    }
-                },
-                JSONObject.class);
-
-        return new AliyunRequestExecutor<String>(getProvider(),
-                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                request,
-                responseHandler).execute();
-    }
-
-    @Override
-    public void remove(@Nonnull String volumeId) throws InternalException, CloudException {
-        Map<String, Object> entity = new HashMap<String, Object>();
-        entity.put("DiskId", volumeId);
-
-        HttpUriRequest request = AliyunRequestBuilder.post()
-                .provider(getProvider())
-                .category(AliyunRequestBuilder.Category.ECS)
-                .parameter("Action", "DeleteDisk")
-                .entity(entity)
-                .build();
-
-        new AliyunRequestExecutor<Void>(getProvider(),
-                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                request,
-                new AliyunValidateJsonResponseHandler(getProvider())).execute();
     }
 
     @Override
     public void attach(@Nonnull String volumeId, @Nonnull String toServer, @Nonnull String deviceId) throws InternalException, CloudException {
-        Map<String, Object> entity = new HashMap<String, Object>();
-        entity.put("DiskId", volumeId);
-        entity.put("InstanceId", toServer);
-        entity.put("Device", deviceId);
+        APITrace.begin(getProvider(), "Volume.attach");
+        try {
+            Map<String, Object> entity = new HashMap<String, Object>();
+            entity.put("DiskId", volumeId);
+            entity.put("InstanceId", toServer);
+            entity.put("Device", deviceId);
 
-        HttpUriRequest request = AliyunRequestBuilder.post()
-                .provider(getProvider())
-                .category(AliyunRequestBuilder.Category.ECS)
-                .parameter("Action", "AttachDisk")
-                .entity(entity)
-                .build();
+            HttpUriRequest request = AliyunRequestBuilder.post().provider(getProvider())
+                    .category(AliyunRequestBuilder.Category.ECS)
+                    .parameter("Action", "AttachDisk").entity(entity)
+                    .build();
 
-        new AliyunRequestExecutor<Void>(getProvider(),
-                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                request,
-                new AliyunValidateJsonResponseHandler(getProvider())).execute();
+            new AliyunRequestExecutor<Void>(getProvider(),
+                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                    request,
+                    new AliyunValidateJsonResponseHandler(getProvider())).execute();
+        } finally {
+            APITrace.end();
+        }
     }
 
     @Override
     public void detach(@Nonnull String volumeId, boolean force) throws InternalException, CloudException {
-        Volume volume = getVolume(volumeId);
-        if (volume.getProviderVirtualMachineId() == null || volume.getProviderVirtualMachineId().isEmpty()) {
-            throw new CloudException("Volume " + volumeId + " has not been attached to a instance");
+        APITrace.begin(getProvider(), "Volume.detach");
+        try {
+            Volume volume = getVolume(volumeId);
+            if (volume.getProviderVirtualMachineId() == null || volume.getProviderVirtualMachineId().isEmpty()) {
+                throw new CloudException("Volume " + volumeId + " has not been attached to a instance");
+            }
+
+            Map<String, Object> entity = new HashMap<String, Object>();
+            entity.put("DiskId", volumeId);
+            entity.put("InstanceId", volume.getProviderVirtualMachineId());
+
+            HttpUriRequest request = AliyunRequestBuilder.post().provider(getProvider())
+                    .category(AliyunRequestBuilder.Category.ECS)
+                    .parameter("Action", "DetachDisk").entity(entity)
+                    .build();
+
+            new AliyunRequestExecutor<Void>(getProvider(),
+                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                    request,
+                    new AliyunValidateJsonResponseHandler(getProvider())).execute();
+        } finally {
+            APITrace.end();
         }
-
-        Map<String, Object> entity = new HashMap<String, Object>();
-        entity.put("DiskId", volumeId);
-        entity.put("InstanceId", volume.getProviderVirtualMachineId());
-
-        HttpUriRequest request = AliyunRequestBuilder.post()
-                .provider(getProvider())
-                .category(AliyunRequestBuilder.Category.ECS)
-                .parameter("Action", "DetachDisk")
-                .entity(entity)
-                .build();
-
-        new AliyunRequestExecutor<Void>(getProvider(),
-                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                request,
-                new AliyunValidateJsonResponseHandler(getProvider())).execute();
     }
 
 }

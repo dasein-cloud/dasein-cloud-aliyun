@@ -106,7 +106,7 @@ public class AliyunDataCenter extends AbstractDataCenterServices<Aliyun> impleme
 
     @Override
     public @Nonnull Iterable<DataCenter> listDataCenters(@Nonnull final String providerRegionId) throws InternalException, CloudException {
-        APITrace.begin(getProvider(), "listDataCenters");
+        APITrace.begin(getProvider(), "DataCenter.listDataCenters");
         try {
             ProviderContext context = getProvider().getContext();
             if (context == null) {
@@ -180,7 +180,7 @@ public class AliyunDataCenter extends AbstractDataCenterServices<Aliyun> impleme
 
     @Override
     public @Nonnull Iterable<Region> listRegions() throws InternalException, CloudException {
-        APITrace.begin(getProvider(), "listRegions");
+        APITrace.begin(getProvider(), "DataCenter.listRegions");
 
         try {
             ProviderContext context = getProvider().getContext();

@@ -46,6 +46,7 @@ import org.dasein.cloud.compute.VolumeAttachment;
 import org.dasein.cloud.compute.VolumeCreateOptions;
 import org.dasein.cloud.network.IPVersion;
 import org.dasein.cloud.network.RawAddress;
+import org.dasein.cloud.util.APITrace;
 import org.dasein.cloud.util.Cache;
 import org.dasein.cloud.util.CacheLevel;
 import org.dasein.cloud.util.requester.DriverToCoreMapper;
@@ -96,165 +97,184 @@ public class AliyunVirtualMachine extends AbstractVMSupport<Aliyun> implements V
     @Override
     public @Nonnull VirtualMachine launch(@Nonnull VMLaunchOptions withLaunchOptions)
             throws CloudException, InternalException {
-        String regionId = getContext().getRegionId();
-        if (regionId == null) {
-            throw new InternalException("No region was set for this request");
-        }
+        APITrace.begin(getProvider(), "VirtualMachine.launch");
+        try {
+            String regionId = getContext().getRegionId();
+            if (regionId == null) {
+                throw new InternalException("No region was set for this request");
+            }
 
-        Map<String, Object> entity = new HashMap<String, Object>();
-        entity.put("RegionId", regionId);
-        if (withLaunchOptions.getDataCenterId() != null) {
-            entity.put("ZoneId", withLaunchOptions.getDataCenterId());
-        }
-        entity.put("ImageId", withLaunchOptions.getMachineImageId());
-        entity.put("InstanceType", withLaunchOptions.getStandardProductId());
-        entity.put("SecurityGroupId", withLaunchOptions.getFirewallIds()[0]); //support only one when create
-        if (withLaunchOptions.getFriendlyName() != null) {
-            entity.put("InstanceName", withLaunchOptions.getFriendlyName());
-        }
-        if (withLaunchOptions.getDescription() != null) {
-            entity.put("Description", withLaunchOptions.getDescription());
-        }
-        entity.put("InternetChargeType", "PayByTraffic");
-        entity.put("InternetMaxBandwidthIn", "200");
-        entity.put("InternetMaxBandwidthOut", "100");
-        if (withLaunchOptions.getHostName() != null) {
-            entity.put("HostName", withLaunchOptions.getHostName());
-        }
-        if (withLaunchOptions.getBootstrapPassword() != null) {
-            entity.put("Password", withLaunchOptions.getBootstrapPassword());
-        }
-        entity.put("SystemDisk.Category", "cloud");//hard code to cloud, because others are not persistent
-        int volumeCount = 1;
-        for (VolumeAttachment volumeAttachment : withLaunchOptions.getVolumes()) {
-            if (volumeAttachment.getVolumeToCreate() != null) {
-                VolumeCreateOptions volumeCreateOptions = volumeAttachment.getVolumeToCreate();
-                if (volumeAttachment.isRootVolume()) {
-                    entity.put("SystemDisk.DiskName", volumeCreateOptions.getName());
-                    entity.put("SystemDisk.Description", volumeCreateOptions.getDescription());
-                } else {
-                    entity.put("DataDisk." + volumeCount + ".Size", volumeCreateOptions.getVolumeSize());
-                    entity.put("DataDisk." + volumeCount + ".Category", "cloud");
-                    entity.put("DataDisk." + volumeCount + ".SnapshotId", volumeCreateOptions.getSnapshotId());
-                    entity.put("DataDisk." + volumeCount + ".DiskName", volumeCreateOptions.getName());
-                    entity.put("DataDisk." + volumeCount + ".Description", volumeCreateOptions.getDescription());
-                    entity.put("DataDisk." + volumeCount + ".Device", volumeCreateOptions.getDeviceId());
-                    entity.put("DataDisk." + volumeCount + ".DeleteWithInstance", "false");
+            Map<String, Object> entity = new HashMap<String, Object>();
+            entity.put("RegionId", regionId);
+            if (withLaunchOptions.getDataCenterId() != null) {
+                entity.put("ZoneId", withLaunchOptions.getDataCenterId());
+            }
+            entity.put("ImageId", withLaunchOptions.getMachineImageId());
+            entity.put("InstanceType", withLaunchOptions.getStandardProductId());
+            entity.put("SecurityGroupId", withLaunchOptions.getFirewallIds()[0]); //support only one when create
+            if (withLaunchOptions.getFriendlyName() != null) {
+                entity.put("InstanceName", withLaunchOptions.getFriendlyName());
+            }
+            if (withLaunchOptions.getDescription() != null) {
+                entity.put("Description", withLaunchOptions.getDescription());
+            }
+            entity.put("InternetChargeType", "PayByTraffic");
+            entity.put("InternetMaxBandwidthIn", "200");
+            entity.put("InternetMaxBandwidthOut", "100");
+            if (withLaunchOptions.getHostName() != null) {
+                entity.put("HostName", withLaunchOptions.getHostName());
+            }
+            if (withLaunchOptions.getBootstrapPassword() != null) {
+                entity.put("Password", withLaunchOptions.getBootstrapPassword());
+            }
+            entity.put("SystemDisk.Category", "cloud");//hard code to cloud, because others are not persistent
+            int volumeCount = 1;
+            for (VolumeAttachment volumeAttachment : withLaunchOptions.getVolumes()) {
+                if (volumeAttachment.getVolumeToCreate() != null) {
+                    VolumeCreateOptions volumeCreateOptions = volumeAttachment.getVolumeToCreate();
+                    if (volumeAttachment.isRootVolume()) {
+                        entity.put("SystemDisk.DiskName", volumeCreateOptions.getName());
+                        entity.put("SystemDisk.Description", volumeCreateOptions.getDescription());
+                    } else {
+                        entity.put("DataDisk." + volumeCount + ".Size", volumeCreateOptions.getVolumeSize());
+                        entity.put("DataDisk." + volumeCount + ".Category", "cloud");
+                        entity.put("DataDisk." + volumeCount + ".SnapshotId", volumeCreateOptions.getSnapshotId());
+                        entity.put("DataDisk." + volumeCount + ".DiskName", volumeCreateOptions.getName());
+                        entity.put("DataDisk." + volumeCount + ".Description", volumeCreateOptions.getDescription());
+                        entity.put("DataDisk." + volumeCount + ".Device", volumeCreateOptions.getDeviceId());
+                        entity.put("DataDisk." + volumeCount + ".DeleteWithInstance", "false");
+                    }
                 }
             }
-        }
 
-        //only Vpc type has subnet id, should aliyun has two types of network product? Classic | Vpc
-        //refer http://docs.aliyun.com/?spm=5176.100054.3.1.Ym5tBh#/ecs/open-api/datatype&instanceattributestype
-        if (withLaunchOptions.getSubnetId() != null) {
-            entity.put("VSwitchId", withLaunchOptions.getSubnetId());
-            entity.put("PrivateIpAddress", withLaunchOptions.getPrivateIp());
-        }
+            //only Vpc type has subnet id, should aliyun has two types of network product? Classic | Vpc
+            //refer http://docs.aliyun.com/?spm=5176.100054.3.1.Ym5tBh#/ecs/open-api/datatype&instanceattributestype
+            if (withLaunchOptions.getSubnetId() != null) {
+                entity.put("VSwitchId", withLaunchOptions.getSubnetId());
+                entity.put("PrivateIpAddress", withLaunchOptions.getPrivateIp());
+            }
 
-        HttpUriRequest request = AliyunRequestBuilder.post()
-                .provider(getProvider())
-                .category(AliyunRequestBuilder.Category.ECS)
-                .parameter("Action", "CreateInstance")
-                .entity(entity)
-                .clientToken(true)
-                .build();
+            HttpUriRequest request = AliyunRequestBuilder.post()
+                    .provider(getProvider())
+                    .category(AliyunRequestBuilder.Category.ECS)
+                    .parameter("Action", "CreateInstance")
+                    .entity(entity)
+                    .clientToken(true)
+                    .build();
 
-        ResponseHandler<String> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, String>(
-                new StreamToJSONObjectProcessor(),
-                new DriverToCoreMapper<JSONObject, String>() {
-                    @Override
-                    public String mapFrom(JSONObject json) {
-                        try {
-                            return json.getString("InstanceId");
-                        } catch (JSONException jsonException) {
-                            stdLogger.error("Failed to parse JSON", jsonException);
-                            throw new RuntimeException(jsonException.getMessage());
+            ResponseHandler<String> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, String>(
+                    new StreamToJSONObjectProcessor(),
+                    new DriverToCoreMapper<JSONObject, String>() {
+                        @Override
+                        public String mapFrom(JSONObject json) {
+                            try {
+                                return json.getString("InstanceId");
+                            } catch (JSONException jsonException) {
+                                stdLogger.error("Failed to parse JSON", jsonException);
+                                throw new RuntimeException(jsonException.getMessage());
+                            }
                         }
-                    }
-                },
-                JSONObject.class);
+                    },
+                    JSONObject.class);
 
-        String instanceId = new AliyunRequestExecutor<String>(getProvider(),
-                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                request,
-                responseHandler).execute();
+            String instanceId = new AliyunRequestExecutor<String>(getProvider(),
+                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                    request,
+                    responseHandler).execute();
 
-        return getVirtualMachine(instanceId);
+            return getVirtualMachine(instanceId);
+        } finally {
+            APITrace.end();
+        }
     }
 
     @Override
     public void reboot( @Nonnull String vmId ) throws CloudException, InternalException {
-        Map<String, Object> entity = new HashMap<String, Object>();
-        entity.put("InstanceId", vmId);
-        entity.put("ForceStop", "false");
+        APITrace.begin(getProvider(), "VirtualMachine.reboot");
+        try {
+            Map<String, Object> entity = new HashMap<String, Object>();
+            entity.put("InstanceId", vmId);
+            entity.put("ForceStop", "false");
 
-        HttpUriRequest request = AliyunRequestBuilder.post()
-                .provider(getProvider())
-                .category(AliyunRequestBuilder.Category.ECS)
-                .parameter("Action", "RebootInstance")
-                .entity(entity)
-                .build();
+            HttpUriRequest request = AliyunRequestBuilder.post().provider(getProvider())
+                    .category(AliyunRequestBuilder.Category.ECS).parameter("Action", "RebootInstance")
+                    .entity(entity)
+                    .build();
 
-        new AliyunRequestExecutor<Void>(getProvider(),
-                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                request,
-                new AliyunValidateJsonResponseHandler(getProvider())).execute();
+            new AliyunRequestExecutor<Void>(getProvider(),
+                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                    request,
+                    new AliyunValidateJsonResponseHandler(getProvider())).execute();
+        } finally {
+            APITrace.end();
+        }
     }
 
     @Override
     public void start( @Nonnull String vmId ) throws InternalException, CloudException {
-        Map<String, Object> entity = new HashMap<String, Object>();
-        entity.put("InstanceId", vmId);
+        APITrace.begin(getProvider(), "VirtualMachine.start");
+        try {
+            Map<String, Object> entity = new HashMap<String, Object>();
+            entity.put("InstanceId", vmId);
 
-        HttpUriRequest request = AliyunRequestBuilder.post()
-                .provider(getProvider())
-                .category(AliyunRequestBuilder.Category.ECS)
-                .parameter("Action", "StartInstance")
-                .entity(entity)
-                .build();
+            HttpUriRequest request = AliyunRequestBuilder.post()
+                    .provider(getProvider())
+                    .category(AliyunRequestBuilder.Category.ECS)
+                    .parameter("Action", "StartInstance")
+                    .entity(entity)
+                    .build();
 
-        new AliyunRequestExecutor<Void>(getProvider(),
-                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                request,
-                new AliyunValidateJsonResponseHandler(getProvider())).execute();
+            new AliyunRequestExecutor<Void>(getProvider(),
+                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                    request,
+                    new AliyunValidateJsonResponseHandler(getProvider())).execute();
+        } finally {
+            APITrace.end();
+        }
     }
 
     @Override
     public void stop( @Nonnull String vmId, boolean force ) throws InternalException, CloudException {
-        Map<String, Object> entity = new HashMap<String, Object>();
-        entity.put("InstanceId", vmId);
-        entity.put("ForceStop", Boolean.valueOf(force));
+        APITrace.begin(getProvider(), "VirtualMachine.stop");
+        try {
+            Map<String, Object> entity = new HashMap<String, Object>();
+            entity.put("InstanceId", vmId);
+            entity.put("ForceStop", Boolean.valueOf(force));
 
-        HttpUriRequest request = AliyunRequestBuilder.post()
-                .provider(getProvider())
-                .category(AliyunRequestBuilder.Category.ECS)
-                .parameter("Action", "StopInstance")
-                .entity(entity)
-                .build();
+            HttpUriRequest request = AliyunRequestBuilder.post().provider(getProvider())
+                    .category(AliyunRequestBuilder.Category.ECS).parameter("Action", "StopInstance")
+                    .entity(entity)
+                    .build();
 
-        new AliyunRequestExecutor<Void>(getProvider(),
-                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                request,
-                new AliyunValidateJsonResponseHandler(getProvider())).execute();
+            new AliyunRequestExecutor<Void>(getProvider(),
+                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                    request,
+                    new AliyunValidateJsonResponseHandler(getProvider())).execute();
+        } finally {
+            APITrace.end();
+        }
     }
 
     @Override
     public void terminate(@Nonnull String vmId, @Nullable String explanation)
             throws InternalException, CloudException {
-        Map<String, Object> entity = new HashMap<String, Object>();
-        entity.put("InstanceId", vmId);
+        APITrace.begin(getProvider(), "VirtualMachine.terminate");
+        try {
+            Map<String, Object> entity = new HashMap<String, Object>();
+            entity.put("InstanceId", vmId);
 
-        HttpUriRequest request = AliyunRequestBuilder.post()
-                .provider(getProvider())
-                .category(AliyunRequestBuilder.Category.ECS)
-                .parameter("Action", "DeleteInstance")
-                .entity(entity)
-                .build();
+            HttpUriRequest request = AliyunRequestBuilder.post().provider(getProvider())
+                    .category(AliyunRequestBuilder.Category.ECS).parameter("Action", "DeleteInstance")
+                    .entity(entity)
+                    .build();
 
-        new AliyunRequestExecutor<Void>(getProvider(),
-                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                request,
-                new AliyunValidateJsonResponseHandler(getProvider())).execute();
+            new AliyunRequestExecutor<Void>(getProvider(),
+                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                    request,
+                    new AliyunValidateJsonResponseHandler(getProvider())).execute();
+        } finally {
+            APITrace.end();
+        }
     }
 
     @Override
@@ -265,60 +285,65 @@ public class AliyunVirtualMachine extends AbstractVMSupport<Aliyun> implements V
 
     @Override
     public @Nonnull VirtualMachine alterVirtualMachineFirewalls(@Nonnull String virtualMachineId, @Nonnull String[] firewalls) throws InternalException, CloudException{
-        List<String> targetFirewalls = Arrays.asList(firewalls);
-        VirtualMachine virtualMachine = getVirtualMachine(virtualMachineId);
-        List<String> currentFirewalls = Arrays.asList(virtualMachine.getProviderFirewallIds());
+        APITrace.begin(getProvider(), "VirtualMachine.alterVirtualMachineFirewalls");
+        try {
+            List<String> targetFirewalls = Arrays.asList(firewalls);
+            VirtualMachine virtualMachine = getVirtualMachine(virtualMachineId);
+            List<String> currentFirewalls = Arrays.asList(virtualMachine.getProviderFirewallIds());
 
-        List<String> toRemove = new ArrayList<String>();
-        List<String> toAdd = new ArrayList<String>();
-        for (String firewall : currentFirewalls) {
-            if (!targetFirewalls.contains(firewall)) {
-                toRemove.add(firewall);
+            List<String> toRemove = new ArrayList<String>();
+            List<String> toAdd = new ArrayList<String>();
+            for (String firewall : currentFirewalls) {
+                if (!targetFirewalls.contains(firewall)) {
+                    toRemove.add(firewall);
+                }
             }
-        }
-        for (String firewall : targetFirewalls) {
-            if (!currentFirewalls.contains(firewall)) {
-                toAdd.add(firewall);
+            for (String firewall : targetFirewalls) {
+                if (!currentFirewalls.contains(firewall)) {
+                    toAdd.add(firewall);
+                }
             }
+
+            for (String firewallId : toRemove) {
+                Map<String, Object> entity = new HashMap<String, Object>();
+                entity.put("InstanceId", virtualMachineId);
+                entity.put("SecurityGroupId", firewallId);
+
+                HttpUriRequest request = AliyunRequestBuilder.post()
+                        .provider(getProvider())
+                        .category(AliyunRequestBuilder.Category.ECS)
+                        .parameter("Action", "LeaveSecurityGroup")
+                        .entity(entity)
+                        .build();
+
+                new AliyunRequestExecutor<Void>(getProvider(),
+                        AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                        request,
+                        new AliyunValidateJsonResponseHandler(getProvider())).execute();
+            }
+            for (String firewallId : toAdd) {
+                Map<String, Object> entity = new HashMap<String, Object>();
+                entity.put("InstanceId", virtualMachineId);
+                entity.put("SecurityGroupId", firewallId);
+
+                HttpUriRequest request = AliyunRequestBuilder.post()
+                        .provider(getProvider())
+                        .category(AliyunRequestBuilder.Category.ECS)
+                        .parameter("Action", "JoinSecurityGroup")
+                        .entity(entity)
+                        .build();
+
+                new AliyunRequestExecutor<Void>(getProvider(),
+                        AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                        request,
+                        new AliyunValidateJsonResponseHandler(getProvider())).execute();
+            }
+
+            virtualMachine.setProviderFirewallIds(firewalls);
+            return virtualMachine;
+        } finally {
+            APITrace.end();
         }
-
-        for (String firewallId : toRemove) {
-            Map<String, Object> entity = new HashMap<String, Object>();
-            entity.put("InstanceId", virtualMachineId);
-            entity.put("SecurityGroupId", firewallId);
-
-            HttpUriRequest request = AliyunRequestBuilder.post()
-                    .provider(getProvider())
-                    .category(AliyunRequestBuilder.Category.ECS)
-                    .parameter("Action", "LeaveSecurityGroup")
-                    .entity(entity)
-                    .build();
-
-            new AliyunRequestExecutor<Void>(getProvider(),
-                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                    request,
-                    new AliyunValidateJsonResponseHandler(getProvider())).execute();
-        }
-        for (String firewallId : toAdd) {
-            Map<String, Object> entity = new HashMap<String, Object>();
-            entity.put("InstanceId", virtualMachineId);
-            entity.put("SecurityGroupId", firewallId);
-
-            HttpUriRequest request = AliyunRequestBuilder.post()
-                    .provider(getProvider())
-                    .category(AliyunRequestBuilder.Category.ECS)
-                    .parameter("Action", "JoinSecurityGroup")
-                    .entity(entity)
-                    .build();
-
-            new AliyunRequestExecutor<Void>(getProvider(),
-                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                    request,
-                    new AliyunValidateJsonResponseHandler(getProvider())).execute();
-        }
-
-        virtualMachine.setProviderFirewallIds(firewalls);
-        return virtualMachine;
     }
 
     private @Nonnull VmState toVmState(@Nonnull String status) {
@@ -412,113 +437,121 @@ public class AliyunVirtualMachine extends AbstractVMSupport<Aliyun> implements V
 
     @Override
     public @Nullable VirtualMachine getVirtualMachine(@Nonnull String vmId) throws InternalException, CloudException {
-        String regionId = getContext().getRegionId();
-        if (regionId == null) {
-            throw new InternalException("No region was set for this request");
-        }
+        APITrace.begin(getProvider(), "VirtualMachine.getVirtualMachine");
+        try {
+            String regionId = getContext().getRegionId();
+            if (regionId == null) {
+                throw new InternalException("No region was set for this request");
+            }
 
-        HttpUriRequest request = AliyunRequestBuilder.get()
-                .provider(getProvider())
-                .category(AliyunRequestBuilder.Category.ECS)
-                .parameter("Action", "DescribeInstances")
-                .parameter("RegionId", regionId)
-                .parameter("InstanceIds", "[\"" + vmId + "\"]")
-                .build();
+            HttpUriRequest request = AliyunRequestBuilder.get().provider(getProvider())
+                    .category(AliyunRequestBuilder.Category.ECS)
+                    .parameter("Action", "DescribeInstances").parameter("RegionId", regionId)
+                    .parameter("InstanceIds", "[\"" + vmId + "\"]")
+                    .build();
 
-        ResponseHandler<VirtualMachine> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, VirtualMachine>(
-                new StreamToJSONObjectProcessor(),
-                new DriverToCoreMapper<JSONObject, VirtualMachine>() {
-                    @Override
-                    public VirtualMachine mapFrom(JSONObject json) {
-                        try {
-                            JSONArray virtualMachinesJson = json.getJSONObject("Instances").getJSONArray("Instance");
-                            if (virtualMachinesJson.length() >= 1) {
-                                JSONObject virtualMachineJson = virtualMachinesJson.getJSONObject(0);
-                                return toVirtualMachine(virtualMachineJson);
-                            } else {
-                                return null;
+            ResponseHandler<VirtualMachine> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, VirtualMachine>(
+                    new StreamToJSONObjectProcessor(),
+                    new DriverToCoreMapper<JSONObject, VirtualMachine>() {
+                        @Override
+                        public VirtualMachine mapFrom(JSONObject json) {
+                            try {
+                                JSONArray virtualMachinesJson = json.getJSONObject("Instances").getJSONArray("Instance");
+                                if (virtualMachinesJson.length() >= 1) {
+                                    JSONObject virtualMachineJson = virtualMachinesJson.getJSONObject(0);
+                                    return toVirtualMachine(virtualMachineJson);
+                                } else {
+                                    return null;
+                                }
+                            } catch (JSONException jsonException) {
+                                stdLogger.error("Failed to parse JSON", jsonException);
+                                throw new RuntimeException(jsonException);
+                            } catch (CloudException cloudException) {
+                                stdLogger.error("Failed to parse JSON", cloudException);
+                                throw new RuntimeException(cloudException.getMessage());
+                            } catch (InternalException internalException) {
+                                stdLogger.error("Failed to parse JSON", internalException);
+                                throw new RuntimeException(internalException.getMessage());
                             }
-                        } catch (JSONException jsonException) {
-                            stdLogger.error("Failed to parse JSON", jsonException);
-                            throw new RuntimeException(jsonException);
-                        } catch (CloudException cloudException) {
-                            stdLogger.error("Failed to parse JSON", cloudException);
-                            throw new RuntimeException(cloudException.getMessage());
-                        } catch (InternalException internalException) {
-                            stdLogger.error("Failed to parse JSON", internalException);
-                            throw new RuntimeException(internalException.getMessage());
                         }
-                    }
-                },
-                JSONObject.class);
+                    },
+                    JSONObject.class);
 
-        return new AliyunRequestExecutor<VirtualMachine>(getProvider(),
-                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                request,
-                responseHandler).execute();
+            return new AliyunRequestExecutor<VirtualMachine>(getProvider(),
+                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                    request,
+                    responseHandler).execute();
+        } finally {
+            APITrace.end();
+        }
     }
 
     @Override
     public @Nonnull Iterable<VirtualMachine> listVirtualMachines() throws InternalException, CloudException {
-        String regionId = getContext().getRegionId();
-        if (regionId == null) {
-            throw new InternalException("No region was set for this request");
-        }
-
-        final List<VirtualMachine> result = new ArrayList<VirtualMachine>();
-        final AtomicInteger totalCount = new AtomicInteger(0);
-        final AtomicInteger processedCount = new AtomicInteger(0);
-
-        ResponseHandler<Void> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, Void>(
-                new StreamToJSONObjectProcessor(),
-                new DriverToCoreMapper<JSONObject, Void>() {
-                    @Override
-                    public Void mapFrom(JSONObject json) {
-                        try {
-                            totalCount.set(json.getInt("TotalCount"));
-
-                            JSONArray virtualMachinesJson = json.getJSONObject("Instances").getJSONArray("Instance");
-                            for (int i = 0; i < virtualMachinesJson.length(); i++) {
-                                JSONObject virtualMachineJson = virtualMachinesJson.getJSONObject(i);
-                                result.add(toVirtualMachine(virtualMachineJson));
-                                processedCount.incrementAndGet();
-                            }
-                            return null;
-                        } catch (JSONException jsonException) {
-                            stdLogger.error("Failed to parse JSON", jsonException);
-                            throw new RuntimeException(jsonException);
-                        } catch (CloudException cloudException) {
-                            stdLogger.error("Failed to parse JSON", cloudException);
-                            throw new RuntimeException(cloudException);
-                        } catch (InternalException internalException) {
-                            stdLogger.error("Failed to parse JSON", internalException);
-                            throw new RuntimeException(internalException.getMessage());
-                        }
-                    }
-                },
-                JSONObject.class);
-
-        int pageNumber = 1;
-        while(true) {
-            HttpUriRequest request = AliyunRequestBuilder.get()
-                    .provider(getProvider())
-                    .category(AliyunRequestBuilder.Category.ECS)
-                    .parameter("Action", "DescribeInstances")
-                    .parameter("RegionId", regionId)
-                    .parameter("PageNumber", pageNumber++)
-                    .parameter("PageSize", 50)//max
-                    .build();
-
-            new AliyunRequestExecutor<Void>(getProvider(),
-                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                    request,
-                    responseHandler).execute();
-
-            if (processedCount.intValue() >= totalCount.intValue()) {
-                break;
+        APITrace.begin(getProvider(), "VirtualMachine.listVirtualMachines");
+        try {
+            String regionId = getContext().getRegionId();
+            if (regionId == null) {
+                throw new InternalException("No region was set for this request");
             }
+
+            final List<VirtualMachine> result = new ArrayList<VirtualMachine>();
+            final AtomicInteger totalCount = new AtomicInteger(0);
+            final AtomicInteger processedCount = new AtomicInteger(0);
+
+            ResponseHandler<Void> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, Void>(
+                    new StreamToJSONObjectProcessor(),
+                    new DriverToCoreMapper<JSONObject, Void>() {
+                        @Override
+                        public Void mapFrom(JSONObject json) {
+                            try {
+                                totalCount.set(json.getInt("TotalCount"));
+
+                                JSONArray virtualMachinesJson = json.getJSONObject("Instances").getJSONArray("Instance");
+                                for (int i = 0; i < virtualMachinesJson.length(); i++) {
+                                    JSONObject virtualMachineJson = virtualMachinesJson.getJSONObject(i);
+                                    result.add(toVirtualMachine(virtualMachineJson));
+                                    processedCount.incrementAndGet();
+                                }
+                                return null;
+                            } catch (JSONException jsonException) {
+                                stdLogger.error("Failed to parse JSON", jsonException);
+                                throw new RuntimeException(jsonException);
+                            } catch (CloudException cloudException) {
+                                stdLogger.error("Failed to parse JSON", cloudException);
+                                throw new RuntimeException(cloudException);
+                            } catch (InternalException internalException) {
+                                stdLogger.error("Failed to parse JSON", internalException);
+                                throw new RuntimeException(internalException.getMessage());
+                            }
+                        }
+                    },
+                    JSONObject.class);
+
+            int pageNumber = 1;
+            while(true) {
+                HttpUriRequest request = AliyunRequestBuilder.get()
+                        .provider(getProvider())
+                        .category(AliyunRequestBuilder.Category.ECS)
+                        .parameter("Action", "DescribeInstances")
+                        .parameter("RegionId", regionId)
+                        .parameter("PageNumber", pageNumber++)
+                        .parameter("PageSize", 50)//max
+                        .build();
+
+                new AliyunRequestExecutor<Void>(getProvider(),
+                        AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                        request,
+                        responseHandler).execute();
+
+                if (processedCount.intValue() >= totalCount.intValue()) {
+                    break;
+                }
+            }
+            return result;
+        } finally {
+            APITrace.end();
         }
-        return result;
     }
 
     @Override
@@ -528,109 +561,34 @@ public class AliyunVirtualMachine extends AbstractVMSupport<Aliyun> implements V
 
     @Override
     public @Nonnull Iterable<ResourceStatus> listVirtualMachineStatus() throws InternalException, CloudException {
-        String regionId = getContext().getRegionId();
-        if (regionId == null) {
-            throw new InternalException("No region was set for this request");
-        }
-
-        final List<ResourceStatus> result = new ArrayList<ResourceStatus>();
-        final AtomicInteger totalCount = new AtomicInteger(0);
-        final AtomicInteger processedCount = new AtomicInteger(0);
-
-        ResponseHandler<Void> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, Void>(
-                new StreamToJSONObjectProcessor(),
-                new DriverToCoreMapper<JSONObject, Void>() {
-                    @Override
-                    public Void mapFrom(JSONObject json) {
-                        try {
-                            totalCount.set(json.getInt("TotalCount"));
-
-                            JSONArray virtualMachinesJson = json.getJSONObject("InstanceStatuses").getJSONArray("InstanceStatus");
-                            for (int i = 0; i < virtualMachinesJson.length(); i++) {
-                                JSONObject virtualMachineJson = virtualMachinesJson.getJSONObject(i);
-                                String virtualMachineId = virtualMachineJson.getString("InstanceId");
-                                VmState virtualMachineState = toVmState(virtualMachineJson.getString("Status"));
-                                result.add(new ResourceStatus(virtualMachineId, virtualMachineState));
-                                processedCount.incrementAndGet();
-                            }
-                            return null;
-                        } catch (JSONException jsonException) {
-                            stdLogger.error("Failed to parse JSON", jsonException);
-                            throw new RuntimeException(jsonException);
-                        }
-                    }
-                },
-                JSONObject.class);
-
-        int pageNumber = 1;
-        while(true) {
-            HttpUriRequest request = AliyunRequestBuilder.get()
-                    .provider(getProvider())
-                    .category(AliyunRequestBuilder.Category.ECS)
-                    .parameter("Action", "DescribeInstanceStatus")
-                    .parameter("RegionId", regionId)
-                    .parameter("PageNumber", pageNumber++)
-                    .parameter("PageSize", 50)//max
-                    .build();
-
-            new AliyunRequestExecutor<Void>(getProvider(),
-                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                    request,
-                    responseHandler).execute();
-
-            if (processedCount.intValue() >= totalCount.intValue()) {
-                break;
+        APITrace.begin(getProvider(), "VirtualMachine.listVirtualMachineStatus");
+        try {
+            String regionId = getContext().getRegionId();
+            if (regionId == null) {
+                throw new InternalException("No region was set for this request");
             }
-        }
-        return result;
-    }
 
-    @Override
-    public @Nonnull Iterable<VirtualMachineProduct> listProducts( @Nonnull VirtualMachineProductFilterOptions options, @Nullable Architecture architecture ) throws InternalException, CloudException {
-        List<VirtualMachineProduct> products = new ArrayList<VirtualMachineProduct>();
+            final List<ResourceStatus> result = new ArrayList<ResourceStatus>();
+            final AtomicInteger totalCount = new AtomicInteger(0);
+            final AtomicInteger processedCount = new AtomicInteger(0);
 
-        Cache<VirtualMachineProduct> cache = Cache
-                .getInstance(getProvider(), "vmProducts", VirtualMachineProduct.class, CacheLevel.CLOUD,
-                        TimePeriod.valueOf(1, "day"));
-        Iterable<VirtualMachineProduct> cachedProducts = cache.get(getContext());
-        if (cachedProducts != null && cachedProducts.iterator().hasNext()) {
-            Iterator<VirtualMachineProduct> iterator = cachedProducts.iterator();
-            while (iterator.hasNext()) {
-                products.add(iterator.next());
-            }
-        } else {
-            HttpUriRequest request = AliyunRequestBuilder.get()
-                    .provider(getProvider())
-                    .category(AliyunRequestBuilder.Category.ECS)
-                    .parameter("Action", "DescribeInstanceTypes")
-                    .build();
-
-            ResponseHandler<List<VirtualMachineProduct>> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, List<VirtualMachineProduct>>(
+            ResponseHandler<Void> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, Void>(
                     new StreamToJSONObjectProcessor(),
-                    new DriverToCoreMapper<JSONObject, List<VirtualMachineProduct>>() {
+                    new DriverToCoreMapper<JSONObject, Void>() {
                         @Override
-                        public List<VirtualMachineProduct> mapFrom(JSONObject json) {
-                            if (json == null) {
-                                return null;
-                            }
+                        public Void mapFrom(JSONObject json) {
                             try {
-                                List<VirtualMachineProduct> result = new ArrayList<VirtualMachineProduct>();
-                                JSONArray productsJson = json.getJSONObject("InstanceTypes").getJSONArray("InstanceType");
-                                for (int i = 0; i < productsJson.length(); i++) {
-                                    JSONObject productJson = productsJson.getJSONObject(i);
-                                    VirtualMachineProduct product = new VirtualMachineProduct();
+                                totalCount.set(json.getInt("TotalCount"));
 
-                                    product.setRamSize(new Storage<Gigabyte>(productJson.getInt("MemorySize"), Storage.GIGABYTE));
-                                    //Aliyun root volume, Linux has 20G while Windows has 40G
-                                    product.setRootVolumeSize(new Storage<Gigabyte>(20, Storage.GIGABYTE));
-                                    product.setCpuCount(productJson.getInt("CpuCoreCount"));
-                                    String instanceTypeId = productJson.getString("InstanceTypeId");
-                                    product.setProviderProductId(instanceTypeId);
-                                    product.setDescription(instanceTypeId);
-                                    product.setName(instanceTypeId);
-                                    result.add(product);
+                                JSONArray virtualMachinesJson = json.getJSONObject("InstanceStatuses").getJSONArray("InstanceStatus");
+                                for (int i = 0; i < virtualMachinesJson.length(); i++) {
+                                    JSONObject virtualMachineJson = virtualMachinesJson.getJSONObject(i);
+                                    String virtualMachineId = virtualMachineJson.getString("InstanceId");
+                                    VmState virtualMachineState = toVmState(virtualMachineJson.getString("Status"));
+                                    result.add(new ResourceStatus(virtualMachineId, virtualMachineState));
+                                    processedCount.incrementAndGet();
                                 }
-                                return result;
+                                return null;
                             } catch (JSONException jsonException) {
                                 stdLogger.error("Failed to parse JSON", jsonException);
                                 throw new RuntimeException(jsonException);
@@ -639,28 +597,113 @@ public class AliyunVirtualMachine extends AbstractVMSupport<Aliyun> implements V
                     },
                     JSONObject.class);
 
-            List<VirtualMachineProduct> result = new AliyunRequestExecutor<List<VirtualMachineProduct>>(getProvider(),
-                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                    request,
-                    responseHandler).execute();
+            int pageNumber = 1;
+            while(true) {
+                HttpUriRequest request = AliyunRequestBuilder.get()
+                        .provider(getProvider())
+                        .category(AliyunRequestBuilder.Category.ECS)
+                        .parameter("Action", "DescribeInstanceStatus")
+                        .parameter("RegionId", regionId)
+                        .parameter("PageNumber", pageNumber++)
+                        .parameter("PageSize", 50)//max
+                        .build();
 
-            if (result == null) {
-                return Collections.emptyList();
+                new AliyunRequestExecutor<Void>(getProvider(),
+                        AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                        request,
+                        responseHandler).execute();
+
+                if (processedCount.intValue() >= totalCount.intValue()) {
+                    break;
+                }
             }
-            cache.put(getContext(), products);
+            return result;
+        } finally {
+            APITrace.end();
         }
+    }
 
-        List<VirtualMachineProduct> result = new ArrayList<VirtualMachineProduct>();
-        for (VirtualMachineProduct product : products) {
-            if (options != null) {
-                if (options.matches(product)) {
-                    result.add(product);
+    @Override
+    public @Nonnull Iterable<VirtualMachineProduct> listProducts( @Nonnull VirtualMachineProductFilterOptions options, @Nullable Architecture architecture ) throws InternalException, CloudException {
+        APITrace.begin(getProvider(), "VirtualMachine.listProducts");
+        try {
+            List<VirtualMachineProduct> products = new ArrayList<VirtualMachineProduct>();
+
+            Cache<VirtualMachineProduct> cache = Cache
+                    .getInstance(getProvider(), "vmProducts", VirtualMachineProduct.class, CacheLevel.CLOUD,
+                            TimePeriod.valueOf(1, "day"));
+            Iterable<VirtualMachineProduct> cachedProducts = cache.get(getContext());
+            if (cachedProducts != null && cachedProducts.iterator().hasNext()) {
+                Iterator<VirtualMachineProduct> iterator = cachedProducts.iterator();
+                while (iterator.hasNext()) {
+                    products.add(iterator.next());
                 }
             } else {
-                result.add(product);
+                HttpUriRequest request = AliyunRequestBuilder.get()
+                        .provider(getProvider())
+                        .category(AliyunRequestBuilder.Category.ECS)
+                        .parameter("Action", "DescribeInstanceTypes")
+                        .build();
+
+                ResponseHandler<List<VirtualMachineProduct>> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, List<VirtualMachineProduct>>(
+                        new StreamToJSONObjectProcessor(),
+                        new DriverToCoreMapper<JSONObject, List<VirtualMachineProduct>>() {
+                            @Override
+                            public List<VirtualMachineProduct> mapFrom(JSONObject json) {
+                                if (json == null) {
+                                    return null;
+                                }
+                                try {
+                                    List<VirtualMachineProduct> result = new ArrayList<VirtualMachineProduct>();
+                                    JSONArray productsJson = json.getJSONObject("InstanceTypes").getJSONArray("InstanceType");
+                                    for (int i = 0; i < productsJson.length(); i++) {
+                                        JSONObject productJson = productsJson.getJSONObject(i);
+                                        VirtualMachineProduct product = new VirtualMachineProduct();
+
+                                        product.setRamSize(new Storage<Gigabyte>(productJson.getInt("MemorySize"), Storage.GIGABYTE));
+                                        //Aliyun root volume, Linux has 20G while Windows has 40G
+                                        product.setRootVolumeSize(new Storage<Gigabyte>(20, Storage.GIGABYTE));
+                                        product.setCpuCount(productJson.getInt("CpuCoreCount"));
+                                        String instanceTypeId = productJson.getString("InstanceTypeId");
+                                        product.setProviderProductId(instanceTypeId);
+                                        product.setDescription(instanceTypeId);
+                                        product.setName(instanceTypeId);
+                                        result.add(product);
+                                    }
+                                    return result;
+                                } catch (JSONException jsonException) {
+                                    stdLogger.error("Failed to parse JSON", jsonException);
+                                    throw new RuntimeException(jsonException);
+                                }
+                            }
+                        },
+                        JSONObject.class);
+
+                List<VirtualMachineProduct> result = new AliyunRequestExecutor<List<VirtualMachineProduct>>(getProvider(),
+                        AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+                        request,
+                        responseHandler).execute();
+
+                if (result == null) {
+                    return Collections.emptyList();
+                }
+                cache.put(getContext(), products);
             }
+
+            List<VirtualMachineProduct> result = new ArrayList<VirtualMachineProduct>();
+            for (VirtualMachineProduct product : products) {
+                if (options != null) {
+                    if (options.matches(product)) {
+                        result.add(product);
+                    }
+                } else {
+                    result.add(product);
+                }
+            }
+            return result;
+        } finally {
+            APITrace.end();
         }
-        return result;
     }
 
 }
