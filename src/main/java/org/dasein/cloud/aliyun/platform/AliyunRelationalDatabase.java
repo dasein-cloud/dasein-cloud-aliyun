@@ -115,7 +115,7 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 	public Collection<ConfigurationParameter> listParameters(
 			String forProviderConfigurationId) throws CloudException,
 			InternalException {
-		APITrace.begin(getProvider(), "listParameters");
+		APITrace.begin(getProvider(), "RelationalDatabase.listParameters");
 		try {
 			
 			DatabaseConfiguration configuration = getConfiguration(forProviderConfigurationId);
@@ -263,7 +263,7 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 	@Override
 	public String createFromScratch(String databaseName, DatabaseProduct product, String databaseVersion,
 			String withAdminUser, String withAdminPassword, int hostPort) throws CloudException, InternalException {
-		APITrace.begin(getProvider(), "createFromScratch");
+		APITrace.begin(getProvider(), "RelationalDatabase.createFromScratch");
 		try {
 			Map<String, Object> params = new HashMap<String, Object>();
 			params.put("RegionId", getContext().getRegionId());
@@ -370,7 +370,7 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 
 	@Override
 	public void removeDatabase(String providerDatabaseId) throws CloudException, InternalException {
-		APITrace.begin(getProvider(), "removeDatabase");
+		APITrace.begin(getProvider(), "RelationalDatabase.removeDatabase");
 		try {
 			DatabaseId databaseId = new DatabaseId(providerDatabaseId);
 
@@ -389,7 +389,7 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 
 	@Override
 	public void restart(String providerDatabaseId, boolean blockUntilDone) throws CloudException, InternalException {
-		APITrace.begin(getProvider(), "restart");
+		APITrace.begin(getProvider(), "RelationalDatabase.restart");
 		try {
 			DatabaseId databaseId = new DatabaseId(providerDatabaseId);
 
@@ -407,7 +407,7 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 	@Override
 	public Database getDatabase(String providerDatabaseId)
 			throws CloudException, InternalException {
-		APITrace.begin(getProvider(), "getDatabase");
+		APITrace.begin(getProvider(), "RelationalDatabase.getDatabase");
 		try {
 
 			final DatabaseId databaseId = new DatabaseId(providerDatabaseId);
@@ -497,7 +497,7 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 
 	@Override
 	public Iterable<Database> listDatabases() throws CloudException, InternalException {
-		APITrace.begin(getProvider(), "listDatabases");
+		APITrace.begin(getProvider(), "RelationalDatabase.listDatabases");
 		try {
 			//query all db instance ids
 			List<String> allDbInstanceIds = new ArrayList<String>();
@@ -646,7 +646,7 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 	@Override
 	public void addAccess(String providerDatabaseId, String sourceCidr)
 			throws CloudException, InternalException {
-		APITrace.begin(getProvider(), "addAccess");
+		APITrace.begin(getProvider(), "RelationalDatabase.addAccess");
 		try {
 			Map<String, Object> params = new HashMap<String, Object>();
 			
@@ -671,7 +671,7 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 
 	@Override
 	public void revokeAccess(String providerDatabaseId, String sourceCidr) throws CloudException, InternalException {
-		APITrace.begin(getProvider(), "revokeAccess");
+		APITrace.begin(getProvider(), "RelationalDatabase.revokeAccess");
 		try {
 			Map<String, Object> params = new HashMap<String, Object>();
 			
@@ -757,7 +757,7 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 	@Override
 	public Iterable<DatabaseBackup> listBackups(String forOptionalProviderDatabaseId)
 			throws CloudException, InternalException {
-		APITrace.begin(getProvider(), "listBackups");
+		APITrace.begin(getProvider(), "RelationalDatabase.listBackups");
 		try {
 			List<DatabaseBackup> allBackups = new ArrayList<DatabaseBackup>();
 	        final AtomicInteger totalPageNumber = new AtomicInteger(1);
@@ -825,7 +825,7 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 	}
 
 	private TimeWindow getBackupTimeWindow(String databaseInstanceId) throws InternalException, CloudException {
-		APITrace.begin(getProvider(), "getBackupTimeWindow");
+		APITrace.begin(getProvider(), "RelationalDatabase.getBackupTimeWindow");
 		try {
 			Map<String, Object> params = new HashMap<String, Object>();
 			params.put("DBInstanceId", databaseInstanceId);
@@ -888,7 +888,7 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 	}
 
 	private JSONObject getDBInstanceAttribute(String databaseInstanceId) throws InternalException, CloudException {
-		APITrace.begin(getProvider(), "getDBInstanceAttribute");
+		APITrace.begin(getProvider(), "RelationalDatabase.getDBInstanceAttribute");
 		try {
 			HttpUriRequest request = AliyunRequestBuilder.get()
 					.provider(getProvider())
@@ -979,7 +979,7 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 	 * get the first account name of DB instance
 	 */
 	private String getDBInstanceAccount(final String dbInstanceId) throws CloudException, InternalException {
-		APITrace.begin(getProvider(), "getDBInstanceAccount");
+		APITrace.begin(getProvider(), "RelationalDatabase.getDBInstanceAccount");
 		try {
 			HttpUriRequest request = AliyunRequestBuilder.get()
 					.provider(getProvider())
@@ -1017,7 +1017,7 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 	}
 	
 	private void removeDBInstanceAccount (String dbInstanceId, String adminUser) throws InternalException, CloudException {
-		APITrace.begin(getProvider(), "removeDBInstanceAccount");
+		APITrace.begin(getProvider(), "RelationalDatabase.removeDBInstanceAccount");
 		try {
 			HashMap<String, Object> params = new HashMap<String, Object>();
 			params.put("DBInstanceId", dbInstanceId);
@@ -1035,7 +1035,7 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 	 */
 	private void createDBInstanceAccount(String dbInstanceId, String dbName, String adminUser, String adminPassword)
 			throws InternalException, CloudException {
-		APITrace.begin(getProvider(), "createDBInstanceAccount");
+		APITrace.begin(getProvider(), "RelationalDatabase.createDBInstanceAccount");
 		try {
 			//create db account
 			HashMap<String, Object> params = new HashMap<String, Object>();
@@ -1063,7 +1063,7 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 
 	private void alterPreferredBackupWindow(String databaseInstanceId, TimeWindow preferredBackupWindow) 
 			throws InternalException, CloudException {
-		APITrace.begin(getProvider(), "alterPreferredBackupWindow");
+		APITrace.begin(getProvider(), "RelationalDatabase.alterPreferredBackupWindow");
 		try {
 			Map<String, Object> params = new HashMap<String, Object>();
 			params.put("DBInstanceId", databaseInstanceId);
@@ -1083,7 +1083,7 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 	
 	private void alterPreferredMaintenanceWindow(String databaseInstanceId, TimeWindow preferredMaintenanceWindow) 
 			throws InternalException, CloudException {
-		APITrace.begin(getProvider(), "alterPreferredMaintenanceWindow");
+		APITrace.begin(getProvider(), "RelationalDatabase.alterPreferredMaintenanceWindow");
 		try {
 			Map<String, Object> params = new HashMap<String, Object>();
 			params.put("DBInstanceId", databaseInstanceId);
@@ -1099,7 +1099,7 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 	
 	private void alterDBInstanceAttribute(String databaseInstanceId, String productSize, int storageInGigabytes) 
 			throws InternalException, CloudException {
-		APITrace.begin(getProvider(), "alterDBInstanceAttribute");
+		APITrace.begin(getProvider(), "RelationalDatabase.alterDBInstanceAttribute");
 		try {
 			Map<String, Object> params = new HashMap<String, Object>();
 			params.put("DBInstanceId", databaseInstanceId);

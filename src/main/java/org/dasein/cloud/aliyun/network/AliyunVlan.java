@@ -152,7 +152,7 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
      */
     @Override
     public Route addRouteToVirtualMachine(@Nonnull String routingTableId, @Nonnull IPVersion version, @Nullable String destinationCidr, @Nonnull String vmId) throws CloudException, InternalException {
-    	APITrace.begin(getProvider(), "addRouteToVirtualMachine");
+    	APITrace.begin(getProvider(), "Vlan.addRouteToVirtualMachine");
     	try {
 	    	if (!version.equals(IPVersion.IPV4)) {
 	            throw new InternalException("Aliyun supports IPV4 only!");
@@ -191,7 +191,7 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
     @Nonnull
     @Override
     public Subnet createSubnet(@Nonnull SubnetCreateOptions options) throws CloudException, InternalException {
-    	APITrace.begin(getProvider(), "createSubnet");
+    	APITrace.begin(getProvider(), "Vlan.createSubnet");
     	try {
 	    	Map<String, Object> params = new HashMap<String, Object>();
 	        params.put("ZoneId", options.getProviderDataCenterId());
@@ -246,7 +246,7 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
     @Override
     public VLAN createVlan(@Nonnull String cidr, @Nonnull String name, @Nonnull String description, @Nonnull String domainName,
                            @Nonnull String[] dnsServers, @Nonnull String[] ntpServers) throws CloudException, InternalException {
-    	APITrace.begin(getProvider(), "createVlan");
+    	APITrace.begin(getProvider(), "Vlan.createVlan");
     	try {
 	    	Map<String, Object> params = new HashMap<String, Object>();
 	        params.put("RegionId", getContext().getRegionId());
@@ -326,7 +326,7 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
      */
     @Override
     public RoutingTable getRoutingTableForVlan(@Nonnull String vlanId) throws CloudException, InternalException {
-    	APITrace.begin(getProvider(), "getRoutingTableForVlan");
+    	APITrace.begin(getProvider(), "Vlan.getRoutingTableForVlan");
     	try {
 	    	final IdentityGenerator identityGenerator = new IdentityGenerator(vlanId);
 	        if (!getProvider().isEmpty(identityGenerator.getVrouterId())) {
@@ -382,7 +382,7 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
      */
     @Override
     public RoutingTable getRoutingTable(@Nonnull String id) throws CloudException, InternalException {
-    	APITrace.begin(getProvider(), "getRoutingTable");
+    	APITrace.begin(getProvider(), "Vlan.getRoutingTable");
     	try {
 	    	final IdentityGenerator identityGenerator = new IdentityGenerator(id);
 	        if (!getProvider().isEmpty(identityGenerator.getVrouterId())) {
@@ -432,7 +432,7 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
 
     @Override
     public Subnet getSubnet(@Nonnull String subnetId) throws CloudException, InternalException {
-    	APITrace.begin(getProvider(), "getSubnet");
+    	APITrace.begin(getProvider(), "Vlan.getSubnet");
     	try {
 	    	IdentityGenerator identityGenerator = new IdentityGenerator(subnetId);
 	        if (!getProvider().isEmpty(identityGenerator.getVlanId())) {
@@ -482,7 +482,7 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
 
     @Override
     public VLAN getVlan(@Nonnull String vlanId) throws CloudException, InternalException {
-    	APITrace.begin(getProvider(), "getVlan");
+    	APITrace.begin(getProvider(), "Vlan.getVlan");
     	try {
 	        HttpUriRequest request = AliyunRequestBuilder.get()
 	        		.provider(getProvider())
@@ -614,7 +614,7 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
     @Nonnull
     @Override
     public Iterable<Subnet> listSubnets(@Nullable String vlanId) throws CloudException, InternalException {
-    	APITrace.begin(getProvider(), "listSubnets");
+    	APITrace.begin(getProvider(), "Vlan.listSubnets");
     	try {
 	    	List<Subnet> allSubnets = new ArrayList<Subnet>();
 	        final AtomicInteger totalPageNumber = new AtomicInteger(1);
@@ -686,7 +686,7 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
     @Nonnull
     @Override
     public Iterable<VLAN> listVlans() throws CloudException, InternalException {
-    	APITrace.begin(getProvider(), "listVlans");
+    	APITrace.begin(getProvider(), "Vlan.listVlans");
     	try {
 	    	List<VLAN> allVlans = new ArrayList<VLAN>();
 	        final AtomicInteger totalPageNumber = new AtomicInteger(1);
@@ -755,7 +755,7 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
      */
     @Override
     public void removeRoute(@Nonnull String routingTableId, @Nonnull String destinationCidr) throws CloudException, InternalException {
-    	APITrace.begin(getProvider(), "removeRoute");
+    	APITrace.begin(getProvider(), "Vlan.removeRoute");
     	try {
 	    	//search routes by routing table and destination cidr
 	        RoutingTable routingTable = getRoutingTable(routingTableId);
@@ -802,7 +802,7 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
 
     @Override
     public void removeSubnet(String providerSubnetId) throws CloudException, InternalException {
-    	APITrace.begin(getProvider(), "removeSubnet");
+    	APITrace.begin(getProvider(), "Vlan.removeSubnet");
     	try {
 	    	Map<String, Object> params = new HashMap<String, Object>();
 	        params.put("VSwitchId", new IdentityGenerator(providerSubnetId).getSubnetId());

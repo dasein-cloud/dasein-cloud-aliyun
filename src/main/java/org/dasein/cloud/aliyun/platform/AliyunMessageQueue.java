@@ -96,7 +96,7 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
 	@Override
 	public String createMessageQueue(final MQCreateOptions options)
 			throws CloudException, InternalException {
-		APITrace.begin(getProvider(), "createMessageQueue");
+		APITrace.begin(getProvider(), "MessageQueue.createMessageQueue");
 		try {
 			Queue queue = new Queue();
 			if (!getProvider().isEmpty(options.getMetaData().get("DelaySeconds"))) {
@@ -159,7 +159,7 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
 	public MessageQueue getMessageQueue(String mqId) throws CloudException,
 			InternalException {
 		
-		APITrace.begin(getProvider(), "getMessageQueue");
+		APITrace.begin(getProvider(), "MessageQueue.getMessageQueue");
 		try {
 			HttpUriRequest request = AliyunRequestBuilder.get()
 	                .provider(getProvider())
@@ -219,7 +219,7 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
 	@Override
 	public void removeMessageQueue(String mqId, String reason)
 			throws CloudException, InternalException {
-		APITrace.begin(getProvider(), "removeMessageQueue");
+		APITrace.begin(getProvider(), "MessageQueue.removeMessageQueue");
 		try {
 			HttpUriRequest request = AliyunRequestBuilder.delete()
 	                .provider(getProvider())
@@ -239,7 +239,7 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
 	@Override
 	public Iterable<MessageQueue> listMessageQueues() throws CloudException,
 			InternalException {
-		APITrace.begin(getProvider(), "listMessageQueues");
+		APITrace.begin(getProvider(), "MessageQueue.listMessageQueues");
 		try {
 			List<MessageQueue> messageQueues = new ArrayList<MessageQueue>();
 			
@@ -288,7 +288,7 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
 			TimePeriod<Second> waitTime, int count,
 			TimePeriod<Second> visibilityTimeout) throws CloudException,
 			InternalException {
-		APITrace.begin(getProvider(), "receiveMessages");
+		APITrace.begin(getProvider(), "MessageQueue.receiveMessages");
 		try {
 			List<MQMessageReceipt> receipts = new ArrayList<MQMessageReceipt>();
 			
@@ -347,7 +347,7 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
 	@Override
 	public MQMessageIdentifier sendMessage(String mqId, String message)
 			throws CloudException, InternalException {
-		APITrace.begin(getProvider(), "sendMessage");
+		APITrace.begin(getProvider(), "MessageQueue.sendMessage");
 		try {
 			Message sendMessage = new Message();
 			sendMessage.setMessageBody(message);
@@ -375,7 +375,7 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
 	}
 	
 	private void deleteMessage(String queueId, String receiptHandle) throws InternalException, CloudException {
-		APITrace.begin(getProvider(), "deleteMessage");
+		APITrace.begin(getProvider(), "MessageQueue.deleteMessage");
 		try {
 			HttpUriRequest request = AliyunRequestBuilder.delete()
 	                .provider(getProvider())
@@ -403,7 +403,7 @@ public class AliyunMessageQueue extends AbstractMQSupport<Aliyun> implements MQS
 	
 	private void changeQueueVisibilityTimeout(String queueName, Integer visibilityTimeout) 
 			throws InternalException, CloudException {
-		APITrace.begin(getProvider(), "changeQueueVisibilityTimeout");
+		APITrace.begin(getProvider(), "MessageQueue.changeQueueVisibilityTimeout");
 		try {
 			Queue queue = new Queue();
 			queue.setVisibilityTimeout(visibilityTimeout);

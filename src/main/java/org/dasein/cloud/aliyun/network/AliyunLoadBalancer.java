@@ -77,7 +77,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 	@Override
 	public String createLoadBalancer(@Nonnull LoadBalancerCreateOptions options)
 			throws CloudException, InternalException {
-		APITrace.begin(getProvider(), "createLoadBalancer");
+		APITrace.begin(getProvider(), "LoadBalancer.createLoadBalancer");
 		try {
 			Map<String, Object> params = new HashMap<String, Object>();
 			params.put("RegionId", getContext().getRegionId());
@@ -144,7 +144,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 	@Override
 	public void removeLoadBalancer(@Nonnull String loadBalancerId)
 			throws CloudException, InternalException {
-		APITrace.begin(getProvider(), "removeLoadBalancer");
+		APITrace.begin(getProvider(), "LoadBalancer.removeLoadBalancer");
 		try {
 			Map<String, Object> params = new HashMap<String, Object>();
 			params.put("LoadBalancerId", loadBalancerId);
@@ -216,7 +216,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 
 	private void startListener(@Nonnull String toLoadBalancerId,
 			LbListener listener) throws CloudException, InternalException {
-		APITrace.begin(getProvider(), "startListener");
+		APITrace.begin(getProvider(), "LoadBalancer.startListener");
 		try {
 			Map<String, Object> params = new HashMap<String, Object>();
 			params.put("LoadBalancerId", toLoadBalancerId);
@@ -232,7 +232,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 
 	private void createListener(@Nonnull String toLoadBalancerId,
 			LbListener listener) throws CloudException, InternalException {
-		APITrace.begin(getProvider(), "createListener");
+		APITrace.begin(getProvider(), "LoadBalancer.createListener");
 		try {
 			Map<String, Object> params = new HashMap<String, Object>();
 			params.put("LoadBalancerId", toLoadBalancerId);
@@ -265,7 +265,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 	public void removeListeners(@Nonnull String toLoadBalancerId,
 			@Nullable LbListener[] listeners) throws CloudException,
 			InternalException {
-		APITrace.begin(getProvider(), "removeListeners");
+		APITrace.begin(getProvider(), "LoadBalancer.removeListeners");
 		try {
 			for (LbListener listener : listeners) {
 	
@@ -286,7 +286,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 	public void addServers(@Nonnull String toLoadBalancerId,
 			@Nonnull String... serverIdsToAdd) throws CloudException,
 			InternalException {
-		APITrace.begin(getProvider(), "addServers");
+		APITrace.begin(getProvider(), "LoadBalancer.addServers");
 		try {
 			JSONArray jsonArray = new JSONArray();
 			for (String serverIdToAdd : serverIdsToAdd) {
@@ -316,7 +316,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 	public void removeServers(@Nonnull String fromLoadBalancerId,
 			@Nonnull String... serverIdsToRemove) throws CloudException,
 			InternalException {
-		APITrace.begin(getProvider(), "removeServers");
+		APITrace.begin(getProvider(), "LoadBalancer.removeServers");
 		try {
 			Map<String, Object> params = new HashMap<String, Object>();
 			params.put("LoadBalancerId", fromLoadBalancerId);
@@ -345,7 +345,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 	public Iterable<LoadBalancerEndpoint> listEndpoints(
 			@Nonnull String forLoadBalancerId) throws CloudException,
 			InternalException {
-		APITrace.begin(getProvider(), "listEndpoints");
+		APITrace.begin(getProvider(), "LoadBalancer.listEndpoints");
 		try {
 			final Map<String, LoadBalancerEndpoint> allLoadBalancerEndpointMap = new HashMap<String, LoadBalancerEndpoint>();
 			int[] listenerPorts = describeLoadBalancer(forLoadBalancerId, false).getPublicPorts();
@@ -420,7 +420,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 	public SSLCertificate createSSLCertificate(
 			@Nonnull SSLCertificateCreateOptions options)
 			throws CloudException, InternalException {
-		APITrace.begin(getProvider(), "createSSLCertificate");
+		APITrace.begin(getProvider(), "LoadBalancer.createSSLCertificate");
 		try {
 			Map<String, Object> params = new HashMap<String, Object>();
 			params.put("RegionId", getContext().getRegionId());
@@ -486,7 +486,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 	@Override
 	public Iterable<SSLCertificate> listSSLCertificates()
 			throws CloudException, InternalException {
-		APITrace.begin(getProvider(), "listSSLCertificates");
+		APITrace.begin(getProvider(), "LoadBalancer.listSSLCertificates");
 		try {
 			HttpUriRequest request = AliyunRequestBuilder.get()
 					.provider(getProvider())
@@ -534,7 +534,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 	@Override
 	public void removeSSLCertificate(@Nonnull String certificateName)
 			throws CloudException, InternalException {
-		APITrace.begin(getProvider(), "removeSSLCertificate");
+		APITrace.begin(getProvider(), "LoadBalancer.removeSSLCertificate");
 		try {
 			SSLCertificate certificate = getSSLCertificate(certificateName);
 			if (certificate != null) {
@@ -555,7 +555,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 	public void setSSLCertificate(
 			@Nonnull SetLoadBalancerSSLCertificateOptions options)
 			throws CloudException, InternalException {
-		APITrace.begin(getProvider(), "setSSLCertificate");
+		APITrace.begin(getProvider(), "LoadBalancer.setSSLCertificate");
 		try {
 			SSLCertificate certificate = getSSLCertificate(options
 					.getSslCertificateName());
@@ -585,7 +585,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 	private LoadBalancerHealthCheck setHealthCheckAttribute(
 			HealthCheckOptions options, LbListener lbListener)
 			throws CloudException, InternalException {
-		APITrace.begin(getProvider(), "setHealthCheckAttribute");
+		APITrace.begin(getProvider(), "LoadBalancer.setHealthCheckAttribute");
 		try {	
 			Map<String, Object> params = new HashMap<String, Object>();
 			params.put("LoadBalancerId", options.getProviderLoadBalancerId());
@@ -694,7 +694,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 	public void removeLoadBalancerHealthCheck(
 			@Nonnull String providerLoadBalancerId) throws CloudException,
 			InternalException {
-		APITrace.begin(getProvider(), "removeLoadBalancerHealthCheck");
+		APITrace.begin(getProvider(), "LoadBalancer.removeLoadBalancerHealthCheck");
 		try {
 			List<LbListener> listeners = describeListeners(providerLoadBalancerId);
 			for (LbListener listener : listeners) {
@@ -852,7 +852,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 	private List<LoadBalancer> describeLoadBalancersBriefInfo()
 			throws JSONException, InternalException, CloudException {
 		
-		APITrace.begin(getProvider(), "describeLoadBalancersBriefInfo");
+		APITrace.begin(getProvider(), "LoadBalancer.describeLoadBalancersBriefInfo");
 		try {
 			HttpUriRequest request = AliyunRequestBuilder.get()
 					.provider(getProvider())
@@ -920,7 +920,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 
 	private LoadBalancer describeLoadBalancer(@Nonnull final String loadBalancerId,
 			final boolean cascade) throws CloudException, InternalException {
-		APITrace.begin(getProvider(), "describeLoadBalancer");
+		APITrace.begin(getProvider(), "LoadBalancer.describeLoadBalancer");
 		try {
 			HttpUriRequest request = AliyunRequestBuilder.get()
 					.provider(getProvider())
@@ -1038,7 +1038,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 	private JSONObject describeListenerAttribute(String loadBalancerId,
 			LbProtocol lbProtocol, int listenerPort) throws CloudException,
 			InternalException {
-		APITrace.begin(getProvider(), "describeListenerAttribute");
+		APITrace.begin(getProvider(), "LoadBalancer.describeListenerAttribute");
 		try {
 			String methodName = null;
 			if (lbProtocol.equals(LbProtocol.HTTP)) {

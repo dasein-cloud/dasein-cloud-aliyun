@@ -63,7 +63,7 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
     }
 
     public void delete(@Nonnull String firewallId) throws InternalException, CloudException {
-    	APITrace.begin(getProvider(), "delete");
+    	APITrace.begin(getProvider(), "Firewall.delete");
     	try {
 	    	Map<String, Object> params = new HashMap<String, Object>();
 	    	params.put("RegionId", getProvider().getContext().getRegionId());
@@ -99,7 +99,7 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
 
     @Nonnull
     public Iterable<Firewall> list() throws InternalException, CloudException {
-    	APITrace.begin(getProvider(), "list");
+    	APITrace.begin(getProvider(), "Firewall.list");
     	try {
 	        final List<Firewall> allFirewalls = new ArrayList<Firewall>();
 	        final AtomicInteger maxPageNumber = new AtomicInteger(1);
@@ -164,7 +164,7 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
     @Nonnull
     @Override
     public String authorize(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull RuleTarget sourceEndpoint, @Nonnull Protocol protocol, @Nonnull RuleTarget destinationEndpoint, int beginPort, int endPort, @Nonnegative int precedence) throws CloudException, InternalException {
-    	APITrace.begin(getProvider(), "authorize");
+    	APITrace.begin(getProvider(), "Firewall.authorize");
     	try {
 	        String methodName = "";
 	
@@ -259,7 +259,7 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
     @Nonnull
     @Override
     public String create(@Nonnull FirewallCreateOptions options) throws InternalException, CloudException {
-    	APITrace.begin(getProvider(), "create");
+    	APITrace.begin(getProvider(), "Firewall.create");
     	try {
 	    	Map<String, Object> params = new HashMap<String, Object>();
 	        params.put("RegionId", getContext().getRegionId());
@@ -298,7 +298,7 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
     @Nullable
     @Override
     public Firewall getFirewall(@Nonnull String firewallId) throws InternalException, CloudException {
-    	APITrace.begin(getProvider(), "getFirewall");
+    	APITrace.begin(getProvider(), "Firewall.getFirewall");
     	try {
 	        HttpUriRequest request = AliyunRequestBuilder.get()
 	        		.provider(getProvider())
@@ -338,7 +338,7 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
     @Nonnull
     @Override
     public Iterable<ResourceStatus> listFirewallStatus() throws InternalException, CloudException {
-    	APITrace.begin(getProvider(), "listFirewallStatus");
+    	APITrace.begin(getProvider(), "Firewall.listFirewallStatus");
     	try {
 	        List<ResourceStatus> allResourceStatus = new ArrayList<ResourceStatus>();
 	        final AtomicInteger totalPageCount = new AtomicInteger(1);
@@ -419,7 +419,7 @@ public class AliyunFirewall extends AbstractFirewallSupport<Aliyun> {
 
     @Override
     public void revoke(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull String source, @Nonnull Protocol protocol, @Nonnull RuleTarget target, int beginPort, int endPort) throws CloudException, InternalException {
-    	APITrace.begin(getProvider(), "revoke");
+    	APITrace.begin(getProvider(), "Firewall.revoke");
     	try {
 	    	String methodName = null;
 	        Map<String, Object> params = new HashMap<String, Object>();

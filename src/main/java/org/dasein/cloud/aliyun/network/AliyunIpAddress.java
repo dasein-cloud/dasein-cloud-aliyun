@@ -61,7 +61,7 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
 
 	public void assign(@Nonnull String addressId, @Nonnull String serverId)
 			throws InternalException, CloudException {
-		APITrace.begin(getProvider(), "assign");
+		APITrace.begin(getProvider(), "IpAddress.assign");
 		try {
 			Map<String, Object> params = new HashMap<String, Object>();
 			params.put("AllocationId", addressId);
@@ -70,7 +70,8 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
 			HttpUriRequest request = AliyunRequestBuilder.post()
 					.provider(getProvider())
 					.category(AliyunRequestBuilder.Category.ECS)
-					.parameter("Action", "AssociateEipAddress").entity(params)
+					.parameter("Action", "AssociateEipAddress")
+					.entity(params)
 					.build();
 	
 			new AliyunRequestExecutor<Void>(getProvider(),
@@ -105,14 +106,15 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
 
 	public IpAddress getIpAddress(@Nonnull String addressId)
 			throws InternalException, CloudException {
-		APITrace.begin(getProvider(), "getIpAddress");
+		APITrace.begin(getProvider(), "IpAddress.getIpAddress");
 		try {
 			HttpUriRequest request = AliyunRequestBuilder.get()
 					.provider(getProvider())
 					.category(AliyunRequestBuilder.Category.ECS)
 					.parameter("Action", "DescribeEipAddresses")
 					.parameter("RegionId", getContext().getRegionId())
-					.parameter("AllocationId", addressId).build();
+					.parameter("AllocationId", addressId)
+					.build();
 	
 			ResponseHandler<IpAddress> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, IpAddress>(
 					new StreamToJSONObjectProcessor(),
@@ -155,7 +157,7 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
 
 	public Iterable<IpAddress> listIpPool(@Nonnull IPVersion version,
 			boolean unassignedOnly) throws InternalException, CloudException {
-		APITrace.begin(getProvider(), "listIpPool");
+		APITrace.begin(getProvider(), "IpAddress.listIpPool");
 		try {
 			if (!version.equals(IPVersion.IPV4)) {
 				return Collections.emptyList();
@@ -235,7 +237,7 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
 	 */
 	public Iterable<ResourceStatus> listIpPoolStatus(@Nonnull IPVersion version)
 			throws InternalException, CloudException {
-		APITrace.begin(getProvider(), "listIpPoolStatus");
+		APITrace.begin(getProvider(), "IpAddress.listIpPoolStatus");
 		try {
 			if (!version.equals(IPVersion.IPV4)) {
 				return Collections.emptyList();
@@ -301,7 +303,7 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
 
 	public void releaseFromPool(@Nonnull String addressId)
 			throws InternalException, CloudException {
-		APITrace.begin(getProvider(), "releaseFromPool");
+		APITrace.begin(getProvider(), "IpAddress.releaseFromPool");
 		try {
 			Map<String, Object> params = new HashMap<String, Object>();
 			params.put("AllocationId", addressId);
@@ -322,7 +324,7 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
 
 	public void releaseFromServer(@Nonnull String addressId)
 			throws InternalException, CloudException {
-		APITrace.begin(getProvider(), "releaseFromServer");
+		APITrace.begin(getProvider(), "IpAddress.releaseFromServer");
 		try {
 			Map<String, Object> params = new HashMap<String, Object>();
 			IpAddress ipAddress = getIpAddress(addressId);
@@ -350,7 +352,7 @@ public class AliyunIpAddress extends AbstractIpAddressSupport<Aliyun> {
 
 	public String request(@Nonnull IPVersion version) throws InternalException,
 			CloudException {
-		APITrace.begin(getProvider(), "request");
+		APITrace.begin(getProvider(), "IpAddress.request");
 		try {
 			if (!version.equals(IPVersion.IPV4)) {
 				throw new InternalException("Aliyun supports IPV4 ip address only!");
