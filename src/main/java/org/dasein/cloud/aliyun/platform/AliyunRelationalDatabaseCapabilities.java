@@ -66,7 +66,7 @@ public class AliyunRelationalDatabaseCapabilities extends
 	@Override
 	public boolean supportsHighAvailability() throws CloudException,
 			InternalException {
-		return false;
+		return true;
 	}
 
 	@Override
@@ -107,13 +107,13 @@ public class AliyunRelationalDatabaseCapabilities extends
 	@Override
 	public boolean supportsDemandBackups() throws CloudException,
 			InternalException {
-		return false;
+		return true;
 	}
 
 	@Override
 	public boolean supportsRestoreBackup() throws CloudException,
 			InternalException {
-		return false;	//TODO
+		return false;
 	}
 
 	@Override
