@@ -18,36 +18,46 @@
  */
 package org.dasein.cloud.aliyun.platform;
 
+import java.util.Locale;
+
+import javax.annotation.Nonnull;
+
+import org.dasein.cloud.AbstractCapabilities;
+import org.dasein.cloud.CloudException;
+import org.dasein.cloud.InternalException;
 import org.dasein.cloud.aliyun.Aliyun;
-import org.dasein.cloud.platform.AbstractPlatformServices;
-import org.dasein.cloud.platform.CDNSupport;
-import org.dasein.cloud.platform.MQSupport;
-import org.dasein.cloud.platform.RelationalDatabaseSupport;
+import org.dasein.cloud.platform.CDNCapabilities;
 
 /**
- * Created by Jane Wang on 7/10/2015.
+ * Created by Jane Wang on 7/22/2015.
  * 
  * @author Jane Wang
  * @since 2015.05.01
  */
-public class AliyunPlatform extends AbstractPlatformServices<Aliyun> {
+public class AliyunCdnCapabilities extends AbstractCapabilities<Aliyun> implements CDNCapabilities {
 
-	public AliyunPlatform(Aliyun provider) {
+	public AliyunCdnCapabilities(@Nonnull Aliyun provider) {
 		super(provider);
 	}
 
 	@Override
-	public MQSupport getMessageQueueSupport() {
-		return new AliyunMessageQueue(getProvider());
+	public boolean canCreateCDN() throws CloudException, InternalException {
+		return true;
 	}
 
 	@Override
-	public RelationalDatabaseSupport getRelationalDatabaseSupport() {
-		return new AliyunRelationalDatabase(getProvider());
+	public boolean canDeleteCDN() throws CloudException, InternalException {
+		return true;
 	}
 
 	@Override
-	public CDNSupport getCDNSupport() {
-		return new AliyunCdn(getProvider());
+	public boolean canModifyCDN() throws CloudException, InternalException {
+		return false;
 	}
+
+	@Override
+	public String getProviderTermForDistribution(Locale locale) {
+		return "domain";
+	}
+
 }
