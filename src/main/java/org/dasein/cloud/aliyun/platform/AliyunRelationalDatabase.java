@@ -774,13 +774,15 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 	 */
 	private void alterDatabaseAccount (String databaseInstanceId, String databaseName, String newAdminUser, String newAdminPassword) 
 			throws CloudException, InternalException {
-		String oldAccountName = getAccount(databaseInstanceId, databaseName);
-		if (!getProvider().isEmpty(oldAccountName) && oldAccountName.equals(newAdminUser)) {	//change password
-			resetAccountPassword(databaseInstanceId, oldAccountName, newAdminPassword);
+		List<String> oldAccountNames = getAccounts(databaseInstanceId, databaseName);
+		if (!getProvider().isEmpty(oldAccountNames) && oldAccountNames.contains(newAdminUser)) {	//change password
+			resetAccountPassword(databaseInstanceId, newAdminUser, newAdminPassword);
 		} else {	//replace account
 			createAccount(databaseInstanceId, databaseName, newAdminUser, newAdminPassword);
-			if (!getProvider().isEmpty(oldAccountName)) {
-				removeAccount(databaseInstanceId, oldAccountName);
+			if (!getProvider().isEmpty(oldAccountNames)) {
+				for (String oldAccountName: oldAccountNames) {
+					removeAccount(databaseInstanceId, oldAccountName);
+				}
 			}
 		}
 	}
@@ -802,7 +804,7 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 		}
 	}
 
-	private String getAccount(final String databaseInstanceId, final String databaseName) throws CloudException, InternalException {
+	private List<String> getAccounts(final String databaseInstanceId, final String databaseName) throws CloudException, InternalException {
 		APITrace.begin(getProvider(), "RelationalDatabase.getAccount");
 		try {
 			HttpUriRequest request = AliyunRequestBuilder.get()
@@ -810,20 +812,28 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 					.category(AliyunRequestBuilder.Category.RDS)
 					.parameter("Action", "DescribeAccounts")
 					.parameter("DBInstanceId", databaseInstanceId)
-					.parameter("DBName", databaseName)
 					.build();
 			
-			ResponseHandler<String> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, String>(
+			ResponseHandler<List<String>> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, List<String>>(
 	        		new StreamToJSONObjectProcessor(),
-	        		new DriverToCoreMapper<JSONObject, String>() {
+	        		new DriverToCoreMapper<JSONObject, List<String>>() {
 	                    @Override
-	                    public String mapFrom(JSONObject json) {
+	                    public List<String> mapFrom(JSONObject json) {
 	                        try {
+	                        	List<String> accountNames = new ArrayList<String>();
 	                        	JSONArray accounts = json.getJSONObject("Accounts").getJSONArray("DBInstanceAccount");
-	                        	if (accounts.length() > 0) {
-	                        		return accounts.getJSONObject(0).getString("AccountName");
+	                        	for (int i = 0; i < accounts.length(); i++) {
+	                        		JSONObject account = accounts.getJSONObject(i);
+	                        		JSONArray databasePrivileges = account.getJSONObject("DatabasePrivilegess").getJSONArray("DatabasePrivileges");
+	                        		for (int j = 0; j < databasePrivileges.length(); j++) {
+	                        			JSONObject databasePrivilege = databasePrivileges.getJSONObject(j);
+	                        			if (databasePrivilege.getString("DBName").equals(databaseName) && 
+	                        					databasePrivilege.getString("AccountPrivilege").equals("ReadWrite")) {
+	                        				accountNames.add(account.getString("AccountName"));
+	                        			}
+	                        		}
 	                        	} 
-	                        	return null;
+	                        	return accountNames;
 	                        } catch (JSONException e) {
 	                        	stdLogger.error("Failed to parse account for database instance " + databaseInstanceId, e);
 	                            throw new RuntimeException(e);
@@ -832,7 +842,7 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 	                },
 	                JSONObject.class);
 			
-			return new AliyunRequestExecutor<String>(getProvider(),
+			return new AliyunRequestExecutor<List<String>>(getProvider(),
 	                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
 	                request,
 	                responseHandler).execute();
