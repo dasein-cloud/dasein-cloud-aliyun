@@ -775,11 +775,13 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 	private void alterDatabaseAccount (String databaseInstanceId, String databaseName, String newAdminUser, String newAdminPassword) 
 			throws CloudException, InternalException {
 		List<String> oldAccountNames = getAccounts(databaseInstanceId, databaseName);
-		if (!getProvider().isEmpty(oldAccountNames) && oldAccountNames.contains(newAdminUser)) {	//change password
-			resetAccountPassword(databaseInstanceId, newAdminUser, newAdminPassword);
-		} else {	//replace account
+		if (getProvider().isEmpty(oldAccountNames)) { //create new
 			createAccount(databaseInstanceId, databaseName, newAdminUser, newAdminPassword);
-			if (!getProvider().isEmpty(oldAccountNames)) {
+		} else {
+			if (oldAccountNames.contains(newAdminUser)) {	//reset password
+				resetAccountPassword(databaseInstanceId, newAdminUser, newAdminPassword);
+			} else {	//replace old accounts with new account
+				createAccount(databaseInstanceId, databaseName, newAdminUser, newAdminPassword);
 				for (String oldAccountName: oldAccountNames) {
 					removeAccount(databaseInstanceId, oldAccountName);
 				}
@@ -805,7 +807,7 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 	}
 
 	private List<String> getAccounts(final String databaseInstanceId, final String databaseName) throws CloudException, InternalException {
-		APITrace.begin(getProvider(), "RelationalDatabase.getAccount");
+		APITrace.begin(getProvider(), "RelationalDatabase.getAccounts");
 		try {
 			HttpUriRequest request = AliyunRequestBuilder.get()
 					.provider(getProvider())
@@ -828,7 +830,8 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 	                        		for (int j = 0; j < databasePrivileges.length(); j++) {
 	                        			JSONObject databasePrivilege = databasePrivileges.getJSONObject(j);
 	                        			if (databasePrivilege.getString("DBName").equals(databaseName) && 
-	                        					databasePrivilege.getString("AccountPrivilege").equals("ReadWrite")) {
+	                        					databasePrivilege.getString("AccountPrivilege").equals("ReadWrite") &&
+	                        					databasePrivilege.getString("AccountStatus").equals("Available")) {
 	                        				accountNames.add(account.getString("AccountName"));
 	                        			}
 	                        		}
