@@ -233,6 +233,7 @@ public class AliyunRequestBuilder {
         RDS("rds", "Relational Database Service", AliyunRdsRequestBuilderStrategy.class),
         OSS("oss", "Open Storage Service", AliyunOssRequestBuilderStrategy.class),
         MQS("mqs", "Message and Notification Service", AliyunMqsRequestBuilderStrategy.class),
+        CDN("cdn", "Content Delivery Network", AliyunCdnRequestBuilderStrategy.class),
         /**
          * In dasein, there is no service like OTS exist.
          */
