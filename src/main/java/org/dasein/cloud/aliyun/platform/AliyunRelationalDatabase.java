@@ -384,7 +384,8 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 					"DeleteDatabase", AliyunNetworkCommon.RequestMethod.POST, false,
 					new AliyunValidateJsonResponseHandler(getProvider()));
 			
-			if (!associateWithDatabase(databaseId.getDatabaseInstanceId())) {
+			List<Database> databases = queryDatabase(databaseId.getDatabaseInstanceId(), null);
+			if (getProvider().isEmpty(databases)) {
 				removeDatabaseInstance(databaseId.getDatabaseInstanceId());
 			}
 			
@@ -392,8 +393,6 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 			APITrace.end();
 		}
 	}
-	
-	
 
 	@Override
 	public void restart(String providerDatabaseId, boolean blockUntilDone) throws CloudException, InternalException {
@@ -1117,44 +1116,6 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 			executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS,
 					"DeleteDatabase", AliyunNetworkCommon.RequestMethod.POST, false,
 					new AliyunValidateJsonResponseHandler(getProvider()));
-		} finally {
-			APITrace.end();
-		}
-	}
-	
-	private boolean associateWithDatabase(String databaseInstanceId) throws InternalException, CloudException {
-		APITrace.begin(getProvider(), "RelationalDatabase.associateWithDatabase");
-		try {
-			HttpUriRequest request = AliyunRequestBuilder.get()
-					.provider(getProvider())
-					.category(AliyunRequestBuilder.Category.RDS)
-					.parameter("Action", "DescribeDatabases")
-					.parameter("DBInstanceId", databaseInstanceId)
-					.build();
-			
-			ResponseHandler<Boolean> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, Boolean>(
-					new StreamToJSONObjectProcessor(),
-					new DriverToCoreMapper<JSONObject, Boolean>() {
-						@Override
-						public Boolean mapFrom(JSONObject json) {
-							try {
-								JSONArray databases = json.getJSONObject("Databases").getJSONArray("Database");
-								if (databases.length() > 0) {
-									return true;
-								} else {
-									return false;
-								}
-							} catch (JSONException e) {
-								stdLogger.error("parsing database instance attribute failed", e);
-								throw new RuntimeException(e);
-							}
-						}
-					}, JSONObject.class);
-		
-			return new AliyunRequestExecutor<Boolean>(getProvider(),
-					AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-					request,
-					responseHandler).execute();
 		} finally {
 			APITrace.end();
 		}
