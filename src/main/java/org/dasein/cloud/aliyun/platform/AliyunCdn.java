@@ -104,7 +104,7 @@ public class AliyunCdn extends AbstractProviderService<Aliyun> implements CDNSup
 			Blob blob = support.getBucket(origin);
 			
 			Map<String, Object> params = new HashMap<String, Object>();
-			params.put("DomainName", name + ".aliyuncs.com");		
+			params.put("DomainName", name);		
 			params.put("CdnType", "web");
 			params.put("SourceType", "oss");
 			params.put("Sources", parseDomainName(blob.getLocation()));
