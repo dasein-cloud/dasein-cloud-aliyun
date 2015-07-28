@@ -30,6 +30,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
+
 import org.apache.http.client.ResponseHandler;
 import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.log4j.Logger;
@@ -47,6 +48,9 @@ import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.cloud.platform.CDNCapabilities;
 import org.dasein.cloud.platform.CDNSupport;
 import org.dasein.cloud.platform.Distribution;
+import org.dasein.cloud.storage.Blob;
+import org.dasein.cloud.storage.BlobStoreSupport;
+import org.dasein.cloud.storage.StorageServices;
 import org.dasein.cloud.util.APITrace;
 import org.dasein.cloud.util.requester.DriverToCoreMapper;
 import org.dasein.cloud.util.requester.streamprocessors.StreamToJSONObjectProcessor;
@@ -67,6 +71,9 @@ public class AliyunCdn extends AbstractProviderService<Aliyun> implements CDNSup
     private volatile transient AliyunCdnCapabilities capabilities;
     
     private static final int DefaultPageSize = 20;
+    private static final int MaxWaitTimes = 2;
+    private static final long ConfiguringWaitTime = 2000;	//milliseconds
+    private static final long StopCdnWaitTime = 5000; //milliseconds
     
     public AliyunCdn(Aliyun provider) {
     	super(provider);
@@ -80,7 +87,7 @@ public class AliyunCdn extends AbstractProviderService<Aliyun> implements CDNSup
 
 	/**
 	 * If the client want to apply aliases for the domain, then the client need to enable the mapping from the DNS provider side.
-	 * @param origin 	origin/location of the resources, can be ip address (separate by ','), domain name or oss bucket.
+	 * @param origin 	bucket name
 	 * @param name		domain name
 	 * @param active	on-op
 	 * @param aliases	cnames: unused in Aliyun
@@ -93,11 +100,15 @@ public class AliyunCdn extends AbstractProviderService<Aliyun> implements CDNSup
 			String... aliases) throws InternalException, CloudException {
 		APITrace.begin(getProvider(), "Cdn.create");
 		try {
+			StorageServices services = getProvider().getStorageServices();
+			BlobStoreSupport support = services.getOnlineStorageSupport();
+			Blob blob = support.getBucket(origin);
+			
 			Map<String, Object> params = new HashMap<String, Object>();
-			params.put("DomainName", name);
+			params.put("DomainName", name + ".aliyuncs.com");		//TODO
 			params.put("CdnType", "web");
-			params.put("SourceType", parseSourceType(origin.split(",")[0]).name());
-			params.put("Sources", origin);
+			params.put("SourceType", "oss");
+			params.put("Sources", parseDomainName(blob.getLocation()));
 			
 			HttpUriRequest request = AliyunRequestBuilder.post()
 					.provider(getProvider())
@@ -105,29 +116,24 @@ public class AliyunCdn extends AbstractProviderService<Aliyun> implements CDNSup
 					.parameter("Action", "AddCdnDomain")
 					.entity(params)
 					.build();
-			
+			try {
 			new AliyunRequestExecutor<Void>(getProvider(),
 					AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
 					new AliyunValidateJsonResponseHandler(getProvider())).execute();
-			
-			return name;
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+			return name + ".aliyuncs.com";
 		} finally {
 			APITrace.end();
 		}
 	}
 	
-	private static enum SourceType { ipaddr, domain, oss};
-	private SourceType parseSourceType(String source) {
-		final String ipAddressRexp = "((?:(?:25[0-5]|2[0-4]\\d|((1\\d{2})|([1-9]?\\d)))\\.){3}(?:25[0-5]|2[0-4]\\d|((1\\d{2})|([1-9]?\\d))))";
-		final String domainNameRexp = "^((?!-)[A-Za-z0-9-]{1,63}(?<!-)\\.)+[A-Za-z]{2,6}$";
-		String segment = source.split(",")[0].trim();
-		if (Pattern.compile(ipAddressRexp).matcher(segment).matches()) { //check ip address first
-			return SourceType.ipaddr;
-		} else if (Pattern.compile(domainNameRexp).matcher(segment).matches()) {	//check domain name
-			return SourceType.domain;
-		} else {
-			return SourceType.oss;
+	private String parseDomainName(String name) {
+		if (name.startsWith("http")) {
+			return name.substring(name.indexOf("//") + 2, name.length());
 		}
+		return null;
 	}
 	
 	@Override
@@ -135,6 +141,12 @@ public class AliyunCdn extends AbstractProviderService<Aliyun> implements CDNSup
 			CloudException {
 		APITrace.begin(getProvider(), "Cdn.delete");
 		try {
+			
+			//first stop running cdn
+			update(distributionId, distributionId, false, null);
+			
+			Thread.sleep(StopCdnWaitTime);
+			
 			Map<String, Object> params = new HashMap<String, Object>();
 			params.put("DomainName", distributionId);
 			
@@ -148,6 +160,9 @@ public class AliyunCdn extends AbstractProviderService<Aliyun> implements CDNSup
 			new AliyunRequestExecutor<Void>(getProvider(),
 					AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
 					new AliyunValidateJsonResponseHandler(getProvider())).execute();
+		} catch (InterruptedException e) {
+			stdLogger.error("Thread wait for stop distribution failed", e);
+			throw new RuntimeException(e);
 		} finally {
 			APITrace.end();
 		}
@@ -162,18 +177,12 @@ public class AliyunCdn extends AbstractProviderService<Aliyun> implements CDNSup
 		return capabilities;
 	}
 
+	//TODO: if not found, should return null
 	@Override
 	public Distribution getDistribution(String distributionId)
 			throws InternalException, CloudException {
 		APITrace.begin(getProvider(), "Cdn.getDistribution");
 		try {
-			HttpUriRequest request = AliyunRequestBuilder.post()
-					.provider(getProvider())
-					.category(AliyunRequestBuilder.Category.CDN)
-					.parameter("Action", "DescribeCdnDomainDetail")
-					.parameter("DomainName", distributionId)
-					.build();
-			
 			final String accountNumber = getContext().getAccountNumber();
 			ResponseHandler<Distribution> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, Distribution>(
 					new StreamToJSONObjectProcessor(),
@@ -182,20 +191,26 @@ public class AliyunCdn extends AbstractProviderService<Aliyun> implements CDNSup
 						public Distribution mapFrom(JSONObject json) {
 							JSONObject getDomainDetailModel;
 							try {
-								getDomainDetailModel = json.getJSONObject("GetDomainDetailModel");
+ 								getDomainDetailModel = json.getJSONObject("GetDomainDetailModel");
 								Distribution distribution = new Distribution();
 								distribution.setProviderDistributionId(getDomainDetailModel.getString("DomainName"));
+								distribution.setName(distribution.getProviderDistributionId());
 								distribution.setDnsName(getDomainDetailModel.getString("DomainName"));
 								distribution.setProviderOwnerId(accountNumber);
-								if (getProvider().isEmpty(getDomainDetailModel.getString("Cname"))) {
+								if (!getDomainDetailModel.isNull("Cname")) {
 									distribution.setAliases(new String[]{getDomainDetailModel.getString("Cname")});
 								}
-								if (getProvider().isEmpty(getDomainDetailModel.getString("Sources"))) {
-									distribution.setLocation(getDomainDetailModel.getString("Sources"));
+								if (!getDomainDetailModel.isNull("Sources") && !getDomainDetailModel.getJSONObject("Sources").isNull("Source")) {
+									JSONArray sources = getDomainDetailModel.getJSONObject("Sources").getJSONArray("Source");
+									if (sources.length() > 0) {
+										distribution.setLocation(getDomainDetailModel.getJSONObject("Sources").getJSONArray("Source").getString(0));	//TODO check
+									}
 								}
 								String logFullPath = getLatestLog(getDomainDetailModel.getString("DomainName"));
-								distribution.setLogDirectory(parseLogDirectory(logFullPath));
-								distribution.setLogName(parseLogName(logFullPath));
+								if (!getProvider().isEmpty(logFullPath)) {
+									distribution.setLogDirectory(parseLogDirectory(logFullPath));
+									distribution.setLogName(parseLogName(logFullPath));
+								}
 								if (getDomainDetailModel.getString("DomainStatus").equals("online") ||
 										getDomainDetailModel.getString("DomainStatus").equals("configuring")) {
 									distribution.setActive(true);
@@ -217,9 +232,24 @@ public class AliyunCdn extends AbstractProviderService<Aliyun> implements CDNSup
 						}
 					}, JSONObject.class);
 			
-			return new AliyunRequestExecutor<Distribution>(getProvider(),
-					AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
-					responseHandler).execute();
+			Distribution distribution = null;
+			int maxWaitTimes = MaxWaitTimes;
+			do {
+				HttpUriRequest request = AliyunRequestBuilder.post()
+						.provider(getProvider())
+						.category(AliyunRequestBuilder.Category.CDN)
+						.parameter("Action", "DescribeCdnDomainDetail")
+						.parameter("DomainName", distributionId)
+						.build();
+				distribution = new AliyunRequestExecutor<Distribution>(getProvider(),
+						AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
+						responseHandler).execute();
+				Thread.sleep(ConfiguringWaitTime);
+			} while (distribution.isActive() && !distribution.isDeployed() && maxWaitTimes-- > 0);
+			return distribution;
+		} catch (InterruptedException e) {
+			stdLogger.error("Thread for get running and configuring distribution failed", e);
+			throw new RuntimeException(e);
 		} finally {
 			APITrace.end();
 		}
@@ -227,7 +257,15 @@ public class AliyunCdn extends AbstractProviderService<Aliyun> implements CDNSup
 
 	@Override
 	public String getProviderTermForDistribution(Locale locale) {
-		return capabilities.getProviderTermForDistribution(locale);
+		try {
+			return getCapabilities().getProviderTermForDistribution(locale);
+		} catch (InternalException e) {
+			stdLogger.error("Get capabilities failed", e);
+			throw new RuntimeException(e);
+		} catch (CloudException e) {
+			stdLogger.error("Get capabilities failed", e);
+			throw new RuntimeException(e);
+		}
 	}
 
 	@Override
@@ -316,11 +354,13 @@ public class AliyunCdn extends AbstractProviderService<Aliyun> implements CDNSup
 			String... aliases) throws InternalException, CloudException {
 		APITrace.begin(getProvider(), "Cdn.update");
 		try {
+			Map<String, Object> params = new HashMap<String, Object>();
+			params.put("DomainName", distributionId);
 			AliyunRequestBuilder builder = AliyunRequestBuilder
 					.post()
 					.provider(getProvider())
 					.category(AliyunRequestBuilder.Category.CDN)
-					.parameter("DomainName", distributionId);
+					.entity(params);
 			if (active) { //start CDN service
 				builder = builder.parameter("Action", "StartCdnDomain");
 			} else {	//stop CDN service
@@ -356,15 +396,17 @@ public class AliyunCdn extends AbstractProviderService<Aliyun> implements CDNSup
 							public String mapFrom(JSONObject json) {
 								Date latestDate = null;
 								String latestLogPath = null;
-								JSONArray domainLogs;
 								try {
-									domainLogs = json.getJSONObject("DomainLogModel").getJSONObject("Items").getJSONArray("DomainLogDetail");
-									for (int i = 0; i < domainLogs.length(); i++) {
-										JSONObject domainLog = domainLogs.getJSONObject(i);
-										Date currentDate = new SimpleDateFormat("YYYY-MM-DD'T'hh:mm:ss'Z'").parse(domainLog.getString("EndTime"));
-										if (latestDate == null || latestDate.before(currentDate)) {
-											latestDate = currentDate;
-											latestLogPath = domainLog.getString("LogPath");
+									JSONObject domainLogDetails = json.getJSONObject("DomainLogModel").getJSONObject("DomainLogDetails");
+									if (!domainLogDetails.isNull("Items")) {
+										JSONArray items = domainLogDetails.getJSONArray("Items");
+										for (int i = 0; i < items.length(); i++) {
+											JSONObject domainLog = items.getJSONObject(i);
+											Date currentDate = new SimpleDateFormat("YYYY-MM-DD'T'hh:mm:ss'Z'").parse(domainLog.getString("EndTime"));
+											if (latestDate == null || latestDate.before(currentDate)) {
+												latestDate = currentDate;
+												latestLogPath = domainLog.getString("LogPath");
+											}
 										}
 									}
 									return latestLogPath;
