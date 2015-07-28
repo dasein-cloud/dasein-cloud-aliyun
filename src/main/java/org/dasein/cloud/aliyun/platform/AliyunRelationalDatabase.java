@@ -461,7 +461,10 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 				StringBuilder accessBuilder = new StringBuilder();
 				Iterator<String> access = listAccess(providerDatabaseId).iterator();
 				while (access.hasNext()) {
-					accessBuilder.append(access.next() + ",");
+					String whiteListItem = access.next();
+					if (!whiteListItem.equals(sourceCidr)) {
+						accessBuilder.append(whiteListItem + ",");
+					}
 				}
 				accessBuilder.append(sourceCidr);
 				params.put("SecurityIps", accessBuilder.toString());
