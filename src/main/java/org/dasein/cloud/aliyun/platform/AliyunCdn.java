@@ -21,6 +21,7 @@ package org.dasein.cloud.aliyun.platform;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
@@ -29,7 +30,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.regex.Pattern;
 
 import org.apache.http.client.ResponseHandler;
 import org.apache.http.client.methods.HttpUriRequest;
@@ -65,7 +65,7 @@ import org.json.JSONObject;
  * @since 2015.05.01
  */
 public class AliyunCdn extends AbstractProviderService<Aliyun> implements CDNSupport {
-
+	
 	private static final Logger stdLogger = Aliyun.getStdLogger(AliyunCdn.class);
 	
     private volatile transient AliyunCdnCapabilities capabilities;
@@ -105,7 +105,7 @@ public class AliyunCdn extends AbstractProviderService<Aliyun> implements CDNSup
 			Blob blob = support.getBucket(origin);
 			
 			Map<String, Object> params = new HashMap<String, Object>();
-			params.put("DomainName", name + ".aliyuncs.com");		//TODO
+			params.put("DomainName", name + ".aliyuncs.com");		
 			params.put("CdnType", "web");
 			params.put("SourceType", "oss");
 			params.put("Sources", parseDomainName(blob.getLocation()));
@@ -193,30 +193,28 @@ public class AliyunCdn extends AbstractProviderService<Aliyun> implements CDNSup
 							try {
  								getDomainDetailModel = json.getJSONObject("GetDomainDetailModel");
 								Distribution distribution = new Distribution();
+								distribution.setProviderOwnerId(accountNumber);
+								distribution.setDnsName(getDomainDetailModel.getString("Cname"));
 								distribution.setProviderDistributionId(getDomainDetailModel.getString("DomainName"));
 								distribution.setName(distribution.getProviderDistributionId());
-								distribution.setDnsName(getDomainDetailModel.getString("DomainName"));
-								distribution.setProviderOwnerId(accountNumber);
-								if (!getDomainDetailModel.isNull("Cname")) {
-									distribution.setAliases(new String[]{getDomainDetailModel.getString("Cname")});
-								}
+								distribution.setAliases(new String[]{distribution.getProviderDistributionId()});
 								if (!getDomainDetailModel.isNull("Sources") && !getDomainDetailModel.getJSONObject("Sources").isNull("Source")) {
 									JSONArray sources = getDomainDetailModel.getJSONObject("Sources").getJSONArray("Source");
 									if (sources.length() > 0) {
 										distribution.setLocation(getDomainDetailModel.getJSONObject("Sources").getJSONArray("Source").getString(0));	//TODO check
 									}
 								}
-								String logFullPath = getLatestLog(getDomainDetailModel.getString("DomainName"));
-								if (!getProvider().isEmpty(logFullPath)) {
-									distribution.setLogDirectory(parseLogDirectory(logFullPath));
-									distribution.setLogName(parseLogName(logFullPath));
-								}
-								if (getDomainDetailModel.getString("DomainStatus").equals("online") ||
-										getDomainDetailModel.getString("DomainStatus").equals("configuring")) {
+								if (!getDomainDetailModel.isNull("DomainStatus") && (getDomainDetailModel.getString("DomainStatus").equals("online") ||
+										getDomainDetailModel.getString("DomainStatus").equals("configuring"))) {
 									distribution.setActive(true);
 									if (getDomainDetailModel.getString("DomainStatus").equals("online")) {
 										distribution.setDeployed(true);
 									}
+								}
+								String logFullPath = getLatestLog(distribution.getProviderDistributionId());
+								if (!getProvider().isEmpty(logFullPath)) {
+									distribution.setLogDirectory(parseLogDirectory(logFullPath));
+									distribution.setLogName(parseLogName(logFullPath));
 								}
 								return distribution;
 							} catch (JSONException e) {
