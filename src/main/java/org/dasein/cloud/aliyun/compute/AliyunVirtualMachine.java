@@ -381,7 +381,7 @@ public class AliyunVirtualMachine extends AbstractVMSupport<Aliyun> implements V
         virtualMachine.setProviderFirewallIds(securityGroupIds.toArray(new String[] {}));
 
         //ignore InternetMaxBandwidthIn, InternetMaxBandwidthOut, InternetChargeType
-        Date creationTime = getProvider().parseIso8601Date(json.getString("CreationTime"));
+        Date creationTime = getProvider().parseIso8601DateWithoutSecond(json.getString("CreationTime"));
         virtualMachine.setCreationTimestamp(creationTime.getTime());
 
         String networkType = json.getString("InstanceNetworkType");

@@ -57,6 +57,8 @@ public class Aliyun extends AbstractCloud {
     static private Logger stdLogger = Aliyun.getStdLogger(Aliyun.class);
 
     static private final String ISO8601_DATE_FORMAT = "yyyy-MM-dd'T'HH:mm:ss'Z'";
+    static private final String ISO8601_DATE_FORMAT_WITHOUT_SECOND = "yyyy-MM-dd'T'HH:mm'Z'";
+    
     static private final String RFC822_DATE_FORMAT = "EEE, dd MMM yyyy HH:mm:ss z";
     static public final String DSN_ACCESS_KEY = "accessKey";
 
@@ -186,6 +188,20 @@ public class Aliyun extends AbstractCloud {
         }
     }
 
+	public Date parseIso8601DateWithoutSecond(@Nonnull String date) throws InternalException {
+		if (date == null || date.isEmpty()) {
+            return new Date(0);
+        }
+
+        SimpleDateFormat dateFormat = new SimpleDateFormat(ISO8601_DATE_FORMAT_WITHOUT_SECOND);
+
+        try {
+            return dateFormat.parse(date);
+        } catch (ParseException parseException) {
+            throw new InternalException("Could not parse date: " + date);
+        }
+	}
+    
     public String formatRfc822Date(Date date) {
         SimpleDateFormat rfc822DateFormat = new SimpleDateFormat(RFC822_DATE_FORMAT, Locale.US);
         rfc822DateFormat.setTimeZone(new SimpleTimeZone(0, "GMT"));
