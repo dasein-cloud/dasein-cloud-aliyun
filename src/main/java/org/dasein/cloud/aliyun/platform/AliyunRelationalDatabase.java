@@ -82,6 +82,7 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 	private static final Logger stdLogger = Aliyun.getStdLogger(AliyunRelationalDatabase.class);
 
     private transient volatile AliyunRelationalDatabaseCapabilities capabilities;
+    private static final int DefaultPageSize = 30;
 	
 	public AliyunRelationalDatabase(Aliyun provider) {
 		super(provider);
@@ -103,7 +104,7 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 			throw new InternalException("No region was set for this request");
 		}
 
-		if (Arrays.asList("cn-hangzhou", "cn-qingdao", "cn-beijing", "cn-hongkong").contains(regionId)) {
+		if (Arrays.asList("cn-hangzhou", "cn-qingdao", "cn-beijing", "cn-hongkong", "cn-shenzhen", "us-west-1").contains(regionId)) {
 			return true;
 		} else {
 			return false;
@@ -227,21 +228,20 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 		if (forEngine.equals(DatabaseEngine.MYSQL)) {
 			engineName = "MySQL";
 		} else if (forEngine.equals(DatabaseEngine.POSTGRES)) {
-			engineName = "PostgreSQL";
+			engineName = "postgres";
 		} else if (forEngine.equals(DatabaseEngine.SQLSERVER_EE)) {
-			engineName = "SQLServer";
+			engineName = "sqlserver-ex";
 		} else {
-			stdLogger.error("Aliyun doesn't support database engine " + forEngine.name());
-			throw new OperationNotSupportedException("Aliyun doesn't support database engine " + forEngine.name());
+			return retProducts;
 		}
 		org.dasein.cloud.aliyun.platform.model.DatabaseEngine engine = provider.findEngine(engineName);
 		for (org.dasein.cloud.aliyun.platform.model.DatabaseRegion region : engine.getRegions()) {
-			if (region.getName().equals(getContext().getRegionId())) {
+			if (region.getName().contains(getContext().getRegionId())) {
 
 				for (org.dasein.cloud.aliyun.platform.model.DatabaseProduct product : region.getProducts()) {
 					DatabaseProduct retProduct = new DatabaseProduct(engineName);
 					retProduct.setCurrency(product.getCurrency());
-					retProduct.setName(String.format("class:%s, memory %dMB, max iops %d, max connection %d",
+					retProduct.setName(String.format("class:%s, memory %.2fMB, max iops %d, max connection %d",
 							product.getName(), product.getMemory(), product.getMaxIops(), product.getMaxConnection()));
 					retProduct.setProductSize(product.getName());
 					retProduct.setStandardHourlyRate(product.getHourlyPrice());
@@ -517,12 +517,14 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 			throw new InternalException(e);
 		}
 	}
-
+	
+	private static final SimpleDateFormat daseinFormatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+	private static final SimpleDateFormat aliyunFormatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
+	private static final SimpleDateFormat aliyunFormatterWithoutSecond = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm'Z'"); 
 	@Override
 	public DatabaseBackup getUsableBackup(String providerDatabaseId, String beforeTimestamp)
 			throws CloudException, InternalException {
 		
-		SimpleDateFormat daseinFormatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
 		Date baseDate = null;
 		try {
 			baseDate = daseinFormatter.parse(beforeTimestamp);
@@ -531,7 +533,6 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 			throw new RuntimeException(e);
 		}
 		
-		SimpleDateFormat aliyunFormatter = new SimpleDateFormat("YYYY-MM-DD'T'hh:mm:ss'Z'");
 		DatabaseBackup closestBackup = null;
 		Iterator<DatabaseBackup> backupIter = listBackups(providerDatabaseId).iterator();
 		while (backupIter.hasNext()) {
@@ -582,11 +583,10 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 									backup.setProviderDatabaseId(databaseId.getDatabaseId());
 									backup.setProviderOwnerId(getContext().getAccountNumber());
 									backup.setProviderRegionId(getContext().getRegionId());
-									backup.setStorageInGigabytes((int)(respBackup.getLong("storageInGigabytes") / 1024l * 1024l * 1024l));
 									backups.add(backup);
 								}
-								totalPageNumber.addAndGet(json.getInt("TotalRecordCount") / AliyunNetworkCommon.DefaultPageSize +
-	                                    json.getInt("TotalRecordCount") % AliyunNetworkCommon.DefaultPageSize > 0 ? 1 : 0);
+								totalPageNumber.addAndGet(json.getInt("TotalRecordCount") / DefaultPageSize +
+	                                    json.getInt("TotalRecordCount") % DefaultPageSize > 0 ? 1 : 0);
 	                            currentPageNumber.incrementAndGet();
 								return backups;
 							} catch (JSONException e) {
@@ -605,7 +605,9 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 	    				.category(AliyunRequestBuilder.Category.RDS)
 	    				.parameter("Action", "DescribeBackups")
 	    				.parameter("DBInstanceId", databaseId.getDatabaseInstanceId())
-	    				.parameter("PageSize", AliyunNetworkCommon.DefaultPageSize)
+	    				.parameter("StartTime", aliyunFormatterWithoutSecond.format(new Date(0)))
+	    				.parameter("EndTime", aliyunFormatterWithoutSecond.format(new Date()))			//TODO check synchronized with server
+	    				.parameter("PageSize", DefaultPageSize)
 	            		.parameter("PageNumber", currentPageNumber)
 	    				.build();
 	            
@@ -647,10 +649,11 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
                       			timeWindow.setEndHour(cal.get(Calendar.HOUR_OF_DAY));
                       			timeWindow.setEndMinute(cal.get(Calendar.MINUTE));
                       			
-                      			timeWindow.setStartDayOfWeek(
-										DayOfWeek.valueOf(json.getString("PreferredBackupPeriod").toUpperCase()));
-                      			timeWindow.setEndDayOfWeek(
-										DayOfWeek.valueOf(json.getString("PreferredBackupPeriod").toUpperCase()));
+                      			//TODO: Aliyun returns Monday,Wednesday,Friday,Sunday. How to transfer to Dasein TimeWindow period
+//                      			timeWindow.setStartDayOfWeek(
+//										DayOfWeek.valueOf(json.getString("PreferredBackupPeriod").toUpperCase()));
+//                      			timeWindow.setEndDayOfWeek(
+//										DayOfWeek.valueOf(json.getString("PreferredBackupPeriod").toUpperCase()));
                       			
                       			return timeWindow;
 	                        } catch (JSONException e ) {
@@ -975,8 +978,8 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 									databaseInstanceIds.add(databaseInstances.getJSONObject(i).getString("DBInstanceId"));
 	
 								}
-								totalPageNumber.addAndGet(json.getInt("TotalRecordCount") / AliyunNetworkCommon.DefaultPageSize +
-										json.getInt("TotalRecordCount") % AliyunNetworkCommon.DefaultPageSize > 0 ? 1 : 0);
+								totalPageNumber.addAndGet(json.getInt("TotalRecordCount") / DefaultPageSize +
+										json.getInt("TotalRecordCount") % DefaultPageSize > 0 ? 1 : 0);
 								currentPageNumber.incrementAndGet();
 								return databaseInstanceIds;
 							} catch (JSONException e) {
@@ -992,7 +995,8 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 						.category(AliyunRequestBuilder.Category.RDS)
 						.parameter("Action", "DescribeDBInstances")
 						.parameter("RegionId", getContext().getRegionId())
-						.parameter("PageSize", AliyunNetworkCommon.DefaultPageSize)
+						.parameter("DBInstanceType", "Primary")
+						.parameter("PageSize", DefaultPageSize)
 						.parameter("PageNumber", currentPageNumber)
 						.build();
 	
