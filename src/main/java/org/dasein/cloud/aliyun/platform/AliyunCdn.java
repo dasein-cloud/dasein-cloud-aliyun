@@ -21,7 +21,6 @@ package org.dasein.cloud.aliyun.platform;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
@@ -116,14 +115,12 @@ public class AliyunCdn extends AbstractProviderService<Aliyun> implements CDNSup
 					.parameter("Action", "AddCdnDomain")
 					.entity(params)
 					.build();
-			try {
+			
 			new AliyunRequestExecutor<Void>(getProvider(),
 					AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
 					new AliyunValidateJsonResponseHandler(getProvider())).execute();
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
-			return name + ".aliyuncs.com";
+			
+			return (String) params.get("DomainName");
 		} finally {
 			APITrace.end();
 		}
@@ -144,7 +141,6 @@ public class AliyunCdn extends AbstractProviderService<Aliyun> implements CDNSup
 			
 			//first stop running cdn
 			update(distributionId, distributionId, false, null);
-			
 			Thread.sleep(StopCdnWaitTime);
 			
 			Map<String, Object> params = new HashMap<String, Object>();
@@ -194,14 +190,16 @@ public class AliyunCdn extends AbstractProviderService<Aliyun> implements CDNSup
  								getDomainDetailModel = json.getJSONObject("GetDomainDetailModel");
 								Distribution distribution = new Distribution();
 								distribution.setProviderOwnerId(accountNumber);
-								distribution.setDnsName(getDomainDetailModel.getString("Cname"));
+								if (!getDomainDetailModel.isNull("Cname")) {
+									distribution.setDnsName(getDomainDetailModel.getString("Cname"));
+								}
 								distribution.setProviderDistributionId(getDomainDetailModel.getString("DomainName"));
 								distribution.setName(distribution.getProviderDistributionId());
 								distribution.setAliases(new String[]{distribution.getProviderDistributionId()});
 								if (!getDomainDetailModel.isNull("Sources") && !getDomainDetailModel.getJSONObject("Sources").isNull("Source")) {
 									JSONArray sources = getDomainDetailModel.getJSONObject("Sources").getJSONArray("Source");
 									if (sources.length() > 0) {
-										distribution.setLocation(getDomainDetailModel.getJSONObject("Sources").getJSONArray("Source").getString(0));	//TODO check
+										distribution.setLocation(getDomainDetailModel.getJSONObject("Sources").getJSONArray("Source").getString(0));
 									}
 								}
 								if (!getDomainDetailModel.isNull("DomainStatus") && (getDomainDetailModel.getString("DomainStatus").equals("online") ||
