@@ -482,7 +482,7 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 			DatabaseId databaseId = new DatabaseId(providerDatabaseId);
 			if (!getProvider().isEmpty(databaseId.getDatabaseInstanceId())) {
 				Map<String, Object> params = new HashMap<String, Object>();
-				params.put("DBInstanceId", id.getDatabaseInstanceId());
+				params.put("DBInstanceId", databaseId.getDatabaseInstanceId());
 				
 				StringBuilder accessBuilder = new StringBuilder();
 				Iterator<String> access = listAccess(providerDatabaseId).iterator();
