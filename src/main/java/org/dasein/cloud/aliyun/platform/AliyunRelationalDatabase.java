@@ -353,20 +353,24 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 		
 		DatabaseId databaseId = new DatabaseId(providerDatabaseId);
 		
-		if (!getProvider().isEmpty(productSize) || storageInGigabytes >= 5) {
-			alterDatabaseInstanceAttribute(databaseId.getDatabaseInstanceId(), productSize, storageInGigabytes);
-		}
-
-		if (!getProvider().isEmpty(newAdminUser) && !getProvider().isEmpty(newAdminPassword)) {
-			alterDatabaseAccount(databaseId.getDatabaseInstanceId(), databaseId.getDatabaseName(), newAdminUser, newAdminPassword);
-		}
-
-		if (preferredMaintenanceWindow != null) {
-			alterPreferredMaintenanceWindow(databaseId.getDatabaseInstanceId(), preferredMaintenanceWindow);
-		}
-
-		if (preferredBackupWindow != null) {
-			alterPreferredBackupWindow(databaseId.getDatabaseInstanceId(), preferredBackupWindow);
+		if (!getProvider().isEmpty(databaseId.getDatabaseInstanceId())) {
+			if (!getProvider().isEmpty(productSize) || storageInGigabytes >= 5) {
+				alterDatabaseInstanceAttribute(databaseId.getDatabaseInstanceId(), productSize, storageInGigabytes);
+			}
+	
+			if (!getProvider().isEmpty(databaseId.getDatabaseName()) 
+					&& !getProvider().isEmpty(newAdminUser) 
+					&& !getProvider().isEmpty(newAdminPassword)) {
+				alterDatabaseAccount(databaseId.getDatabaseInstanceId(), databaseId.getDatabaseName(), newAdminUser, newAdminPassword);
+			}
+	
+			if (preferredMaintenanceWindow != null) {
+				alterPreferredMaintenanceWindow(databaseId.getDatabaseInstanceId(), preferredMaintenanceWindow);
+			}
+	
+			if (preferredBackupWindow != null) {
+				alterPreferredBackupWindow(databaseId.getDatabaseInstanceId(), preferredBackupWindow);
+			}
 		}
 	}
 
@@ -375,20 +379,20 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 		APITrace.begin(getProvider(), "RelationalDatabase.removeDatabase");
 		try {
 			DatabaseId databaseId = new DatabaseId(providerDatabaseId);
-
-			Map<String, Object> params = new HashMap<String, Object>();
-			params.put("DBInstanceId", databaseId.getDatabaseInstanceId());
-			params.put("DBName", databaseId.getDatabaseName());
-
-			executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS,
-					"DeleteDatabase", AliyunNetworkCommon.RequestMethod.POST, false,
-					new AliyunValidateJsonResponseHandler(getProvider()));
-			
-			List<Database> databases = queryDatabase(databaseId.getDatabaseInstanceId(), null);
-			if (getProvider().isEmpty(databases)) {
-				removeDatabaseInstance(databaseId.getDatabaseInstanceId());
+			if (!getProvider().isEmpty(databaseId.getDatabaseInstanceId()) && !getProvider().isEmpty(databaseId.getDatabaseName())) {
+				Map<String, Object> params = new HashMap<String, Object>();
+				params.put("DBInstanceId", databaseId.getDatabaseInstanceId());
+				params.put("DBName", databaseId.getDatabaseName());
+	
+				executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS,
+						"DeleteDatabase", AliyunNetworkCommon.RequestMethod.POST, false,
+						new AliyunValidateJsonResponseHandler(getProvider()));
+				
+				List<Database> databases = queryDatabase(databaseId.getDatabaseInstanceId(), null);
+				if (getProvider().isEmpty(databases)) {
+					removeDatabaseInstance(databaseId.getDatabaseInstanceId());
+				}
 			}
-			
 		} finally {
 			APITrace.end();
 		}
@@ -399,13 +403,13 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 		APITrace.begin(getProvider(), "RelationalDatabase.restart");
 		try {
 			DatabaseId databaseId = new DatabaseId(providerDatabaseId);
-
-			Map<String, Object> params = new HashMap<String, Object>();
-			params.put("DBInstanceId", databaseId.getDatabaseInstanceId());
-
-			executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS,
-					"RestartDBInstance", AliyunNetworkCommon.RequestMethod.POST, false,
-					new AliyunValidateJsonResponseHandler(getProvider()));
+			if (!getProvider().isEmpty(databaseId.getDatabaseInstanceId())) {
+				Map<String, Object> params = new HashMap<String, Object>();
+				params.put("DBInstanceId", databaseId.getDatabaseInstanceId());
+				executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS,
+						"RestartDBInstance", AliyunNetworkCommon.RequestMethod.POST, false,
+						new AliyunValidateJsonResponseHandler(getProvider()));
+			}
 		} finally {
 			APITrace.end();
 		}
@@ -415,9 +419,11 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 	public Database getDatabase(String providerDatabaseId)
 			throws CloudException, InternalException {
 		final DatabaseId databaseId = new DatabaseId(providerDatabaseId);
-		List<Database> databaseList = queryDatabase(databaseId.getDatabaseInstanceId(), databaseId.getDatabaseName());
-		if (databaseList.size() > 0) {
-			return databaseList.get(0);
+		if (!getProvider().isEmpty(databaseId.getDatabaseInstanceId()) && !getProvider().isEmpty(databaseId.getDatabaseName())) {
+			List<Database> databaseList = queryDatabase(databaseId.getDatabaseInstanceId(), databaseId.getDatabaseName());
+			if (databaseList.size() > 0) {
+				return databaseList.get(0);
+			}
 		}
 		return null;
 	}
@@ -446,22 +452,24 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 			throws CloudException, InternalException {
 		APITrace.begin(getProvider(), "RelationalDatabase.addAccess");
 		try {
-			Map<String, Object> params = new HashMap<String, Object>();
-			
-			DatabaseId id = new DatabaseId(providerDatabaseId);
-			params.put("DBInstanceId", id.getDatabaseInstanceId());
-			
-			StringBuilder accessBuilder = new StringBuilder();
-			Iterator<String> access = listAccess(providerDatabaseId).iterator();
-			while (access.hasNext()) {
-				accessBuilder.append(access.next() + ",");
+			DatabaseId databaseId = new DatabaseId(providerDatabaseId);
+			if (!getProvider().isEmpty(databaseId.getDatabaseInstanceId())) {
+				
+				Map<String, Object> params = new HashMap<String, Object>();
+				params.put("DBInstanceId", databaseId.getDatabaseInstanceId());
+				
+				StringBuilder accessBuilder = new StringBuilder();
+				Iterator<String> access = listAccess(providerDatabaseId).iterator();
+				while (access.hasNext()) {
+					accessBuilder.append(access.next() + ",");
+				}
+				accessBuilder.append(sourceCidr);
+				params.put("SecurityIps", accessBuilder.toString());
+				
+				executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+						"ModifySecurityIps", AliyunNetworkCommon.RequestMethod.POST, false, 
+						new AliyunValidateJsonResponseHandler(getProvider()));
 			}
-			accessBuilder.append(sourceCidr);
-			params.put("SecurityIps", accessBuilder.toString());
-			
-			executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
-					"ModifySecurityIps", AliyunNetworkCommon.RequestMethod.POST, false, 
-					new AliyunValidateJsonResponseHandler(getProvider()));
 		} finally {
 			APITrace.end();
 		}
@@ -471,25 +479,26 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 	public void revokeAccess(String providerDatabaseId, String sourceCidr) throws CloudException, InternalException {
 		APITrace.begin(getProvider(), "RelationalDatabase.revokeAccess");
 		try {
-			Map<String, Object> params = new HashMap<String, Object>();
-			
-			DatabaseId id = new DatabaseId(providerDatabaseId);
-			params.put("DBInstanceId", id.getDatabaseInstanceId());
-			
-			StringBuilder accessBuilder = new StringBuilder();
-			Iterator<String> access = listAccess(providerDatabaseId).iterator();
-			while (access.hasNext()) {
-				String cidr = access.next();
-				if (!cidr.equals(sourceCidr)) {
-					accessBuilder.append(access.next() + ",");
+			DatabaseId databaseId = new DatabaseId(providerDatabaseId);
+			if (!getProvider().isEmpty(databaseId.getDatabaseInstanceId())) {
+				Map<String, Object> params = new HashMap<String, Object>();
+				params.put("DBInstanceId", id.getDatabaseInstanceId());
+				
+				StringBuilder accessBuilder = new StringBuilder();
+				Iterator<String> access = listAccess(providerDatabaseId).iterator();
+				while (access.hasNext()) {
+					String cidr = access.next();
+					if (!cidr.equals(sourceCidr)) {
+						accessBuilder.append(access.next() + ",");
+					}
 				}
+				accessBuilder.deleteCharAt(accessBuilder.length() - 1);
+				params.put("SecurityIps", accessBuilder.toString());
+				
+				executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
+						"ModifySecurityIps", AliyunNetworkCommon.RequestMethod.POST, false, 
+						new AliyunValidateJsonResponseHandler(getProvider()));
 			}
-			accessBuilder.deleteCharAt(accessBuilder.length() - 1);
-			params.put("SecurityIps", accessBuilder.toString());
-			
-			executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.RDS, 
-					"ModifySecurityIps", AliyunNetworkCommon.RequestMethod.POST, false, 
-					new AliyunValidateJsonResponseHandler(getProvider()));
 		} finally {
 			APITrace.end();
 		}
@@ -497,25 +506,26 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 
 	@Override
 	public Iterable<String> listAccess(String toProviderDatabaseId) throws CloudException, InternalException {
-		
+		List<String> accessList = new ArrayList<String>();
 		DatabaseId databaseId = new DatabaseId(toProviderDatabaseId);
-		JSONObject databaseInstanceAttribute = getDatabaseInstanceAttribute(databaseId.getDatabaseInstanceId());
-		try {
-			
-			String securityIPList = databaseInstanceAttribute.getString("SecurityIPList");
-			List<String> accessList = new ArrayList<String>();
-			if (!getProvider().isEmpty(securityIPList)) {
-
-				String[] segments = securityIPList.split(",");
-				if (segments.length > 0) {
-					Collections.addAll(accessList, segments);
+		if (!getProvider().isEmpty(databaseId.getDatabaseInstanceId())) {
+			JSONObject databaseInstanceAttribute = getDatabaseInstanceAttribute(databaseId.getDatabaseInstanceId());
+			try {
+				String securityIPList = databaseInstanceAttribute.getString("SecurityIPList");
+				
+				if (!getProvider().isEmpty(securityIPList)) {
+	
+					String[] segments = securityIPList.split(",");
+					if (segments.length > 0) {
+						Collections.addAll(accessList, segments);
+					}
 				}
+			} catch (JSONException e) {
+				stdLogger.error("parsing security ip list from database instance " + databaseId.getDatabaseInstanceId() + " failed", e);
+				throw new InternalException(e);
 			}
-			return accessList;
-		} catch (JSONException e) {
-			stdLogger.error("parsing security ip list from database instance " + databaseId.getDatabaseInstanceId() + " failed", e);
-			throw new InternalException(e);
 		}
+		return accessList;
 	}
 	
 	private static final SimpleDateFormat daseinFormatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
@@ -561,6 +571,10 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 	        final AtomicInteger totalPageNumber = new AtomicInteger(1);
 	        final AtomicInteger currentPageNumber = new AtomicInteger(1);
 	        final DatabaseId databaseId = new DatabaseId(forOptionalProviderDatabaseId);
+	        
+	        if (getProvider().isEmpty(databaseId.getDatabaseInstanceId())) {
+	        	return allBackups;
+	        }
 	        
 			ResponseHandler<List<DatabaseBackup>> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, List<DatabaseBackup>>(
 					new StreamToJSONObjectProcessor(),
