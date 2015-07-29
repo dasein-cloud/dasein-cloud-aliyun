@@ -173,7 +173,6 @@ public class AliyunCdn extends AbstractProviderService<Aliyun> implements CDNSup
 		return capabilities;
 	}
 
-	//TODO: if not found, should return null
 	@Override
 	public Distribution getDistribution(String distributionId)
 			throws InternalException, CloudException {

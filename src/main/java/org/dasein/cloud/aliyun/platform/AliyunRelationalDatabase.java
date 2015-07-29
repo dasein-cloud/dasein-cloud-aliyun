@@ -1071,12 +1071,24 @@ public class AliyunRelationalDatabase extends AbstractRelationalDatabaseSupport<
 									database.setProviderRegionId(getContext().getRegionId());
 									database.setHighAvailability(true);	
 									
-									if ("Creating".equals(respDatabase.getString("DBStatus"))) {
+									String databaseStatus = respDatabase.getString("DBStatus");
+									if ("Creating".equals(databaseStatus)) {
 										database.setCurrentState(DatabaseState.PENDING);
-									} else if ("Running".equals(respDatabase.getString("DBStatus"))) {
+									} else if ("Running".equals(databaseStatus)) {
 										database.setCurrentState(DatabaseState.AVAILABLE);
-									} else if ("Deleting".equals(respDatabase.getString("DBStatus"))) {
+									} else if ("Deleting".equals(databaseStatus)) {
 										database.setCurrentState(DatabaseState.DELETING);
+									} else if ("Rebooting".equals(databaseStatus)) {
+										database.setCurrentState(DatabaseState.RESTARTING);
+									} else if ("GuardDBInstanceCreating".equals(databaseStatus) || "Restoring".equals(databaseStatus)) {
+										database.setCurrentState(DatabaseState.BACKUP);
+									} else if ("DBInstanceNetTypeChanging".equals(databaseStatus)) {
+										database.setCurrentState(DatabaseState.MODIFYING);
+									} else if ("DBInstanceClassChanging".equals(databaseStatus) || "TRANSING".equals(databaseStatus) 
+											|| "EngineVersionUpgrading".equals(databaseStatus) || "TransingToOthers".equals(databaseStatus)
+											|| "Importing".equals(databaseStatus) || "GuardSwitching".equals(databaseStatus) 
+											|| "ImportingFromOthers".equals(databaseStatus)) {
+										database.setCurrentState(DatabaseState.MAINTENANCE);
 									} else {
 										database.setCurrentState(DatabaseState.UNKNOWN);
 									}
