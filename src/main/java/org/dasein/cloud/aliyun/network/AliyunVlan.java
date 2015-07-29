@@ -300,21 +300,45 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
     @Override
     @Deprecated
     public String getProviderTermForNetworkInterface(@Nonnull Locale locale) {
-        return capabilities.getProviderTermForNetworkInterface(locale);
+        try {
+			return getCapabilities().getProviderTermForNetworkInterface(locale);
+		} catch (CloudException e) {
+			stdLogger.error("Get capabilities failed", e);
+			throw new RuntimeException(e);
+		} catch (InternalException e) {
+			stdLogger.error("Get capabilities failed", e);
+			throw new RuntimeException(e);
+		}
     }
 
     @Nonnull
     @Override
     @Deprecated
     public String getProviderTermForSubnet(@Nonnull Locale locale) {
-        return capabilities.getProviderTermForSubnet(locale);
+        try {
+			return getCapabilities().getProviderTermForSubnet(locale);
+		} catch (CloudException e) {
+			stdLogger.error("Get capabilities failed", e);
+			throw new RuntimeException(e);
+		} catch (InternalException e) {
+			stdLogger.error("Get capabilities failed", e);
+			throw new RuntimeException(e);
+		}
     }
 
     @Nonnull
     @Override
     @Deprecated
     public String getProviderTermForVlan(@Nonnull Locale locale) {
-        return capabilities.getProviderTermForVlan(locale);
+        try {
+			return getCapabilities().getProviderTermForVlan(locale);
+		} catch (CloudException e) {
+			stdLogger.error("Get capabilities failed", e);
+			throw new RuntimeException(e);
+		} catch (InternalException e) {
+			stdLogger.error("Get capabilities failed", e);
+			throw new RuntimeException(e);
+		}
     }
 
     /**
