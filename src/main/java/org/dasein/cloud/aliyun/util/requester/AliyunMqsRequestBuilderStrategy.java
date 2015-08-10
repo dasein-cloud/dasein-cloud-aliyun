@@ -144,7 +144,8 @@ public class AliyunMqsRequestBuilderStrategy extends AliyunOssRequestBuilderStra
         return true;
     }
 
-    protected String buildCanonicalizedResource(AliyunRequestBuilder aliyunRequestBuilder) {
+    @Override
+    protected String buildCanonicalizedResource(AliyunRequestBuilder aliyunRequestBuilder) throws InternalException {
         StringBuilder canonicalStringBuilder = new StringBuilder();
         canonicalStringBuilder.append(aliyunRequestBuilder.path);
         canonicalStringBuilder.append(buildCanonicalizedParameters(aliyunRequestBuilder));

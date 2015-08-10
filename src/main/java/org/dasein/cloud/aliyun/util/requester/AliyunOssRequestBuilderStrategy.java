@@ -34,7 +34,9 @@ import org.dasein.cloud.aliyun.Aliyun;
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
 import java.net.URISyntaxException;
+import java.net.URLEncoder;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
@@ -164,7 +166,7 @@ public class AliyunOssRequestBuilderStrategy extends AliyunRequestBuilderStrateg
         aliyunRequestBuilder.requestBuilder.addHeader(AUTHORIZATION, "OSS " + new String(accessKey[0]) + ":" + signature);
     }
 
-    protected String buildCanonicalizedString(AliyunRequestBuilder aliyunRequestBuilder) {
+    protected String buildCanonicalizedString(AliyunRequestBuilder aliyunRequestBuilder) throws InternalException {
         RequestBuilder requestBuilder = aliyunRequestBuilder.requestBuilder;
         StringBuilder stringToSign = new StringBuilder();
         stringToSign.append(requestBuilder.getMethod()).append(NEW_LINE);
@@ -218,7 +220,7 @@ public class AliyunOssRequestBuilderStrategy extends AliyunRequestBuilderStrateg
         return SIGNED_PARAMTERS.contains(name);
     }
 
-    protected String buildCanonicalizedParameters(AliyunRequestBuilder aliyunRequestBuilder) {
+    protected String buildCanonicalizedParameters(AliyunRequestBuilder aliyunRequestBuilder) throws InternalException {
         StringBuilder canonicalStringBuilder = new StringBuilder();
 
         Map<String, String> requestParameters = new HashMap<String, String>();
@@ -240,14 +242,18 @@ public class AliyunOssRequestBuilderStrategy extends AliyunRequestBuilderStrateg
             if(aliyun.isEmpty(value)) {
                 canonicalStringBuilder.append(key);
             } else {
-                canonicalStringBuilder.append(key).append("=").append(value);
+                try {
+                    canonicalStringBuilder.append(key).append("=").append(URLEncoder.encode(value, "UTF-8"));
+                } catch (UnsupportedEncodingException unsupportedEncodingException) {
+                    throw new InternalException(unsupportedEncodingException);
+                }
             }
             separator = '&';
         }
         return canonicalStringBuilder.toString();
     }
 
-    protected String buildCanonicalizedResource(AliyunRequestBuilder aliyunRequestBuilder) {
+    protected String buildCanonicalizedResource(AliyunRequestBuilder aliyunRequestBuilder) throws InternalException {
         StringBuilder canonicalStringBuilder = new StringBuilder();
         canonicalStringBuilder.append('/');
         if (!aliyun.isEmpty(aliyunRequestBuilder.subdomain)) {

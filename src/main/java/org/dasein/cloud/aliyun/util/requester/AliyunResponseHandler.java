@@ -62,13 +62,8 @@ public class AliyunResponseHandler<T> implements ResponseHandler<T> {
 
         stdLogger.debug("HTTP STATUS: " + httpCode);
 
-        /*
-        if( httpCode == HttpStatus.SC_NOT_FOUND || httpCode == HttpStatus.SC_GONE ) {
-            return null;
-        }
-        */
-
-        if(httpCode == HttpStatus.SC_NO_CONTENT) {
+        
+        if( httpCode == HttpStatus.SC_NOT_FOUND || httpCode == HttpStatus.SC_GONE || httpCode == HttpStatus.SC_NO_CONTENT) {
             return null;
         }
 

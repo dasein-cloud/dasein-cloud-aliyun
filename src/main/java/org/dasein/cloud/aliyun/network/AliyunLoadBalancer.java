@@ -29,6 +29,7 @@ import org.dasein.cloud.aliyun.util.requester.AliyunRequestExecutor;
 import org.dasein.cloud.aliyun.util.requester.AliyunResponseHandlerWithMapper;
 import org.dasein.cloud.aliyun.util.requester.AliyunValidateJsonResponseHandler;
 import org.dasein.cloud.network.*;
+import org.dasein.cloud.util.APITrace;
 import org.dasein.cloud.util.requester.DriverToCoreMapper;
 import org.dasein.cloud.util.requester.streamprocessors.StreamToJSONObjectProcessor;
 import org.json.JSONArray;
@@ -76,62 +77,84 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 	@Override
 	public String createLoadBalancer(@Nonnull LoadBalancerCreateOptions options)
 			throws CloudException, InternalException {
-		Map<String, Object> params = new HashMap<String, Object>();
-		params.put("RegionId", getContext().getRegionId());
-		getProvider().addValueIfNotEmpty(params, "LoadBalancerName",
-				options.getName());
-		if (options.getProviderSubnetIds() != null
-				&& options.getProviderSubnetIds().length > 0) {
-			if (options.getProviderSubnetIds().length == 1) {
-				params.put("VSwitchId", options.getProviderSubnetIds()[0]);
-			} else {
-				throw new InternalException(
-						"Aliyun supports add load balancer to only one subnet!");
+		APITrace.begin(getProvider(), "LoadBalancer.createLoadBalancer");
+		try {
+			Map<String, Object> params = new HashMap<String, Object>();
+			params.put("RegionId", getContext().getRegionId());
+			getProvider().addValueIfNotEmpty(params, "LoadBalancerName",
+					options.getName());
+			if (options.getProviderSubnetIds() != null
+					&& options.getProviderSubnetIds().length > 0) {
+				if (options.getProviderSubnetIds().length == 1) {
+					params.put("VSwitchId", options.getProviderSubnetIds()[0]);
+				} else {
+					throw new InternalException(
+							"Aliyun supports add load balancer to only one subnet!");
+				}
 			}
-		}
-		if (options.getType() != null
-				&& options.getType().equals(LbType.INTERNAL)) {
-			params.put("AddressType",
-					AliyunNetworkCommon.LoadBalancerAddressType.intranet.name());
-		}
-		params.put("InternetChargeType",
-				AliyunNetworkCommon.InternetChargeType.PayByTraffic.name()
-						.toLowerCase());
-		params.put("Bandwidth", 1000);
-		
-		String loadBalancerId = (String) AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, 
-				AliyunRequestBuilder.Category.SLB, "CreateLoadBalancer", 
-				AliyunNetworkCommon.RequestMethod.POST, true, 
-				AliyunNetworkCommon.getResponseMapHandler(getProvider(), "LoadBalancerId")).get("LoadBalancerId");
-
-		if (loadBalancerId != null) {
-
-			for (LbListener listener : options.getListeners()) {
-				createListener(loadBalancerId, listener);
+			if (options.getType() != null
+					&& options.getType().equals(LbType.INTERNAL)) {
+				params.put("AddressType",
+						AliyunNetworkCommon.LoadBalancerAddressType.intranet.name());
 			}
-
-			createLoadBalancerHealthCheck(options.getHealthCheckOptions());
-
-			for (LbListener listener : options.getListeners()) {
-				// Listener is Stopped by default, need to start
-				startListener(loadBalancerId, listener);
+			params.put("InternetChargeType",
+					AliyunNetworkCommon.InternetChargeType.PayByTraffic.name()
+							.toLowerCase());
+			params.put("Bandwidth", 1000);
+			
+			ResponseHandler<String> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, String>(
+	            new StreamToJSONObjectProcessor(),
+	              new DriverToCoreMapper<JSONObject, String>() {
+	                 @Override
+	                 public String mapFrom(JSONObject json ) {
+	                      try {
+	                          return json.getString("LoadBalancerId" );
+	                      } catch (JSONException e ) {
+	                              stdLogger.error("parse LoadBalancerId from response failed", e);
+	                          throw new RuntimeException(e);
+	                      }
+	                }
+	             }, JSONObject. class);      
+	
+			
+			String loadBalancerId = (String) AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, 
+					AliyunRequestBuilder.Category.SLB, "CreateLoadBalancer", 
+					AliyunNetworkCommon.RequestMethod.POST, true, responseHandler);
+	
+			if (loadBalancerId != null) {
+	
+				for (LbListener listener : options.getListeners()) {
+					createListener(loadBalancerId, listener);
+				}
+	
+				createLoadBalancerHealthCheck(options.getHealthCheckOptions());
+	
+				for (LbListener listener : options.getListeners()) {
+					// Listener is Stopped by default, need to start
+					startListener(loadBalancerId, listener);
+				}
 			}
+	
+			return loadBalancerId;
+		} finally {
+			APITrace.end();
 		}
-
-		return loadBalancerId;
 	}
 
 	@Override
 	public void removeLoadBalancer(@Nonnull String loadBalancerId)
 			throws CloudException, InternalException {
-
-		Map<String, Object> params = new HashMap<String, Object>();
-		params.put("LoadBalancerId", loadBalancerId);
-
-		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.SLB, 
-				"DeleteLoadBalancer", AliyunNetworkCommon.RequestMethod.POST, false, 
-				new AliyunValidateJsonResponseHandler(getProvider()));
-		
+		APITrace.begin(getProvider(), "LoadBalancer.removeLoadBalancer");
+		try {
+			Map<String, Object> params = new HashMap<String, Object>();
+			params.put("LoadBalancerId", loadBalancerId);
+	
+			AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.SLB, 
+					"DeleteLoadBalancer", AliyunNetworkCommon.RequestMethod.POST, false, 
+					new AliyunValidateJsonResponseHandler(getProvider()));
+		} finally {
+			APITrace.end();
+		}
 	}
 
 	@Nonnull
@@ -184,7 +207,6 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 		if (listeners == null) {
 			return;
 		}
-
 		for (LbListener listener : listeners) {
 			createListener(toLoadBalancerId, listener);
 			// Listener is Stopped by default, need to start
@@ -194,56 +216,69 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 
 	private void startListener(@Nonnull String toLoadBalancerId,
 			LbListener listener) throws CloudException, InternalException {
-		
-		Map<String, Object> params = new HashMap<String, Object>();
-		params.put("LoadBalancerId", toLoadBalancerId);
-		params.put("ListenerPort", listener.getPublicPort());
-
-		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.SLB, 
-				"StartLoadBalancerListener", AliyunNetworkCommon.RequestMethod.POST, false, 
-				new AliyunValidateJsonResponseHandler(getProvider()));
+		APITrace.begin(getProvider(), "LoadBalancer.startListener");
+		try {
+			Map<String, Object> params = new HashMap<String, Object>();
+			params.put("LoadBalancerId", toLoadBalancerId);
+			params.put("ListenerPort", listener.getPublicPort());
+	
+			AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.SLB, 
+					"StartLoadBalancerListener", AliyunNetworkCommon.RequestMethod.POST, false, 
+					new AliyunValidateJsonResponseHandler(getProvider()));
+		} finally {
+			APITrace.end();
+		}
 	}
 
 	private void createListener(@Nonnull String toLoadBalancerId,
 			LbListener listener) throws CloudException, InternalException {
-		Map<String, Object> params = new HashMap<String, Object>();
-		params.put("LoadBalancerId", toLoadBalancerId);
-		params = appendParamsByListener(params, listener);
-
-		if (listener.getNetworkProtocol() == LbProtocol.HTTP
-				|| listener.getNetworkProtocol() == LbProtocol.HTTPS) {
-			// health check of TCP_RAW can not be disabled
-			params.put("HealthCheck", "off");
+		APITrace.begin(getProvider(), "LoadBalancer.createListener");
+		try {
+			Map<String, Object> params = new HashMap<String, Object>();
+			params.put("LoadBalancerId", toLoadBalancerId);
+			params = appendParamsByListener(params, listener);
+	
+			if (listener.getNetworkProtocol() == LbProtocol.HTTP
+					|| listener.getNetworkProtocol() == LbProtocol.HTTPS) {
+				// health check of TCP_RAW can not be disabled
+				params.put("HealthCheck", "off");
+			}
+	
+			String methodName = null;
+			if (listener.getNetworkProtocol().equals(LbProtocol.HTTP)) {
+				methodName = "CreateLoadBalancerHTTPListener";
+			} else if (listener.getNetworkProtocol().equals(LbProtocol.HTTPS)) {
+				methodName = "CreateLoadBalancerHTTPSListener";
+			} else if (listener.getNetworkProtocol().equals(LbProtocol.RAW_TCP)) {
+				methodName = "CreateLoadBalancerTCPListener";
+			}
+	
+			AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.SLB, 
+					methodName, AliyunNetworkCommon.RequestMethod.POST, false, 
+					new AliyunValidateJsonResponseHandler(getProvider()));
+		} finally {
+			APITrace.end();
 		}
-
-		String methodName = null;
-		if (listener.getNetworkProtocol().equals(LbProtocol.HTTP)) {
-			methodName = "CreateLoadBalancerHTTPListener";
-		} else if (listener.getNetworkProtocol().equals(LbProtocol.HTTPS)) {
-			methodName = "CreateLoadBalancerHTTPSListener";
-		} else if (listener.getNetworkProtocol().equals(LbProtocol.RAW_TCP)) {
-			methodName = "CreateLoadBalancerTCPListener";
-		}
-
-		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.SLB, 
-				methodName, AliyunNetworkCommon.RequestMethod.POST, false, 
-				new AliyunValidateJsonResponseHandler(getProvider()));
 	}
 
 	@Override
 	public void removeListeners(@Nonnull String toLoadBalancerId,
 			@Nullable LbListener[] listeners) throws CloudException,
 			InternalException {
-
-		for (LbListener listener : listeners) {
-
-			Map<String, Object> params = new HashMap<String, Object>();
-			params.put("LoadBalancerId", toLoadBalancerId);
-			params.put("ListenerPort", listener.getPublicPort());
-
-			AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.SLB, 
-					"DeleteLoadBalancerListener", AliyunNetworkCommon.RequestMethod.POST, false, 
-					new AliyunValidateJsonResponseHandler(getProvider()));
+		APITrace.begin(getProvider(), "LoadBalancer.removeListeners");
+		try {
+			for (LbListener listener : listeners) {
+	
+				Map<String, Object> params = new HashMap<String, Object>();
+				params.put("LoadBalancerId", toLoadBalancerId);
+				params.put("ListenerPort", listener.getPublicPort());
+	
+				AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.SLB, 
+						"DeleteLoadBalancerListener", AliyunNetworkCommon.RequestMethod.POST, false, 
+						new AliyunValidateJsonResponseHandler(getProvider()));
+			}
+		} finally {
+			APITrace.end();
 		}
 	}
 
@@ -251,9 +286,8 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 	public void addServers(@Nonnull String toLoadBalancerId,
 			@Nonnull String... serverIdsToAdd) throws CloudException,
 			InternalException {
-
+		APITrace.begin(getProvider(), "LoadBalancer.addServers");
 		try {
-
 			JSONArray jsonArray = new JSONArray();
 			for (String serverIdToAdd : serverIdsToAdd) {
 				JSONObject jsonObject = new JSONObject();
@@ -269,11 +303,12 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 			AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.SLB, 
 					"AddBackendServers", AliyunNetworkCommon.RequestMethod.POST, false, 
 					new AliyunValidateJsonResponseHandler(getProvider()));
-
 		} catch (JSONException e) {
 			stdLogger.error("An exception occurs during add backend servers!",
 					e);
 			throw new InternalException(e);
+		} finally {
+			APITrace.end();
 		}
 	}
 
@@ -281,23 +316,28 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 	public void removeServers(@Nonnull String fromLoadBalancerId,
 			@Nonnull String... serverIdsToRemove) throws CloudException,
 			InternalException {
-		Map<String, Object> params = new HashMap<String, Object>();
-		params.put("LoadBalancerId", fromLoadBalancerId);
-		JSONArray servers = new JSONArray();
-		for (int i = 0; i < serverIdsToRemove.length; i++) {
-			try {
-				servers.put(i, serverIdsToRemove[i]);
-			} catch (JSONException e) {
-				stdLogger
-						.error("An exception occurs during remove servers!", e);
-				throw new InternalException(e);
+		APITrace.begin(getProvider(), "LoadBalancer.removeServers");
+		try {
+			Map<String, Object> params = new HashMap<String, Object>();
+			params.put("LoadBalancerId", fromLoadBalancerId);
+			JSONArray servers = new JSONArray();
+			for (int i = 0; i < serverIdsToRemove.length; i++) {
+				try {
+					servers.put(i, serverIdsToRemove[i]);
+				} catch (JSONException e) {
+					stdLogger
+							.error("An exception occurs during remove servers!", e);
+					throw new InternalException(e);
+				}
 			}
+			params.put("BackendServers", servers);
+			
+			AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.SLB, 
+					"RemoveBackendServers", AliyunNetworkCommon.RequestMethod.POST, false, 
+					new AliyunValidateJsonResponseHandler(getProvider()));
+		} finally {
+			APITrace.end();
 		}
-		params.put("BackendServers", servers);
-		
-		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.SLB, 
-				"RemoveBackendServers", AliyunNetworkCommon.RequestMethod.POST, false, 
-				new AliyunValidateJsonResponseHandler(getProvider()));
 	}
 
 	@Nonnull
@@ -305,118 +345,126 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 	public Iterable<LoadBalancerEndpoint> listEndpoints(
 			@Nonnull String forLoadBalancerId) throws CloudException,
 			InternalException {
+		APITrace.begin(getProvider(), "LoadBalancer.listEndpoints");
+		try {
+			final Map<String, LoadBalancerEndpoint> allLoadBalancerEndpointMap = new HashMap<String, LoadBalancerEndpoint>();
+			int[] listenerPorts = describeLoadBalancer(forLoadBalancerId, false).getPublicPorts();
+			for (int i = 0; i < listenerPorts.length; i++) {
 	
-		final Map<String, LoadBalancerEndpoint> allLoadBalancerEndpointMap = new HashMap<String, LoadBalancerEndpoint>();
-		int[] listenerPorts = describeLoadBalancer(forLoadBalancerId, false).getPublicPorts();
-		for (int i = 0; i < listenerPorts.length; i++) {
-
-			HttpUriRequest request = AliyunRequestBuilder.get()
-					.provider(getProvider())
-					.category(AliyunRequestBuilder.Category.SLB)
-					.parameter("Action", "DescribeHealthStatus")
-					.parameter("LoadBalancerId", forLoadBalancerId)
-					.parameter("ListenerPort", listenerPorts[i])
-					.build();
+				HttpUriRequest request = AliyunRequestBuilder.get()
+						.provider(getProvider())
+						.category(AliyunRequestBuilder.Category.SLB)
+						.parameter("Action", "DescribeHealthStatus")
+						.parameter("LoadBalancerId", forLoadBalancerId)
+						.parameter("ListenerPort", listenerPorts[i])
+						.build();
+				
+				ResponseHandler<Map<String, LoadBalancerEndpoint>> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, Map<String, LoadBalancerEndpoint>>(
+	            		new StreamToJSONObjectProcessor(),
+	            		new DriverToCoreMapper<JSONObject, Map<String, LoadBalancerEndpoint>>() {
+	                        @Override
+	                        public Map<String, LoadBalancerEndpoint> mapFrom(JSONObject json) {
+	                            try {
+	                            	Map<String, LoadBalancerEndpoint> loadBalancerEndpointMap = new HashMap<String, LoadBalancerEndpoint>();
+	                            	JSONArray backendServers = json.getJSONObject(
+	                						"BackendServers").getJSONArray("BackendServer");
+	                            	for (int j = 0; j < backendServers.length(); j++) {
+	                					JSONObject backendServer = backendServers.getJSONObject(j);
+	                					String serverId = backendServer.getString("ServerId");
+	                					LbEndpointState state = LbEndpointState.INACTIVE;
+	                					if (backendServer.getString("ServerHealthStatus").equals(
+	                							AliyunNetworkCommon.AliyunLbEndpointState.normal
+	                									.name())) {
+	                						state = LbEndpointState.ACTIVE;
+	                					}
+	                					if (!loadBalancerEndpointMap.containsKey(serverId)) { // not
+	                																			// contain
+	                						loadBalancerEndpointMap.put(serverId,
+	                								LoadBalancerEndpoint.getInstance(
+	                										LbEndpointType.VM, serverId, state));
+	                					} else { // already contains
+	                						LoadBalancerEndpoint endpoint = loadBalancerEndpointMap
+	                								.get(serverId);
+	                						if (state.equals(LbEndpointState.INACTIVE)
+	                								&& endpoint.getCurrentState().equals(
+	                										LbEndpointState.ACTIVE)) {
+	                							loadBalancerEndpointMap.remove(serverId);
+	                							loadBalancerEndpointMap.put(serverId,
+	                									LoadBalancerEndpoint.getInstance(
+	                											LbEndpointType.VM, serverId,
+	                											LbEndpointState.INACTIVE));
+	                						}
+	                					}
+	                				}
+	                            	return loadBalancerEndpointMap;
+	                            } catch (JSONException e) {
+	                            	stdLogger.error("Failed to parse routing table", e);
+	                                throw new RuntimeException(e.getMessage());
+								} 
+	                        }
+	                    },
+	                    JSONObject.class);
+				
+				allLoadBalancerEndpointMap.putAll(new AliyunRequestExecutor<Map<String, LoadBalancerEndpoint>>(getProvider(),
+						AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
+						responseHandler).execute());
+			}
 			
-			ResponseHandler<Map<String, LoadBalancerEndpoint>> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, Map<String, LoadBalancerEndpoint>>(
-            		new StreamToJSONObjectProcessor(),
-            		new DriverToCoreMapper<JSONObject, Map<String, LoadBalancerEndpoint>>() {
-                        @Override
-                        public Map<String, LoadBalancerEndpoint> mapFrom(JSONObject json) {
-                            try {
-                            	Map<String, LoadBalancerEndpoint> loadBalancerEndpointMap = new HashMap<String, LoadBalancerEndpoint>();
-                            	JSONArray backendServers = json.getJSONObject(
-                						"BackendServers").getJSONArray("BackendServer");
-                            	for (int j = 0; j < backendServers.length(); j++) {
-                					JSONObject backendServer = backendServers.getJSONObject(j);
-                					String serverId = backendServer.getString("ServerId");
-                					LbEndpointState state = LbEndpointState.INACTIVE;
-                					if (backendServer.getString("ServerHealthStatus").equals(
-                							AliyunNetworkCommon.AliyunLbEndpointState.normal
-                									.name())) {
-                						state = LbEndpointState.ACTIVE;
-                					}
-                					if (!loadBalancerEndpointMap.containsKey(serverId)) { // not
-                																			// contain
-                						loadBalancerEndpointMap.put(serverId,
-                								LoadBalancerEndpoint.getInstance(
-                										LbEndpointType.VM, serverId, state));
-                					} else { // already contains
-                						LoadBalancerEndpoint endpoint = loadBalancerEndpointMap
-                								.get(serverId);
-                						if (state.equals(LbEndpointState.INACTIVE)
-                								&& endpoint.getCurrentState().equals(
-                										LbEndpointState.ACTIVE)) {
-                							loadBalancerEndpointMap.remove(serverId);
-                							loadBalancerEndpointMap.put(serverId,
-                									LoadBalancerEndpoint.getInstance(
-                											LbEndpointType.VM, serverId,
-                											LbEndpointState.INACTIVE));
-                						}
-                					}
-                				}
-                            	return loadBalancerEndpointMap;
-                            } catch (JSONException e) {
-                            	stdLogger.error("Failed to parse routing table", e);
-                                throw new RuntimeException(e.getMessage());
-							} 
-                        }
-                    },
-                    JSONObject.class);
-			
-			allLoadBalancerEndpointMap.putAll(new AliyunRequestExecutor<Map<String, LoadBalancerEndpoint>>(getProvider(),
-					AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
-					responseHandler).execute());
+			return allLoadBalancerEndpointMap.values();
+		} finally {
+			APITrace.end();
 		}
-		
-		return allLoadBalancerEndpointMap.values();
 	}
 
 	@Override
 	public SSLCertificate createSSLCertificate(
 			@Nonnull SSLCertificateCreateOptions options)
 			throws CloudException, InternalException {
-		
-		Map<String, Object> params = new HashMap<String, Object>();
-		params.put("RegionId", getContext().getRegionId());
-		params.put("ServerCertificate", options.getCertificateBody());
-		if (!getProvider().isEmpty(options.getCertificateName())) {
-			params.put("ServerCertificateName", options.getCertificateName());
+		APITrace.begin(getProvider(), "LoadBalancer.createSSLCertificate");
+		try {
+			Map<String, Object> params = new HashMap<String, Object>();
+			params.put("RegionId", getContext().getRegionId());
+			params.put("ServerCertificate", options.getCertificateBody());
+			if (!getProvider().isEmpty(options.getCertificateName())) {
+				params.put("ServerCertificateName", options.getCertificateName());
+			}
+			params.put("PrivateKey", options.getPrivateKey());
+			
+			HttpUriRequest request = AliyunRequestBuilder.post()
+					.provider(getProvider())
+					.category(AliyunRequestBuilder.Category.SLB)
+					.parameter("Action", "UploadServerCertificate")
+					.entity(params)
+					.build();
+			
+			ResponseHandler<SSLCertificate> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, SSLCertificate>(
+	        		new StreamToJSONObjectProcessor(),
+	        		new DriverToCoreMapper<JSONObject, SSLCertificate>() {
+	                    @Override
+	                    public SSLCertificate mapFrom(JSONObject json) {
+	                        try {
+	                			return toSSLCertificate(json);
+	                        } catch (JSONException e) {
+	                        	stdLogger.error("Failed to parse routing table", e);
+	                            throw new RuntimeException(e.getMessage());
+							} catch (InternalException e) {
+								stdLogger.error("Failed build request", e);
+	                            throw new RuntimeException(e.getMessage());
+							} catch (CloudException e) {
+								stdLogger.error("Failed to parse sslcertificate", e);
+	                            throw new RuntimeException(e.getMessage());
+							} 
+	                    }
+	                },
+	                JSONObject.class);
+			
+			return new AliyunRequestExecutor<SSLCertificate>(getProvider(),
+	                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+	                request,
+	                responseHandler).execute();
+		} finally {
+			APITrace.end();
 		}
-		params.put("PrivateKey", options.getPrivateKey());
-		
-		HttpUriRequest request = AliyunRequestBuilder.post()
-				.provider(getProvider())
-				.category(AliyunRequestBuilder.Category.SLB)
-				.parameter("Action", "UploadServerCertificate")
-				.entity(params)
-				.build();
-		
-		ResponseHandler<SSLCertificate> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, SSLCertificate>(
-        		new StreamToJSONObjectProcessor(),
-        		new DriverToCoreMapper<JSONObject, SSLCertificate>() {
-                    @Override
-                    public SSLCertificate mapFrom(JSONObject json) {
-                        try {
-                			return toSSLCertificate(json);
-                        } catch (JSONException e) {
-                        	stdLogger.error("Failed to parse routing table", e);
-                            throw new RuntimeException(e.getMessage());
-						} catch (InternalException e) {
-							stdLogger.error("Failed build request", e);
-                            throw new RuntimeException(e.getMessage());
-						} catch (CloudException e) {
-							stdLogger.error("Failed to parse sslcertificate", e);
-                            throw new RuntimeException(e.getMessage());
-						} 
-                    }
-                },
-                JSONObject.class);
-		
-		return new AliyunRequestExecutor<SSLCertificate>(getProvider(),
-                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                request,
-                responseHandler).execute();
 	}
 
 	@Nullable
@@ -424,8 +472,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 	public SSLCertificate getSSLCertificate(@Nonnull String certificateName)
 			throws CloudException, InternalException {
 		Iterable<SSLCertificate> sslCertificates = listSSLCertificates();
-		Iterator<SSLCertificate> sslCertificateIterator = sslCertificates
-				.iterator();
+		Iterator<SSLCertificate> sslCertificateIterator = sslCertificates.iterator();
 		while (sslCertificateIterator.hasNext()) {
 			SSLCertificate certificate = sslCertificateIterator.next();
 			if (certificate.getCertificateName().equals(certificateName)) {
@@ -439,63 +486,68 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 	@Override
 	public Iterable<SSLCertificate> listSSLCertificates()
 			throws CloudException, InternalException {
-		
-		HttpUriRequest request = AliyunRequestBuilder.get()
-				.provider(getProvider())
-				.category(AliyunRequestBuilder.Category.SLB)
-				.parameter("Action", "DescribeServerCertificates")
-				.parameter("RegionId", getContext().getRegionId())
-				.build();
-		
-		ResponseHandler<List<SSLCertificate>> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, List<SSLCertificate>>(
-        		new StreamToJSONObjectProcessor(),
-        		new DriverToCoreMapper<JSONObject, List<SSLCertificate>>() {
-                    @Override
-                    public List<SSLCertificate> mapFrom(JSONObject json) {
-                        try {
-                        	List<SSLCertificate> sslCertificates = new ArrayList<SSLCertificate>();
-                        	JSONArray sslCertificatesResponse = json.getJSONObject(
-                					"ServerCertificates").getJSONArray("ServerCertificate");
-                			for (int i = 0; i < sslCertificatesResponse.length(); i++) {
-                				sslCertificates.add(toSSLCertificate(sslCertificatesResponse
-                						.getJSONObject(i)));
-                			}
-                			return sslCertificates;
-                        } catch (JSONException e) {
-                        	stdLogger.error("Failed to parse routing table", e);
-                            throw new RuntimeException(e.getMessage());
-						} catch (InternalException e) {
-							stdLogger.error("Failed build request", e);
-                            throw new RuntimeException(e.getMessage());
-						} catch (CloudException e) {
-							stdLogger.error("Failed to parse sslcertificate", e);
-                            throw new RuntimeException(e.getMessage());
-						} 
-                    }
-                },
-                JSONObject.class);
-		
-		return new AliyunRequestExecutor<List<SSLCertificate>>(getProvider(),
-				AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
-				responseHandler).execute();
+		APITrace.begin(getProvider(), "LoadBalancer.listSSLCertificates");
+		try {
+			HttpUriRequest request = AliyunRequestBuilder.get()
+					.provider(getProvider())
+					.category(AliyunRequestBuilder.Category.SLB)
+					.parameter("Action", "DescribeServerCertificates")
+					.parameter("RegionId", getContext().getRegionId())
+					.build();
+			
+			ResponseHandler<List<SSLCertificate>> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, List<SSLCertificate>>(
+	        		new StreamToJSONObjectProcessor(),
+	        		new DriverToCoreMapper<JSONObject, List<SSLCertificate>>() {
+	                    @Override
+	                    public List<SSLCertificate> mapFrom(JSONObject json) {
+	                        try {
+	                        	List<SSLCertificate> sslCertificates = new ArrayList<SSLCertificate>();
+	                        	JSONArray sslCertificatesResponse = json.getJSONObject(
+	                					"ServerCertificates").getJSONArray("ServerCertificate");
+	                			for (int i = 0; i < sslCertificatesResponse.length(); i++) {
+	                				sslCertificates.add(toSSLCertificate(sslCertificatesResponse
+	                						.getJSONObject(i)));
+	                			}
+	                			return sslCertificates;
+	                        } catch (JSONException e) {
+	                        	stdLogger.error("Failed to parse routing table", e);
+	                            throw new RuntimeException(e.getMessage());
+							} catch (InternalException e) {
+								stdLogger.error("Failed build request", e);
+	                            throw new RuntimeException(e.getMessage());
+							} catch (CloudException e) {
+								stdLogger.error("Failed to parse sslcertificate", e);
+	                            throw new RuntimeException(e.getMessage());
+							} 
+	                    }
+	                },
+	                JSONObject.class);
+			
+			return new AliyunRequestExecutor<List<SSLCertificate>>(getProvider(),
+					AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
+					responseHandler).execute();
+		} finally {
+			APITrace.end();
+		}
 	}
 
 	@Override
 	public void removeSSLCertificate(@Nonnull String certificateName)
 			throws CloudException, InternalException {
-		
-		SSLCertificate certificate = getSSLCertificate(certificateName);
-		
-		if (certificate != null) {
-			Map<String, Object> params = new HashMap<String, Object>();
-			params.put("RegionId", getContext().getRegionId());
-			params.put("ServerCertificateId",
-					certificate.getProviderCertificateId());
-			
-			AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.SLB, 
-					"DeleteServerCertificate", AliyunNetworkCommon.RequestMethod.POST, false, 
-					new AliyunValidateJsonResponseHandler(getProvider()));
-			
+		APITrace.begin(getProvider(), "LoadBalancer.removeSSLCertificate");
+		try {
+			SSLCertificate certificate = getSSLCertificate(certificateName);
+			if (certificate != null) {
+				Map<String, Object> params = new HashMap<String, Object>();
+				params.put("RegionId", getContext().getRegionId());
+				params.put("ServerCertificateId",
+						certificate.getProviderCertificateId());
+				AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.SLB, 
+						"DeleteServerCertificate", AliyunNetworkCommon.RequestMethod.POST, false, 
+						new AliyunValidateJsonResponseHandler(getProvider()));
+			}
+		} finally {
+			APITrace.end();
 		}
 	}
 
@@ -503,6 +555,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 	public void setSSLCertificate(
 			@Nonnull SetLoadBalancerSSLCertificateOptions options)
 			throws CloudException, InternalException {
+		APITrace.begin(getProvider(), "LoadBalancer.setSSLCertificate");
 		try {
 			SSLCertificate certificate = getSSLCertificate(options
 					.getSslCertificateName());
@@ -521,72 +574,79 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 			AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.SLB, 
 					"SetLoadBalancerHTTPSListenerAttribute", AliyunNetworkCommon.RequestMethod.POST, false, 
 					new AliyunValidateJsonResponseHandler(getProvider()));
-			
 		} catch (JSONException e) {
 			stdLogger.error("An exception occurs during setSSLCertificate", e);
 			throw new InternalException(e);
+		} finally {
+			APITrace.end();
 		}
 	}
 
 	private LoadBalancerHealthCheck setHealthCheckAttribute(
 			HealthCheckOptions options, LbListener lbListener)
 			throws CloudException, InternalException {
-		Map<String, Object> params = new HashMap<String, Object>();
-		params.put("LoadBalancerId", options.getProviderLoadBalancerId());
-		params = appendParamsByListener(params, lbListener);
-
-		params.put("HealthCheckConnectPort", options.getPort());
-		params.put("HealthyThreshold", options.getHealthyCount());
-		params.put("UnhealthyThreshold", options.getUnhealthyCount());
-		params.put("HealthCheckInterval", options.getInterval());
-		if (options.getProtocol() == LoadBalancerHealthCheck.HCProtocol.HTTP
-				|| options.getProtocol() == LoadBalancerHealthCheck.HCProtocol.HTTPS) {
-			params.put("HealthCheck",
-					AliyunNetworkCommon.AliyunLbSwitcher.on.name());
-			params.put("HealthCheckURI", options.getPath());
-			if (getProvider().isEmpty(options.getHost())) {
-				params.put("HealthCheckDomain", "$_ip");
+		APITrace.begin(getProvider(), "LoadBalancer.setHealthCheckAttribute");
+		try {	
+			Map<String, Object> params = new HashMap<String, Object>();
+			params.put("LoadBalancerId", options.getProviderLoadBalancerId());
+			params = appendParamsByListener(params, lbListener);
+	
+			params.put("HealthCheckConnectPort", options.getPort());
+			params.put("HealthyThreshold", options.getHealthyCount());
+			params.put("UnhealthyThreshold", options.getUnhealthyCount());
+			params.put("HealthCheckInterval", options.getInterval());
+			if (options.getProtocol() == LoadBalancerHealthCheck.HCProtocol.HTTP
+					|| options.getProtocol() == LoadBalancerHealthCheck.HCProtocol.HTTPS) {
+				params.put("HealthCheck",
+						AliyunNetworkCommon.AliyunLbSwitcher.on.name());
+				params.put("HealthCheckURI", options.getPath());
+				if (getProvider().isEmpty(options.getHost())) {
+					params.put("HealthCheckDomain", "$_ip");
+				} else {
+					params.put("HealthCheckDomain", options.getHost());
+				}
+	
+				params.put("HealthCheckTimeout", options.getTimeout());
 			} else {
-				params.put("HealthCheckDomain", options.getHost());
+				params.put("HealthCheckConnectTimeout", options.getTimeout());
 			}
-
-			params.put("HealthCheckTimeout", options.getTimeout());
-		} else {
-			params.put("HealthCheckConnectTimeout", options.getTimeout());
+	
+			String methodName;
+			if (options.getProtocol().equals(
+					LoadBalancerHealthCheck.HCProtocol.HTTP)) {
+				methodName = "SetLoadBalancerHTTPListenerAttribute";
+			} else if (options.getProtocol().equals(
+					LoadBalancerHealthCheck.HCProtocol.HTTPS)) {
+				methodName = "SetLoadBalancerHTTPSListenerAttribute";
+			} else if (options.getProtocol().equals(
+					LoadBalancerHealthCheck.HCProtocol.TCP)) {
+				methodName = "SetLoadBalancerTCPListenerAttribute";
+			} else {
+				throw new InternalException(
+						"Aliyun supports HTTP, HTTPS and TCP as the health check protocol only!");
+			}
+			
+			AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.SLB, 
+					methodName, AliyunNetworkCommon.RequestMethod.POST, false, 
+					new AliyunValidateJsonResponseHandler(getProvider()));
+			
+	
+			String healthCheckId = new LbListenerHealthCheckIdentity(
+					options.getProviderLoadBalancerId(),
+					lbListener.getNetworkProtocol(), lbListener.getPublicPort())
+					.toString();
+			LoadBalancerHealthCheck healthCheck = LoadBalancerHealthCheck
+					.getInstance(healthCheckId, null, null, options.getHost(),
+							options.getProtocol(), options.getPort(),
+							options.getPath(), options.getInterval(),
+							options.getTimeout(), options.getHealthyCount(),
+							options.getUnhealthyCount());
+			healthCheck.addListener(lbListener);
+			
+			return healthCheck;
+		} finally {
+			APITrace.end();
 		}
-
-		String methodName;
-		if (options.getProtocol().equals(
-				LoadBalancerHealthCheck.HCProtocol.HTTP)) {
-			methodName = "SetLoadBalancerHTTPListenerAttribute";
-		} else if (options.getProtocol().equals(
-				LoadBalancerHealthCheck.HCProtocol.HTTPS)) {
-			methodName = "SetLoadBalancerHTTPSListenerAttribute";
-		} else if (options.getProtocol().equals(
-				LoadBalancerHealthCheck.HCProtocol.TCP)) {
-			methodName = "SetLoadBalancerTCPListenerAttribute";
-		} else {
-			throw new InternalException(
-					"Aliyun supports HTTP, HTTPS and TCP as the health check protocol only!");
-		}
-		
-		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.SLB, 
-				methodName, AliyunNetworkCommon.RequestMethod.POST, false, 
-				new AliyunValidateJsonResponseHandler(getProvider()));
-		
-
-		String healthCheckId = new LbListenerHealthCheckIdentity(
-				options.getProviderLoadBalancerId(),
-				lbListener.getNetworkProtocol(), lbListener.getPublicPort())
-				.toString();
-		LoadBalancerHealthCheck healthCheck = LoadBalancerHealthCheck
-				.getInstance(healthCheckId, null, null, options.getHost(),
-						options.getProtocol(), options.getPort(),
-						options.getPath(), options.getInterval(),
-						options.getTimeout(), options.getHealthyCount(),
-						options.getUnhealthyCount());
-		healthCheck.addListener(lbListener);
-		return healthCheck;
 	}
 
 	@Override
@@ -634,6 +694,7 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 	public void removeLoadBalancerHealthCheck(
 			@Nonnull String providerLoadBalancerId) throws CloudException,
 			InternalException {
+		APITrace.begin(getProvider(), "LoadBalancer.removeLoadBalancerHealthCheck");
 		try {
 			List<LbListener> listeners = describeListeners(providerLoadBalancerId);
 			for (LbListener listener : listeners) {
@@ -666,6 +727,8 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 					"An exception occurs during remove health check by load balancer id "
 							+ providerLoadBalancerId, e);
 			throw new InternalException(e);
+		} finally {
+			APITrace.end();
 		}
 	}
 
@@ -789,55 +852,60 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 	private List<LoadBalancer> describeLoadBalancersBriefInfo()
 			throws JSONException, InternalException, CloudException {
 		
-		HttpUriRequest request = AliyunRequestBuilder.get()
-				.provider(getProvider())
-				.category(AliyunRequestBuilder.Category.SLB)
-				.parameter("Action", "DescribeLoadBalancers")
-				.parameter("RegionId", getContext().getRegionId())
-				.build();
-		
-		ResponseHandler<List<LoadBalancer>> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, List<LoadBalancer>>(
-				new StreamToJSONObjectProcessor(),
-				new DriverToCoreMapper<JSONObject, List<LoadBalancer>>() {
-					@Override
-					public List<LoadBalancer> mapFrom(JSONObject json) {
-						List<LoadBalancer> loadBalancers = new ArrayList<LoadBalancer>();
-						try {
-							for (int i = 0; i < json.getJSONObject("LoadBalancers")
-									.getJSONArray("LoadBalancer").length(); i++) {
-								JSONObject simpleLoadBalancer = json
-										.getJSONObject("LoadBalancers")
-										.getJSONArray("LoadBalancer").getJSONObject(i);
-								LoadBalancerState status = LoadBalancerState.PENDING;
-								if (!getProvider().isEmpty(
-										simpleLoadBalancer.getString("LoadBalancerStatus"))
-										&& simpleLoadBalancer
-												.getString("LoadBalancerStatus")
-												.toUpperCase()
-												.equals(LoadBalancerState.ACTIVE.name()
-														.toUpperCase())) {
-									status = LoadBalancerState.ACTIVE;
+		APITrace.begin(getProvider(), "LoadBalancer.describeLoadBalancersBriefInfo");
+		try {
+			HttpUriRequest request = AliyunRequestBuilder.get()
+					.provider(getProvider())
+					.category(AliyunRequestBuilder.Category.SLB)
+					.parameter("Action", "DescribeLoadBalancers")
+					.parameter("RegionId", getContext().getRegionId())
+					.build();
+			
+			ResponseHandler<List<LoadBalancer>> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, List<LoadBalancer>>(
+					new StreamToJSONObjectProcessor(),
+					new DriverToCoreMapper<JSONObject, List<LoadBalancer>>() {
+						@Override
+						public List<LoadBalancer> mapFrom(JSONObject json) {
+							List<LoadBalancer> loadBalancers = new ArrayList<LoadBalancer>();
+							try {
+								for (int i = 0; i < json.getJSONObject("LoadBalancers")
+										.getJSONArray("LoadBalancer").length(); i++) {
+									JSONObject simpleLoadBalancer = json
+											.getJSONObject("LoadBalancers")
+											.getJSONArray("LoadBalancer").getJSONObject(i);
+									LoadBalancerState status = LoadBalancerState.PENDING;
+									if (!getProvider().isEmpty(
+											simpleLoadBalancer.getString("LoadBalancerStatus"))
+											&& simpleLoadBalancer
+													.getString("LoadBalancerStatus")
+													.toUpperCase()
+													.equals(LoadBalancerState.ACTIVE.name()
+															.toUpperCase())) {
+										status = LoadBalancerState.ACTIVE;
+									}
+									loadBalancers.add(LoadBalancer.getInstance(getContext()
+											.getAccountNumber(), getContext().getRegionId(),
+											simpleLoadBalancer.getString("LoadBalancerId"), status,
+											simpleLoadBalancer.getString("LoadBalancerName"), null,
+											null, null));
 								}
-								loadBalancers.add(LoadBalancer.getInstance(getContext()
-										.getAccountNumber(), getContext().getRegionId(),
-										simpleLoadBalancer.getString("LoadBalancerId"), status,
-										simpleLoadBalancer.getString("LoadBalancerName"), null,
-										null, null));
+								return loadBalancers;
+							} catch (JSONException e) {
+								stdLogger.error("An exception occurs during parsing json for load balancers", e);
+								throw new RuntimeException(e);
+							} catch (InternalException e) {
+								stdLogger.error("An exception occurs during parsing json for load balancers", e);
+								throw new RuntimeException(e);
 							}
-							return loadBalancers;
-						} catch (JSONException e) {
-							stdLogger.error("An exception occurs during parsing json for load balancers", e);
-							throw new RuntimeException(e);
-						} catch (InternalException e) {
-							stdLogger.error("An exception occurs during parsing json for load balancers", e);
-							throw new RuntimeException(e);
 						}
-					}
-				}, JSONObject.class);
-		
-		return new AliyunRequestExecutor<List<LoadBalancer>>(getProvider(),
-				AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
-				responseHandler).execute();
+					}, JSONObject.class);
+			
+			return new AliyunRequestExecutor<List<LoadBalancer>>(getProvider(),
+					AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
+					responseHandler).execute();
+		} finally {
+			APITrace.end();
+		}
 	}
 
 	private LoadBalancer describeLoadBalancer(String name)
@@ -852,65 +920,65 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 
 	private LoadBalancer describeLoadBalancer(@Nonnull final String loadBalancerId,
 			final boolean cascade) throws CloudException, InternalException {
-		
-		HttpUriRequest request = AliyunRequestBuilder.get()
-				.provider(getProvider())
-				.category(AliyunRequestBuilder.Category.SLB)
-				.parameter("Action", "DescribeLoadBalancerAttribute")
-				.parameter("LoadBalancerId", loadBalancerId)
-				.build();
-		
-		ResponseHandler<LoadBalancer> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, LoadBalancer>(
-				new StreamToJSONObjectProcessor(),
-				new DriverToCoreMapper<JSONObject, LoadBalancer>() {
-					@Override
-					public LoadBalancer mapFrom(JSONObject json) {
-						try {
-							return toLoadBalancer(json, cascade);
-						} catch (JSONException e) {
-							stdLogger.error("An exception occurs during getLoadBalancer with id " + loadBalancerId, e);
-							throw new RuntimeException(e);
-						} catch (CloudException e) {
-							stdLogger.error("An exception occurs during parsing json of load balancer with id " + loadBalancerId, e);
-							throw new RuntimeException(e);
-						} catch (InternalException e) {
-							stdLogger.error("An exception occurs during parsing json of load balancer with id " + loadBalancerId, e);
-							throw new RuntimeException(e);
+		APITrace.begin(getProvider(), "LoadBalancer.describeLoadBalancer");
+		try {
+			HttpUriRequest request = AliyunRequestBuilder.get()
+					.provider(getProvider())
+					.category(AliyunRequestBuilder.Category.SLB)
+					.parameter("Action", "DescribeLoadBalancerAttribute")
+					.parameter("LoadBalancerId", loadBalancerId)
+					.build();
+			
+			ResponseHandler<LoadBalancer> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, LoadBalancer>(
+					new StreamToJSONObjectProcessor(),
+					new DriverToCoreMapper<JSONObject, LoadBalancer>() {
+						@Override
+						public LoadBalancer mapFrom(JSONObject json) {
+							try {
+								return toLoadBalancer(json, cascade);
+							} catch (JSONException e) {
+								stdLogger.error("An exception occurs during getLoadBalancer with id " + loadBalancerId, e);
+								throw new RuntimeException(e);
+							} catch (CloudException e) {
+								stdLogger.error("An exception occurs during parsing json of load balancer with id " + loadBalancerId, e);
+								throw new RuntimeException(e);
+							} catch (InternalException e) {
+								stdLogger.error("An exception occurs during parsing json of load balancer with id " + loadBalancerId, e);
+								throw new RuntimeException(e);
+							}
 						}
-					}
-				}, JSONObject.class);
-		
-		return new AliyunRequestExecutor<LoadBalancer>(getProvider(),
-				AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
-				responseHandler).execute();
+					}, JSONObject.class);
+			
+			return new AliyunRequestExecutor<LoadBalancer>(getProvider(),
+					AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
+					responseHandler).execute();
+		} finally {
+			APITrace.end();
+		}
 	}
 
 	private List<LoadBalancerHealthCheck> describeHealthChecks(
 			@Nonnull String loadBalancerId) throws InternalException,
 			CloudException, JSONException {
 		List<LoadBalancerHealthCheck> result = new ArrayList<LoadBalancerHealthCheck>();
-
 		Map<JSONObject, LbProtocol> listenersJSON = describeListenersAttribute(loadBalancerId);
 		for (Map.Entry<JSONObject, LbProtocol> listenerJSON : listenersJSON
 				.entrySet()) {
 			result.add(toHealthCheck(loadBalancerId, listenerJSON.getKey(),
 					listenerJSON.getValue()));
 		}
-
 		return result;
 	}
 
 	private List<LbListener> describeListeners(String loadBalancerId)
 			throws CloudException, InternalException, JSONException {
 		List<LbListener> result = new ArrayList<LbListener>();
-
 		Map<JSONObject, LbProtocol> listenersJSON = describeListenersAttribute(loadBalancerId);
 		for (Map.Entry<JSONObject, LbProtocol> listenerJSON : listenersJSON
 				.entrySet()) {
 			result.add(toListener(loadBalancerId, listenerJSON.getKey(),
 					listenerJSON.getValue()));
 		}
-
 		return result;
 	}
 
@@ -970,36 +1038,40 @@ public class AliyunLoadBalancer extends AbstractLoadBalancerSupport<Aliyun> {
 	private JSONObject describeListenerAttribute(String loadBalancerId,
 			LbProtocol lbProtocol, int listenerPort) throws CloudException,
 			InternalException {
-		
-		String methodName = null;
-		if (lbProtocol.equals(LbProtocol.HTTP)) {
-			methodName = "DescribeLoadBalancerHTTPListenerAttribute";
-		} else if (lbProtocol.equals(LbProtocol.HTTPS)) {
-			methodName = "DescribeLoadBalancerHTTPSListenerAttribute";
-		} else if (lbProtocol.equals(LbProtocol.RAW_TCP)) {
-			methodName = "DescribeLoadBalancerTCPListenerAttribute";
+		APITrace.begin(getProvider(), "LoadBalancer.describeListenerAttribute");
+		try {
+			String methodName = null;
+			if (lbProtocol.equals(LbProtocol.HTTP)) {
+				methodName = "DescribeLoadBalancerHTTPListenerAttribute";
+			} else if (lbProtocol.equals(LbProtocol.HTTPS)) {
+				methodName = "DescribeLoadBalancerHTTPSListenerAttribute";
+			} else if (lbProtocol.equals(LbProtocol.RAW_TCP)) {
+				methodName = "DescribeLoadBalancerTCPListenerAttribute";
+			}
+			
+			HttpUriRequest request = AliyunRequestBuilder.get()
+					.provider(getProvider())
+					.category(AliyunRequestBuilder.Category.SLB)
+					.parameter("Action", methodName)
+					.parameter("LoadBalancerId", loadBalancerId)
+					.parameter("ListenerPort", listenerPort)
+					.build();
+			
+			ResponseHandler<JSONObject> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, JSONObject>(
+					new StreamToJSONObjectProcessor(),
+					new DriverToCoreMapper<JSONObject, JSONObject>() {
+						@Override
+						public JSONObject mapFrom(JSONObject json) {
+							return json;
+						}
+					}, JSONObject.class);
+			
+			return new AliyunRequestExecutor<JSONObject>(getProvider(),
+					AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
+					responseHandler).execute();
+		} finally {
+			APITrace.end();
 		}
-		
-		HttpUriRequest request = AliyunRequestBuilder.get()
-				.provider(getProvider())
-				.category(AliyunRequestBuilder.Category.SLB)
-				.parameter("Action", methodName)
-				.parameter("LoadBalancerId", loadBalancerId)
-				.parameter("ListenerPort", listenerPort)
-				.build();
-		
-		ResponseHandler<JSONObject> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, JSONObject>(
-				new StreamToJSONObjectProcessor(),
-				new DriverToCoreMapper<JSONObject, JSONObject>() {
-					@Override
-					public JSONObject mapFrom(JSONObject json) {
-						return json;
-					}
-				}, JSONObject.class);
-		
-		return new AliyunRequestExecutor<JSONObject>(getProvider(),
-				AliyunHttpClientBuilderFactory.newHttpClientBuilder(), request,
-				responseHandler).execute();
 	}
 
 	private LoadBalancer toLoadBalancer(JSONObject response, boolean cascade)

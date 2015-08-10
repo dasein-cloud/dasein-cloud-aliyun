@@ -29,6 +29,7 @@ import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.client.methods.RequestBuilder;
 import org.apache.http.client.utils.URLEncodedUtils;
+import org.apache.http.entity.ByteArrayEntity;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.FileEntity;
 import org.apache.http.entity.StringEntity;
@@ -181,6 +182,12 @@ public class AliyunRequestBuilder {
         return this;
     }
 
+    public AliyunRequestBuilder entity(byte[] bytes, String mimeType) {
+        contentType = ContentType.create(mimeType, Consts.UTF_8);
+        otherEntity = new ByteArrayEntity(bytes, contentType);
+        return this;
+    }
+
     public AliyunRequestBuilder clientToken(boolean clientToken) {
         this.clientToken = clientToken;
         return this;
@@ -225,7 +232,13 @@ public class AliyunRequestBuilder {
         SLB("slb", "Server Load Balancer", AliyunSlbRequestBuilderStrategy.class),
         RDS("rds", "Relational Database Service", AliyunRdsRequestBuilderStrategy.class),
         OSS("oss", "Open Storage Service", AliyunOssRequestBuilderStrategy.class),
-        MQS("mqs", "Message Queue Service", AliyunMqsRequestBuilderStrategy.class);
+        MQS("mqs", "Message and Notification Service", AliyunMqsRequestBuilderStrategy.class),
+        CDN("cdn", "Content Delivery Network", AliyunCdnRequestBuilderStrategy.class),
+        /**
+         * In dasein, there is no service like OTS exist.
+         */
+        @Deprecated
+        OTS("ots", "Open Table Service", AliyunOtsRequestBuilderStrategy.class);
 
         private String host;
         private String name;

@@ -35,7 +35,6 @@ import java.util.Locale;
  *
  * @author Jane Wang
  * @since 2015.05.01
- *
  */
 public class AliyunIpAddressCapabilities extends AbstractCapabilities<Aliyun> implements IPAddressCapabilities {
 

@@ -32,6 +32,7 @@ import org.dasein.cloud.compute.ComputeServices;
 import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.compute.VirtualMachineSupport;
 import org.dasein.cloud.network.*;
+import org.dasein.cloud.util.APITrace;
 import org.dasein.cloud.util.requester.DriverToCoreMapper;
 import org.dasein.cloud.util.requester.streamprocessors.StreamToJSONObjectProcessor;
 import org.dasein.util.Jiterator;
@@ -151,60 +152,82 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
      */
     @Override
     public Route addRouteToVirtualMachine(@Nonnull String routingTableId, @Nonnull IPVersion version, @Nullable String destinationCidr, @Nonnull String vmId) throws CloudException, InternalException {
-        if (!version.equals(IPVersion.IPV4)) {
-            throw new InternalException("Aliyun supports IPV4 only!");
-        }
-        Map<String, Object> params = new HashMap<String, Object>();
-        params.put("RouteTableId", new IdentityGenerator(routingTableId).getRouteTableId());
-        params.put("DestinationCidrBlock", destinationCidr);
-        if (!getProvider().isEmpty(vmId)) {
-            params.put("NextHopType", getProvider().capitalize(
-                    AliyunNetworkCommon.RouteEntryNextHopType.instance.name()));
-            params.put("NextHopId", vmId);
-        } else {
-            stdLogger.warn("Add route to Virtual Machine, you must specify the VM instance ID!");
-            throw new InternalException("Add route to Virtual Machine, you must specify the VM instance ID!");
-        }
-        
-        HttpUriRequest request = AliyunRequestBuilder.post()
-        		.provider(getProvider())
-        		.category(AliyunRequestBuilder.Category.ECS)
-        		.parameter("Action", "CreateRouteEntry")
-        		.entity(params)
-        		.clientToken(true)
-        		.build();
-        
-        new AliyunRequestExecutor<Void>(getProvider(),
-                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                request,
-                new AliyunValidateJsonResponseHandler(getProvider())).execute();
-        
-        return Route.getRouteToVirtualMachine(IPVersion.IPV4, destinationCidr, getContext().getAccountNumber(), vmId);
+    	APITrace.begin(getProvider(), "Vlan.addRouteToVirtualMachine");
+    	try {
+	    	if (!version.equals(IPVersion.IPV4)) {
+	            throw new InternalException("Aliyun supports IPV4 only!");
+	        }
+	        Map<String, Object> params = new HashMap<String, Object>();
+	        params.put("RouteTableId", new IdentityGenerator(routingTableId).getRouteTableId());
+	        params.put("DestinationCidrBlock", destinationCidr);
+	        if (!getProvider().isEmpty(vmId)) {
+	            params.put("NextHopType", getProvider().capitalize(
+	                    AliyunNetworkCommon.RouteEntryNextHopType.instance.name()));
+	            params.put("NextHopId", vmId);
+	        } else {
+	            stdLogger.warn("Add route to Virtual Machine, you must specify the VM instance ID!");
+	            throw new InternalException("Add route to Virtual Machine, you must specify the VM instance ID!");
+	        }
+	        
+	        HttpUriRequest request = AliyunRequestBuilder.post()
+	        		.provider(getProvider())
+	        		.category(AliyunRequestBuilder.Category.ECS)
+	        		.parameter("Action", "CreateRouteEntry")
+	        		.entity(params)
+	        		.clientToken(true)
+	        		.build();
+	        
+	        new AliyunRequestExecutor<Void>(getProvider(),
+	                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+	                request,
+	                new AliyunValidateJsonResponseHandler(getProvider())).execute();
+	        
+	        return Route.getRouteToVirtualMachine(IPVersion.IPV4, destinationCidr, getContext().getAccountNumber(), vmId);
+    	} finally {
+    		APITrace.end();
+    	}
     }
 
     @Nonnull
     @Override
     public Subnet createSubnet(@Nonnull SubnetCreateOptions options) throws CloudException, InternalException {
-        
-    	Map<String, Object> params = new HashMap<String, Object>();
-        params.put("ZoneId", options.getProviderDataCenterId());
-        params.put("CidrBlock", options.getCidr());
-        IdentityGenerator vlanId = new IdentityGenerator(options.getProviderVlanId());
-        params.put("VpcId", vlanId.getVlanId());
-        if (!getProvider().isEmpty(options.getName())) {
-            params.put("VSwitchName", options.getName());
-        }
-        if (!getProvider().isEmpty(options.getDescription())) {
-            params.put("Description", options.getDescription());
-        }
-        
-        String vSwitchId = (String) AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, 
-        		AliyunRequestBuilder.Category.ECS, "CreateVSwitch", 
-        		AliyunNetworkCommon.RequestMethod.POST, true, 
-        		AliyunNetworkCommon.getResponseMapHandler(getProvider(), "VSwitchId")).get("VSwitchId");
-        
-        return getSubnet(new IdentityGenerator(vlanId.getVlanId(), vSwitchId, null, null).toString());
-        
+    	APITrace.begin(getProvider(), "Vlan.createSubnet");
+    	try {
+	    	Map<String, Object> params = new HashMap<String, Object>();
+	        params.put("ZoneId", options.getProviderDataCenterId());
+	        params.put("CidrBlock", options.getCidr());
+	        IdentityGenerator vlanId = new IdentityGenerator(options.getProviderVlanId());
+	        params.put("VpcId", vlanId.getVlanId());
+	        if (!getProvider().isEmpty(options.getName())) {
+	            params.put("VSwitchName", options.getName());
+	        }
+	        if (!getProvider().isEmpty(options.getDescription())) {
+	            params.put("Description", options.getDescription());
+	        }
+	        
+	        ResponseHandler<String> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, String>(
+	            new StreamToJSONObjectProcessor(),
+	              new DriverToCoreMapper<JSONObject, String>() {
+	                 @Override
+	                 public String mapFrom(JSONObject json ) {
+	                	 try {
+	                              return json.getString("VSwitchId" );
+	                     } catch (JSONException e ) {
+	                              stdLogger.error("parse VSwitchId from response failed", e);
+	                              throw new RuntimeException(e);
+	                     }
+	                }
+	             }, JSONObject. class);      
+	
+	        
+	        String vSwitchId = (String) AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, 
+	        		AliyunRequestBuilder.Category.ECS, "CreateVSwitch", 
+	        		AliyunNetworkCommon.RequestMethod.POST, true, responseHandler);
+	        
+	        return getSubnet(new IdentityGenerator(vlanId.getVlanId(), vSwitchId, null, null).toString());
+    	} finally {
+    		APITrace.end();
+    	}
     }
 
     /**
@@ -223,25 +246,40 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
     @Override
     public VLAN createVlan(@Nonnull String cidr, @Nonnull String name, @Nonnull String description, @Nonnull String domainName,
                            @Nonnull String[] dnsServers, @Nonnull String[] ntpServers) throws CloudException, InternalException {
-        
-    	Map<String, Object> params = new HashMap<String, Object>();
-        params.put("RegionId", getContext().getRegionId());
-        if (!getProvider().isEmpty(cidr)) {
-            params.put("CidrBlock", cidr);
-        }
-        if (!getProvider().isEmpty(name)) {
-            params.put("VpcName", name);
-        }
-        if (!getProvider().isEmpty(description)) {
-            params.put("Description", description);
-        }
-        
-        Map<String, Object> result = AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, 
-        		AliyunRequestBuilder.Category.ECS, "CreateVpc", AliyunNetworkCommon.RequestMethod.POST, true, 
-        		AliyunNetworkCommon.getResponseMapHandler(getProvider(), "VpcId", "VRouterId", "RouteTableId"));
-       
-        return getVlan(new IdentityGenerator((String)result.get("VpcId"), null, (String)result.get("VRouterId"), 
-        		(String)result.get("RouteTableId")).toString());
+    	APITrace.begin(getProvider(), "Vlan.createVlan");
+    	try {
+	    	Map<String, Object> params = new HashMap<String, Object>();
+	        params.put("RegionId", getContext().getRegionId());
+	        if (!getProvider().isEmpty(cidr)) {
+	            params.put("CidrBlock", cidr);
+	        }
+	        if (!getProvider().isEmpty(name)) {
+	            params.put("VpcName", name);
+	        }
+	        if (!getProvider().isEmpty(description)) {
+	            params.put("Description", description);
+	        }
+	        
+	        ResponseHandler<String> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, String>(
+	            new StreamToJSONObjectProcessor(),
+	                  new DriverToCoreMapper<JSONObject, String>() {
+		                     @Override
+		                     public String mapFrom(JSONObject json ) {
+		                    	 try {
+									return new IdentityGenerator(json.getString("VpcId"), null, json.getString("VRouterId"), json.getString("RouteTableId")).getVlanId();
+								} catch (JSONException e) {
+									stdLogger.error("parsing VpcId or VRouterId or RouteTableId failed", e);
+									throw new RuntimeException(e);
+								}
+		                    }
+	                 }, JSONObject. class);
+	        
+	        return getVlan(
+	        		AliyunNetworkCommon.executeDefaultRequest(getProvider(), params, AliyunRequestBuilder.Category.ECS, 
+	        				"CreateVpc", AliyunNetworkCommon.RequestMethod.POST, true, responseHandler));
+    	} finally {
+    		APITrace.end();
+    	}
     }
 
     @Nonnull
@@ -262,21 +300,45 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
     @Override
     @Deprecated
     public String getProviderTermForNetworkInterface(@Nonnull Locale locale) {
-        return capabilities.getProviderTermForNetworkInterface(locale);
+        try {
+			return getCapabilities().getProviderTermForNetworkInterface(locale);
+		} catch (CloudException e) {
+			stdLogger.error("Get capabilities failed", e);
+			throw new RuntimeException(e);
+		} catch (InternalException e) {
+			stdLogger.error("Get capabilities failed", e);
+			throw new RuntimeException(e);
+		}
     }
 
     @Nonnull
     @Override
     @Deprecated
     public String getProviderTermForSubnet(@Nonnull Locale locale) {
-        return capabilities.getProviderTermForSubnet(locale);
+        try {
+			return getCapabilities().getProviderTermForSubnet(locale);
+		} catch (CloudException e) {
+			stdLogger.error("Get capabilities failed", e);
+			throw new RuntimeException(e);
+		} catch (InternalException e) {
+			stdLogger.error("Get capabilities failed", e);
+			throw new RuntimeException(e);
+		}
     }
 
     @Nonnull
     @Override
     @Deprecated
     public String getProviderTermForVlan(@Nonnull Locale locale) {
-        return capabilities.getProviderTermForVlan(locale);
+        try {
+			return getCapabilities().getProviderTermForVlan(locale);
+		} catch (CloudException e) {
+			stdLogger.error("Get capabilities failed", e);
+			throw new RuntimeException(e);
+		} catch (InternalException e) {
+			stdLogger.error("Get capabilities failed", e);
+			throw new RuntimeException(e);
+		}
     }
 
     /**
@@ -288,46 +350,50 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
      */
     @Override
     public RoutingTable getRoutingTableForVlan(@Nonnull String vlanId) throws CloudException, InternalException {
-        
-    	final IdentityGenerator identityGenerator = new IdentityGenerator(vlanId);
-        if (!getProvider().isEmpty(identityGenerator.getVrouterId())) {
-            
-            HttpUriRequest request = AliyunRequestBuilder.get()
-            		.provider(getProvider())
-            		.category(AliyunRequestBuilder.Category.ECS)
-            		.parameter("Action", "DescribeRouteTables")
-            		.parameter("VRouterId", identityGenerator.getVrouterId())
-            		.build();
-            
-            ResponseHandler<RoutingTable> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, RoutingTable>(
-            		new StreamToJSONObjectProcessor(),
-            		new DriverToCoreMapper<JSONObject, RoutingTable>() {
-                        @Override
-                        public RoutingTable mapFrom(JSONObject json) {
-                            try {
-                            	JSONArray routingTables = json.getJSONObject("RouteTables").getJSONArray("RouteTable");
-                                if (routingTables != null && routingTables.length() > 0) {
-                                	return toRoutingTable(routingTables.getJSONObject(0), identityGenerator.getVlanId());
-                                }
-                                return null;
-                            } catch (InternalException internalException) {
-                                stdLogger.error("Failed to validate response", internalException);
-                                throw new RuntimeException(internalException.getMessage());
-                            } catch (JSONException e) {
-                            	stdLogger.error("Failed to parse routing table", e);
-                                throw new RuntimeException(e.getMessage());
-							} 
-                        }
-                    },
-                    JSONObject.class);
-            
-            return new AliyunRequestExecutor<RoutingTable>(getProvider(),
-                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                    request,
-                    responseHandler).execute();
-        } else {
-            throw new InternalException("Failed to find associated vrouter for vlan with id " + vlanId);
-        }
+    	APITrace.begin(getProvider(), "Vlan.getRoutingTableForVlan");
+    	try {
+	    	final IdentityGenerator identityGenerator = new IdentityGenerator(vlanId);
+	        if (!getProvider().isEmpty(identityGenerator.getVrouterId())) {
+	            
+	            HttpUriRequest request = AliyunRequestBuilder.get()
+	            		.provider(getProvider())
+	            		.category(AliyunRequestBuilder.Category.ECS)
+	            		.parameter("Action", "DescribeRouteTables")
+	            		.parameter("VRouterId", identityGenerator.getVrouterId())
+	            		.build();
+	            
+	            ResponseHandler<RoutingTable> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, RoutingTable>(
+	            		new StreamToJSONObjectProcessor(),
+	            		new DriverToCoreMapper<JSONObject, RoutingTable>() {
+	                        @Override
+	                        public RoutingTable mapFrom(JSONObject json) {
+	                            try {
+	                            	JSONArray routingTables = json.getJSONObject("RouteTables").getJSONArray("RouteTable");
+	                                if (routingTables != null && routingTables.length() > 0) {
+	                                	return toRoutingTable(routingTables.getJSONObject(0), identityGenerator.getVlanId());
+	                                }
+	                                return null;
+	                            } catch (InternalException internalException) {
+	                                stdLogger.error("Failed to validate response", internalException);
+	                                throw new RuntimeException(internalException.getMessage());
+	                            } catch (JSONException e) {
+	                            	stdLogger.error("Failed to parse routing table", e);
+	                                throw new RuntimeException(e.getMessage());
+								} 
+	                        }
+	                    },
+	                    JSONObject.class);
+	            
+	            return new AliyunRequestExecutor<RoutingTable>(getProvider(),
+	                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+	                    request,
+	                    responseHandler).execute();
+	        } else {
+	            throw new InternalException("Failed to find associated vrouter for vlan with id " + vlanId);
+	        }
+    	} finally {
+    		APITrace.end();
+    	}
     }
 
     /**
@@ -340,133 +406,145 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
      */
     @Override
     public RoutingTable getRoutingTable(@Nonnull String id) throws CloudException, InternalException {
-        
-    	final IdentityGenerator identityGenerator = new IdentityGenerator(id);
-        if (!getProvider().isEmpty(identityGenerator.getVrouterId())) {
-            
-        	HttpUriRequest request = AliyunRequestBuilder.get()
-            		.provider(getProvider())
-            		.category(AliyunRequestBuilder.Category.ECS)
-            		.parameter("Action", "DescribeRouteTables")
-            		.parameter("VRouterId", identityGenerator.getVrouterId())
-            		.parameter("RouteTableId", identityGenerator.getRouteTableId())
-            		.build();
-            
-            ResponseHandler<RoutingTable> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, RoutingTable>(
-            		new StreamToJSONObjectProcessor(),
-            		new DriverToCoreMapper<JSONObject, RoutingTable>() {
-                        @Override
-                        public RoutingTable mapFrom(JSONObject json) {
-                            try {
-                            	JSONArray routingTables = json.getJSONObject("RouteTables").getJSONArray("RouteTable");
-                                if (routingTables != null && routingTables.length() > 0) {
-                                	return toRoutingTable(routingTables.getJSONObject(0), identityGenerator.getVlanId());
-                                }
-                                return null;
-                            } catch (InternalException internalException) {
-                                stdLogger.error("Failed to validate response", internalException);
-                                throw new RuntimeException(internalException.getMessage());
-                            } catch (JSONException e) {
-                            	stdLogger.error("Failed to parse routing table", e);
-                                throw new RuntimeException(e.getMessage());
-							} 
-                        }
-                    },
-                    JSONObject.class);
-            
-            return new AliyunRequestExecutor<RoutingTable>(getProvider(),
-                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                    request,
-                    responseHandler).execute();
-            
-        } else {
-            throw new InternalException("Not find the matching router for routing table with id " + id);
-        }
+    	APITrace.begin(getProvider(), "Vlan.getRoutingTable");
+    	try {
+	    	final IdentityGenerator identityGenerator = new IdentityGenerator(id);
+	        if (!getProvider().isEmpty(identityGenerator.getVrouterId())) {
+	            
+	        	HttpUriRequest request = AliyunRequestBuilder.get()
+	            		.provider(getProvider())
+	            		.category(AliyunRequestBuilder.Category.ECS)
+	            		.parameter("Action", "DescribeRouteTables")
+	            		.parameter("VRouterId", identityGenerator.getVrouterId())
+	            		.parameter("RouteTableId", identityGenerator.getRouteTableId())
+	            		.build();
+	            
+	            ResponseHandler<RoutingTable> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, RoutingTable>(
+	            		new StreamToJSONObjectProcessor(),
+	            		new DriverToCoreMapper<JSONObject, RoutingTable>() {
+	                        @Override
+	                        public RoutingTable mapFrom(JSONObject json) {
+	                            try {
+	                            	JSONArray routingTables = json.getJSONObject("RouteTables").getJSONArray("RouteTable");
+	                                if (routingTables != null && routingTables.length() > 0) {
+	                                	return toRoutingTable(routingTables.getJSONObject(0), identityGenerator.getVlanId());
+	                                }
+	                                return null;
+	                            } catch (InternalException internalException) {
+	                                stdLogger.error("Failed to validate response", internalException);
+	                                throw new RuntimeException(internalException.getMessage());
+	                            } catch (JSONException e) {
+	                            	stdLogger.error("Failed to parse routing table", e);
+	                                throw new RuntimeException(e.getMessage());
+								} 
+	                        }
+	                    },
+	                    JSONObject.class);
+	            
+	            return new AliyunRequestExecutor<RoutingTable>(getProvider(),
+	                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+	                    request,
+	                    responseHandler).execute();
+	            
+	        } else {
+	            throw new InternalException("Not find the matching router for routing table with id " + id);
+	        }
+    	} finally {
+    		APITrace.end();
+    	}
     }
 
     @Override
     public Subnet getSubnet(@Nonnull String subnetId) throws CloudException, InternalException {
-        
-    	IdentityGenerator identityGenerator = new IdentityGenerator(subnetId);
-        if (!getProvider().isEmpty(identityGenerator.getVlanId())) {
-            
-            HttpUriRequest request = AliyunRequestBuilder.get()
-            		.provider(getProvider())
-            		.category(AliyunRequestBuilder.Category.ECS)
-            		.parameter("Action", "DescribeVSwitches")
-            		.parameter("VpcId", identityGenerator.getVlanId())
-            		.parameter("VSwitchId", identityGenerator.getSubnetId())
-            		.build();
-            
-            ResponseHandler<Subnet> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, Subnet>(
-            		new StreamToJSONObjectProcessor(),
-            		new DriverToCoreMapper<JSONObject, Subnet>() {
-                        @Override
-                        public Subnet mapFrom(JSONObject json) {
-                            try {
-                            	JSONArray subnets = json.getJSONObject("VSwitches").getJSONArray("VSwitch");
-                                if (subnets != null && subnets.length() > 0) {
-                                	return toSubnet(subnets.getJSONObject(0));
-                                }
-                                return null;
-                            } catch (InternalException internalException) {
-                                stdLogger.error("Failed to validate response", internalException);
-                                throw new RuntimeException(internalException.getMessage());
-                            } catch (JSONException e) {
-                            	stdLogger.error("Failed to parse vswitch", e);
-                                throw new RuntimeException(e.getMessage());
-							} 
-                        }
-                    },
-                    JSONObject.class);
-            
-            return new AliyunRequestExecutor<Subnet>(getProvider(),
-                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                    request,
-                    responseHandler).execute();
-            
-        } else {
-            throw new InternalException("Cannot find associated vlan id for subnet with id " + subnetId);
-        }
+    	APITrace.begin(getProvider(), "Vlan.getSubnet");
+    	try {
+	    	IdentityGenerator identityGenerator = new IdentityGenerator(subnetId);
+	        if (!getProvider().isEmpty(identityGenerator.getVlanId())) {
+	            
+	            HttpUriRequest request = AliyunRequestBuilder.get()
+	            		.provider(getProvider())
+	            		.category(AliyunRequestBuilder.Category.ECS)
+	            		.parameter("Action", "DescribeVSwitches")
+	            		.parameter("VpcId", identityGenerator.getVlanId())
+	            		.parameter("VSwitchId", identityGenerator.getSubnetId())
+	            		.build();
+	            
+	            ResponseHandler<Subnet> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, Subnet>(
+	            		new StreamToJSONObjectProcessor(),
+	            		new DriverToCoreMapper<JSONObject, Subnet>() {
+	                        @Override
+	                        public Subnet mapFrom(JSONObject json) {
+	                            try {
+	                            	JSONArray subnets = json.getJSONObject("VSwitches").getJSONArray("VSwitch");
+	                                if (subnets != null && subnets.length() > 0) {
+	                                	return toSubnet(subnets.getJSONObject(0));
+	                                }
+	                                return null;
+	                            } catch (InternalException internalException) {
+	                                stdLogger.error("Failed to validate response", internalException);
+	                                throw new RuntimeException(internalException.getMessage());
+	                            } catch (JSONException e) {
+	                            	stdLogger.error("Failed to parse vswitch", e);
+	                                throw new RuntimeException(e.getMessage());
+								} 
+	                        }
+	                    },
+	                    JSONObject.class);
+	            
+	            return new AliyunRequestExecutor<Subnet>(getProvider(),
+	                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+	                    request,
+	                    responseHandler).execute();
+	            
+	        } else {
+	            throw new InternalException("Cannot find associated vlan id for subnet with id " + subnetId);
+	        }
+    	} finally {
+    		APITrace.end();
+    	}
     }
 
     @Override
     public VLAN getVlan(@Nonnull String vlanId) throws CloudException, InternalException {
-        
-        HttpUriRequest request = AliyunRequestBuilder.get()
-        		.provider(getProvider())
-        		.category(AliyunRequestBuilder.Category.ECS)
-        		.parameter("Action", "DescribeVpcs")
-        		.parameter("RegionId", getContext().getRegionId())
-        		.parameter("VpcId", new IdentityGenerator(vlanId).getVlanId())
-        		.build();
-        
-        ResponseHandler<VLAN> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, VLAN>(
-        		new StreamToJSONObjectProcessor(),
-        		new DriverToCoreMapper<JSONObject, VLAN>() {
-                    @Override
-                    public VLAN mapFrom(JSONObject json) {
-                        try {
-                        	JSONArray vlans = json.getJSONObject("Vpcs").getJSONArray("Vpc");
-                            if (vlans != null && vlans.length() > 0) {
-                            	return toVlan(vlans.getJSONObject(0));
-                            }
-                            return null;
-                        } catch (InternalException internalException) {
-                            stdLogger.error("Failed to validate response", internalException);
-                            throw new RuntimeException(internalException.getMessage());
-                        } catch (JSONException e) {
-                        	stdLogger.error("Failed to parse vpc", e);
-                            throw new RuntimeException(e.getMessage());
-						} 
-                    }
-                },
-                JSONObject.class);
-        
-        return new AliyunRequestExecutor<VLAN>(getProvider(),
-                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                request,
-                responseHandler).execute();
+    	APITrace.begin(getProvider(), "Vlan.getVlan");
+    	try {
+	        HttpUriRequest request = AliyunRequestBuilder.get()
+	        		.provider(getProvider())
+	        		.category(AliyunRequestBuilder.Category.ECS)
+	        		.parameter("Action", "DescribeVpcs")
+	        		.parameter("RegionId", getContext().getRegionId())
+	        		.parameter("VpcId", new IdentityGenerator(vlanId).getVlanId())
+	        		.build();
+	        
+	        ResponseHandler<VLAN> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, VLAN>(
+	        		new StreamToJSONObjectProcessor(),
+	        		new DriverToCoreMapper<JSONObject, VLAN>() {
+	                    @Override
+	                    public VLAN mapFrom(JSONObject json) {
+	                        try {
+	                        	JSONArray vlans = json.getJSONObject("Vpcs").getJSONArray("Vpc");
+	                            if (vlans != null && vlans.length() > 0) {
+	                            	return toVlan(vlans.getJSONObject(0));
+	                            }
+	                            return null;
+	                        } catch (InternalException internalException) {
+	                            stdLogger.error("Failed to validate response", internalException);
+	                            throw new RuntimeException(internalException.getMessage());
+	                        } catch (JSONException e) {
+	                        	stdLogger.error("Failed to parse vpc", e);
+	                            throw new RuntimeException(e.getMessage());
+							} 
+	                    }
+	                },
+	                JSONObject.class);
+	        
+	        return new AliyunRequestExecutor<VLAN>(getProvider(),
+	                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+	                request,
+	                responseHandler).execute();
+    	} finally {
+    		APITrace.end();
+    	}
     }
 
     /**
@@ -560,57 +638,61 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
     @Nonnull
     @Override
     public Iterable<Subnet> listSubnets(@Nullable String vlanId) throws CloudException, InternalException {
-        
-    	List<Subnet> allSubnets = new ArrayList<Subnet>();
-        final AtomicInteger totalPageNumber = new AtomicInteger(1);
-        final AtomicInteger currentPageNumber = new AtomicInteger(1);
-        
-        ResponseHandler<List<Subnet>> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, List<Subnet>>(
-        		new StreamToJSONObjectProcessor(),
-        		new DriverToCoreMapper<JSONObject, List<Subnet>>() {
-                    @Override
-                    public List<Subnet> mapFrom(JSONObject json) {
-                        try {
-                        	List<Subnet> subnets = new ArrayList<Subnet>();
-                        	JSONArray subnetsResponse = json.getJSONObject("VSwitches").getJSONArray("VSwitch");
-                            for (int i = 0; i < subnetsResponse.length(); i++) {
-                                subnets.add(toSubnet(subnetsResponse.getJSONObject(i)));
-                            }
-                            totalPageNumber.addAndGet(json.getInt("TotalCount") / AliyunNetworkCommon.DefaultPageSize +
-                                    json.getInt("TotalCount") % AliyunNetworkCommon.DefaultPageSize > 0 ? 1 : 0);
-                            currentPageNumber.incrementAndGet();
-                            return subnets;
-                        } catch (InternalException internalException) {
-                            stdLogger.error("Failed to validate response", internalException);
-                            throw new RuntimeException(internalException.getMessage());
-                        } catch (JSONException e) {
-                        	stdLogger.error("Parsing firewall failed", e);
-                        	throw new RuntimeException(e.getMessage());
-						}
-                    }
-                },
-                JSONObject.class);
-        
-        do {
-            
-            HttpUriRequest request = AliyunRequestBuilder.get()
-            		.provider(getProvider())
-            		.category(AliyunRequestBuilder.Category.ECS)
-            		.parameter("Action", "DescribeSecurityGroups")
-            		.parameter("VpcId", new IdentityGenerator(vlanId).getVlanId())
-            		.parameter("PageSize", AliyunNetworkCommon.DefaultPageSize)
-            		.parameter("PageNumber", currentPageNumber)
-            		.build();
-            
-            
-            allSubnets.addAll(new AliyunRequestExecutor<List<Subnet>>(getProvider(),
-                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                    request,
-                    responseHandler).execute());
-            
-        } while (currentPageNumber.intValue() < totalPageNumber.intValue());
-        
-        return allSubnets;
+    	APITrace.begin(getProvider(), "Vlan.listSubnets");
+    	try {
+	    	List<Subnet> allSubnets = new ArrayList<Subnet>();
+	        final AtomicInteger totalPageNumber = new AtomicInteger(1);
+	        final AtomicInteger currentPageNumber = new AtomicInteger(1);
+	        
+	        ResponseHandler<List<Subnet>> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, List<Subnet>>(
+	        		new StreamToJSONObjectProcessor(),
+	        		new DriverToCoreMapper<JSONObject, List<Subnet>>() {
+	                    @Override
+	                    public List<Subnet> mapFrom(JSONObject json) {
+	                        try {
+	                        	List<Subnet> subnets = new ArrayList<Subnet>();
+	                        	JSONArray subnetsResponse = json.getJSONObject("VSwitches").getJSONArray("VSwitch");
+	                            for (int i = 0; i < subnetsResponse.length(); i++) {
+	                                subnets.add(toSubnet(subnetsResponse.getJSONObject(i)));
+	                            }
+	                            totalPageNumber.addAndGet(json.getInt("TotalCount") / AliyunNetworkCommon.DefaultPageSize +
+	                                    json.getInt("TotalCount") % AliyunNetworkCommon.DefaultPageSize > 0 ? 1 : 0);
+	                            currentPageNumber.incrementAndGet();
+	                            return subnets;
+	                        } catch (InternalException internalException) {
+	                            stdLogger.error("Failed to validate response", internalException);
+	                            throw new RuntimeException(internalException.getMessage());
+	                        } catch (JSONException e) {
+	                        	stdLogger.error("Parsing firewall failed", e);
+	                        	throw new RuntimeException(e.getMessage());
+							}
+	                    }
+	                },
+	                JSONObject.class);
+	        
+	        do {
+	            
+	            HttpUriRequest request = AliyunRequestBuilder.get()
+	            		.provider(getProvider())
+	            		.category(AliyunRequestBuilder.Category.ECS)
+	            		.parameter("Action", "DescribeSecurityGroups")
+	            		.parameter("VpcId", new IdentityGenerator(vlanId).getVlanId())
+	            		.parameter("PageSize", AliyunNetworkCommon.DefaultPageSize)
+	            		.parameter("PageNumber", currentPageNumber)
+	            		.build();
+	            
+	            
+	            allSubnets.addAll(new AliyunRequestExecutor<List<Subnet>>(getProvider(),
+	                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+	                    request,
+	                    responseHandler).execute());
+	            
+	        } while (currentPageNumber.intValue() < totalPageNumber.intValue());
+	        
+	        return allSubnets;
+    	} finally {
+    		APITrace.end();
+    	}
     }
 
     @Nonnull
@@ -628,57 +710,61 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
     @Nonnull
     @Override
     public Iterable<VLAN> listVlans() throws CloudException, InternalException {
-        
-    	List<VLAN> allVlans = new ArrayList<VLAN>();
-        final AtomicInteger totalPageNumber = new AtomicInteger(1);
-        final AtomicInteger currentPageNumber = new AtomicInteger(1);
-        
-        ResponseHandler<List<VLAN>> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, List<VLAN>>(
-        		new StreamToJSONObjectProcessor(),
-        		new DriverToCoreMapper<JSONObject, List<VLAN>>() {
-                    @Override
-                    public List<VLAN> mapFrom(JSONObject json) {
-                        try {
-                        	List<VLAN> vlans = new ArrayList<VLAN>();
-                        	JSONArray vlansResponse = json.getJSONObject("Vpcs").getJSONArray("Vpc");
-                            for (int i = 0; i < vlansResponse.length(); i++) {
-                                vlans.add(toVlan(vlansResponse.getJSONObject(i)));
-                            }
-                            totalPageNumber.addAndGet(json.getInt("TotalCount") / AliyunNetworkCommon.DefaultPageSize +
-                                    json.getInt("TotalCount") % AliyunNetworkCommon.DefaultPageSize > 0 ? 1 : 0);
-                            currentPageNumber.incrementAndGet();
-                            return vlans;
-                        } catch (InternalException internalException) {
-                            stdLogger.error("Failed to validate response", internalException);
-                            throw new RuntimeException(internalException.getMessage());
-                        } catch (JSONException e) {
-                        	stdLogger.error("Parsing firewall failed", e);
-                        	throw new RuntimeException(e.getMessage());
-						}
-                    }
-                },
-                JSONObject.class);
-        
-        do {
-        	
-            HttpUriRequest request = AliyunRequestBuilder.get()
-            		.provider(getProvider())
-            		.category(AliyunRequestBuilder.Category.ECS)
-            		.parameter("Action", "DescribeSecurityGroups")
-            		.parameter("RegionId", getContext().getRegionId())
-            		.parameter("PageSize", AliyunNetworkCommon.DefaultPageSize)
-            		.parameter("PageNumber", currentPageNumber)
-            		.build();
-            
-            
-            allVlans.addAll(new AliyunRequestExecutor<List<VLAN>>(getProvider(),
-                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                    request,
-                    responseHandler).execute());
-            
-        } while (currentPageNumber.intValue() < totalPageNumber.intValue());
-        
-        return allVlans;
+    	APITrace.begin(getProvider(), "Vlan.listVlans");
+    	try {
+	    	List<VLAN> allVlans = new ArrayList<VLAN>();
+	        final AtomicInteger totalPageNumber = new AtomicInteger(1);
+	        final AtomicInteger currentPageNumber = new AtomicInteger(1);
+	        
+	        ResponseHandler<List<VLAN>> responseHandler = new AliyunResponseHandlerWithMapper<JSONObject, List<VLAN>>(
+	        		new StreamToJSONObjectProcessor(),
+	        		new DriverToCoreMapper<JSONObject, List<VLAN>>() {
+	                    @Override
+	                    public List<VLAN> mapFrom(JSONObject json) {
+	                        try {
+	                        	List<VLAN> vlans = new ArrayList<VLAN>();
+	                        	JSONArray vlansResponse = json.getJSONObject("Vpcs").getJSONArray("Vpc");
+	                            for (int i = 0; i < vlansResponse.length(); i++) {
+	                                vlans.add(toVlan(vlansResponse.getJSONObject(i)));
+	                            }
+	                            totalPageNumber.addAndGet(json.getInt("TotalCount") / AliyunNetworkCommon.DefaultPageSize +
+	                                    json.getInt("TotalCount") % AliyunNetworkCommon.DefaultPageSize > 0 ? 1 : 0);
+	                            currentPageNumber.incrementAndGet();
+	                            return vlans;
+	                        } catch (InternalException internalException) {
+	                            stdLogger.error("Failed to validate response", internalException);
+	                            throw new RuntimeException(internalException.getMessage());
+	                        } catch (JSONException e) {
+	                        	stdLogger.error("Parsing firewall failed", e);
+	                        	throw new RuntimeException(e.getMessage());
+							}
+	                    }
+	                },
+	                JSONObject.class);
+	        
+	        do {
+	        	
+	            HttpUriRequest request = AliyunRequestBuilder.get()
+	            		.provider(getProvider())
+	            		.category(AliyunRequestBuilder.Category.ECS)
+	            		.parameter("Action", "DescribeSecurityGroups")
+	            		.parameter("RegionId", getContext().getRegionId())
+	            		.parameter("PageSize", AliyunNetworkCommon.DefaultPageSize)
+	            		.parameter("PageNumber", currentPageNumber)
+	            		.build();
+	            
+	            
+	            allVlans.addAll(new AliyunRequestExecutor<List<VLAN>>(getProvider(),
+	                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+	                    request,
+	                    responseHandler).execute());
+	            
+	        } while (currentPageNumber.intValue() < totalPageNumber.intValue());
+	        
+	        return allVlans;
+    	} finally {
+    		APITrace.end();
+    	}
     }
 
     /**
@@ -693,39 +779,44 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
      */
     @Override
     public void removeRoute(@Nonnull String routingTableId, @Nonnull String destinationCidr) throws CloudException, InternalException {
-        //search routes by routing table and destination cidr
-        RoutingTable routingTable = getRoutingTable(routingTableId);
-        String nextHopId = null;
-        for (Route route : routingTable.getRoutes()) {
-            if (route.getDestinationCidr().equals(destinationCidr)) {
-                if (!getProvider().isEmpty(route.getGatewayVirtualMachineId())) {
-                    nextHopId = route.getGatewayVirtualMachineId();
-                } else if (!getProvider().isEmpty(route.getGatewayId())) {
-                    nextHopId = route.getGatewayId();
-                }
-                break;
-            }
-        }
-
-        //remove route from routing table
-        if (!getProvider().isEmpty(nextHopId)) {
-            Map<String, Object> params = new HashMap<String, Object>();
-            params.put("RouteTableId", new IdentityGenerator(routingTableId).getRouteTableId());
-            params.put("DestinationCidrBlock", destinationCidr);
-            params.put("NextHopId", nextHopId);
-            
-            HttpUriRequest request = AliyunRequestBuilder.get()
-            		.provider(getProvider())
-            		.category(AliyunRequestBuilder.Category.ECS)
-            		.parameter("Action", "DeleteRouteEntry")
-            		.entity(params)
-            		.build();
-            
-            new AliyunRequestExecutor<Void>(getProvider(),
-                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                    request,
-                    new AliyunValidateJsonResponseHandler(getProvider())).execute();
-        }
+    	APITrace.begin(getProvider(), "Vlan.removeRoute");
+    	try {
+	    	//search routes by routing table and destination cidr
+	        RoutingTable routingTable = getRoutingTable(routingTableId);
+	        String nextHopId = null;
+	        for (Route route : routingTable.getRoutes()) {
+	            if (route.getDestinationCidr().equals(destinationCidr)) {
+	                if (!getProvider().isEmpty(route.getGatewayVirtualMachineId())) {
+	                    nextHopId = route.getGatewayVirtualMachineId();
+	                } else if (!getProvider().isEmpty(route.getGatewayId())) {
+	                    nextHopId = route.getGatewayId();
+	                }
+	                break;
+	            }
+	        }
+	
+	        //remove route from routing table
+	        if (!getProvider().isEmpty(nextHopId)) {
+	            Map<String, Object> params = new HashMap<String, Object>();
+	            params.put("RouteTableId", new IdentityGenerator(routingTableId).getRouteTableId());
+	            params.put("DestinationCidrBlock", destinationCidr);
+	            params.put("NextHopId", nextHopId);
+	            
+	            HttpUriRequest request = AliyunRequestBuilder.get()
+	            		.provider(getProvider())
+	            		.category(AliyunRequestBuilder.Category.ECS)
+	            		.parameter("Action", "DeleteRouteEntry")
+	            		.entity(params)
+	            		.build();
+	            
+	            new AliyunRequestExecutor<Void>(getProvider(),
+	                    AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+	                    request,
+	                    new AliyunValidateJsonResponseHandler(getProvider())).execute();
+	        }
+    	} finally {
+    		APITrace.end();
+    	}
     }
 
     @Override
@@ -735,22 +826,25 @@ public class AliyunVlan extends AbstractVLANSupport<Aliyun> {
 
     @Override
     public void removeSubnet(String providerSubnetId) throws CloudException, InternalException {
-       
-    	Map<String, Object> params = new HashMap<String, Object>();
-        params.put("VSwitchId", new IdentityGenerator(providerSubnetId).getSubnetId());
-
-        HttpUriRequest request = AliyunRequestBuilder.get()
-        		.provider(getProvider())
-        		.category(AliyunRequestBuilder.Category.ECS)
-        		.parameter("Action", "DeleteVSwitch")
-        		.entity(params)
-        		.build();
-        
-        new AliyunRequestExecutor<Void>(getProvider(),
-                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
-                request,
-                new AliyunValidateJsonResponseHandler(getProvider())).execute();
-        
+    	APITrace.begin(getProvider(), "Vlan.removeSubnet");
+    	try {
+	    	Map<String, Object> params = new HashMap<String, Object>();
+	        params.put("VSwitchId", new IdentityGenerator(providerSubnetId).getSubnetId());
+	
+	        HttpUriRequest request = AliyunRequestBuilder.get()
+	        		.provider(getProvider())
+	        		.category(AliyunRequestBuilder.Category.ECS)
+	        		.parameter("Action", "DeleteVSwitch")
+	        		.entity(params)
+	        		.build();
+	        
+	        new AliyunRequestExecutor<Void>(getProvider(),
+	                AliyunHttpClientBuilderFactory.newHttpClientBuilder(),
+	                request,
+	                new AliyunValidateJsonResponseHandler(getProvider())).execute();
+    	} finally {
+    		APITrace.end();
+    	}
     }
 
     @Override
