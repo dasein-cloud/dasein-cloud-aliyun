@@ -624,7 +624,7 @@ public class AliyunVirtualMachine extends AbstractVMSupport<Aliyun> implements V
     }
 
     @Override
-    public @Nonnull Iterable<VirtualMachineProduct> listProducts( @Nonnull VirtualMachineProductFilterOptions options, @Nullable Architecture architecture ) throws InternalException, CloudException {
+    public @Nonnull Iterable<VirtualMachineProduct> listProducts(@Nonnull String machineImageId, @Nonnull VirtualMachineProductFilterOptions options ) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "VirtualMachine.listProducts");
         try {
             List<VirtualMachineProduct> products = new ArrayList<VirtualMachineProduct>();
