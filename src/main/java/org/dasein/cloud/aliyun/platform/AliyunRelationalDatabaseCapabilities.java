@@ -82,6 +82,11 @@ public class AliyunRelationalDatabaseCapabilities extends
 	}
 
 	@Override
+	public boolean supportsRootPasswordChange() throws CloudException, InternalException {
+		return true;
+	}
+
+	@Override
 	public boolean supportsAlterDatabase() throws CloudException,
 			InternalException {
 		return true;

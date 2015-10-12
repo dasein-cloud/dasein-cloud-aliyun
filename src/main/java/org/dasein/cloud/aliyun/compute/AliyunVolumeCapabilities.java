@@ -118,6 +118,11 @@ public class AliyunVolumeCapabilities extends AbstractCapabilities<Aliyun> imple
     }
 
     @Override
+    public boolean getSupportsIOPSVolumes() throws InternalException, CloudException {
+        return false;
+    }
+
+    @Override
     public boolean isVolumeSizeDeterminedByProduct() throws InternalException, CloudException {
         return false;
     }
@@ -144,5 +149,15 @@ public class AliyunVolumeCapabilities extends AbstractCapabilities<Aliyun> imple
     @Override
     public @Nonnull Requirement requiresVMOnCreate() throws InternalException, CloudException {
         return Requirement.NONE;
+    }
+
+    @Override
+    public boolean supportsAttach() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsDetach() {
+        return true;
     }
 }

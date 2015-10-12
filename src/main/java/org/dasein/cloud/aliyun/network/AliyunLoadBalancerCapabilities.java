@@ -78,6 +78,12 @@ public class AliyunLoadBalancerCapabilities extends AbstractCapabilities<Aliyun>
 
     @Nonnull
     @Override
+    public Requirement healthCheckRequiresPort() throws CloudException, InternalException {
+        return Requirement.OPTIONAL;
+    }
+
+    @Nonnull
+    @Override
     public Requirement identifyEndpointsOnCreateRequirement() throws CloudException, InternalException {
         return Requirement.NONE;
     }

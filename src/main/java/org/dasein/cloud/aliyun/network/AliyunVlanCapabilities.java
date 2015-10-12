@@ -76,6 +76,11 @@ public class AliyunVlanCapabilities extends AbstractCapabilities<Aliyun> impleme
     }
 
     @Override
+    public boolean allowsDeletionOfReservedSubnets() throws CloudException, InternalException {
+        return true;
+    }
+
+    @Override
     public int getMaxNetworkInterfaceCount() throws CloudException, InternalException {
         return 0;
     }
