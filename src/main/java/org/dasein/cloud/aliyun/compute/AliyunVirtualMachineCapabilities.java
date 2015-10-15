@@ -142,9 +142,9 @@ public class AliyunVirtualMachineCapabilities extends AbstractCapabilities<Aliyu
         return VisibleScope.ACCOUNT_GLOBAL;
     }
 
-    @Nullable
+    @Nonnull
     @Override
-    public String[] getVirtualMachineReservedUsernames() {
+    public String[] getVirtualMachineReservedUserNames() {
         return new String[0];
     }
 

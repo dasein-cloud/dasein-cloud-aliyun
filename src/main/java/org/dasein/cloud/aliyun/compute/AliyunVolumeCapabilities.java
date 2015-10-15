@@ -66,16 +66,6 @@ public class AliyunVolumeCapabilities extends AbstractCapabilities<Aliyun> imple
     }
 
     @Override
-    public int getMaximumVolumeProductIOPS() throws InternalException, CloudException {
-        return 0;
-    }
-
-    @Override
-    public int getMinimumVolumeProductIOPS() throws InternalException, CloudException {
-        return 0;
-    }
-
-    @Override
     public int getMaximumVolumeSizeIOPS() throws InternalException, CloudException {
         return 0;
     }
@@ -118,7 +108,7 @@ public class AliyunVolumeCapabilities extends AbstractCapabilities<Aliyun> imple
     }
 
     @Override
-    public boolean getSupportsIOPSVolumes() throws InternalException, CloudException {
+    public boolean supportsIOPSVolumes() throws InternalException, CloudException {
         return false;
     }
 
