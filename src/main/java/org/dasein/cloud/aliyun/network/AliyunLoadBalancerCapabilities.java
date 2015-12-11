@@ -53,6 +53,26 @@ public class AliyunLoadBalancerCapabilities extends AbstractCapabilities<Aliyun>
         return 10;
     }
 
+    @Override
+    public int getMaxHealthCheckTimeout() throws CloudException, InternalException {
+        return 50;
+    }
+
+    @Override
+    public int getMinHealthCheckTimeout() throws CloudException, InternalException {
+        return 1;
+    }
+
+    @Override
+    public int getMaxHealthCheckInterval() throws CloudException, InternalException {
+        return 5;
+    }
+
+    @Override
+    public int getMinHealthCheckInterval() throws CloudException, InternalException {
+        return 1;
+    }
+
     @Nonnull
     @Override
     public String getProviderTermForLoadBalancer(@Nonnull Locale locale)
@@ -74,6 +94,12 @@ public class AliyunLoadBalancerCapabilities extends AbstractCapabilities<Aliyun>
     @Override
     public Requirement healthCheckRequiresName() throws CloudException, InternalException {
         return Requirement.NONE;
+    }
+
+    @Nonnull
+    @Override
+    public Requirement healthCheckRequiresPort() throws CloudException, InternalException {
+        return Requirement.OPTIONAL;
     }
 
     @Nonnull

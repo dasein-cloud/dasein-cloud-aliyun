@@ -142,6 +142,12 @@ public class AliyunVirtualMachineCapabilities extends AbstractCapabilities<Aliyu
         return VisibleScope.ACCOUNT_GLOBAL;
     }
 
+    @Nonnull
+    @Override
+    public String[] getVirtualMachineReservedUserNames() {
+        return new String[0];
+    }
+
     @Override
     public @Nonnull Requirement identifyDataCenterLaunchRequirement()
             throws CloudException, InternalException {
@@ -211,6 +217,11 @@ public class AliyunVirtualMachineCapabilities extends AbstractCapabilities<Aliyu
     @Override
     public boolean isUserDefinedPrivateIPSupported() throws CloudException, InternalException {
         return true;
+    }
+
+    @Override
+    public boolean isRootPasswordSSHKeyEncrypted() throws CloudException, InternalException {
+        return false;
     }
 
     @Override
